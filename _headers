@@ -1,0 +1,4 @@
+/nd/*
+  Cache-Control: public, max-age=86400
+/catalog/*
+  Cache-Control: public, max-age=86400
