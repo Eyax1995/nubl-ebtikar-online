@@ -391,6 +391,36 @@
   .btn-cat-dl{background:#ffffff14;color:#fff;border:1.5px solid #ffffff30;}
   .btn-cat-dl:hover{background:#ffffff22;}
 
+
+  /* ---- معرض تصاميم الحملة ---- */
+  .dz{background:linear-gradient(180deg,#0e2b22,#0b2118);border:1px solid #ffffff14;border-radius:20px;padding:12px;box-shadow:0 18px 40px #00000040;}
+  .dz-stage{position:relative;border-radius:14px;overflow:hidden;background:#07150f;aspect-ratio:1600/1280;}
+  .dz-stage img{width:100%;height:100%;object-fit:contain;display:block;transition:opacity .22s ease;}
+  .dz-stage.fading img{opacity:.25;}
+  .dz-zone{position:absolute;top:0;bottom:0;width:22%;border:0;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;padding:0;}
+  .dz-zone span{width:38px;height:38px;border-radius:999px;background:#0a2a1cc4;border:1px solid #ffffff24;display:grid;place-items:center;font-size:24px;line-height:1;opacity:0;transition:opacity .18s ease,transform .18s ease;transform:scale(.9);}
+  .dz-stage:hover .dz-zone span{opacity:1;transform:scale(1);}
+  .dz-prev{right:0;} .dz-next{left:0;}
+  .dz-zone:disabled{cursor:default;} .dz-zone:disabled span{opacity:.18;}
+  .dz-count{position:absolute;top:10px;left:10px;background:#0a2a1ce6;color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;direction:ltr;}
+  .dz-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 6px 6px;}
+  .dz-meta b{display:block;font-size:16px;color:#fff;}
+  .dz-meta span{display:block;font-size:12.5px;color:#ffffffa8;margin-top:2px;}
+  .dz-acts{display:flex;gap:8px;flex-wrap:wrap;}
+  .dz-btn{display:inline-flex;align-items:center;gap:6px;background:#1f7a48;color:#fff;border:0;border-radius:999px;padding:8px 15px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;text-decoration:none;}
+  .dz-btn:hover{filter:brightness(1.08);}
+  .dz-btn.ghost{background:#ffffff12;border:1px solid #ffffff24;}
+  .dz-thumbs{display:flex;gap:8px;overflow-x:auto;padding:8px 4px 4px;scrollbar-width:thin;}
+  .dz-thumbs button{flex:0 0 auto;width:96px;border:2px solid transparent;border-radius:9px;overflow:hidden;background:#07150f;cursor:pointer;padding:0;line-height:0;opacity:.62;transition:opacity .16s ease,border-color .16s ease;}
+  .dz-thumbs button img{width:100%;display:block;}
+  .dz-thumbs button:hover{opacity:.9;}
+  .dz-thumbs button.active{opacity:1;border-color:#35b06a;}
+  @media (max-width:640px){
+    .dz-zone span{opacity:1;transform:scale(1);}
+    .dz-thumbs button{width:74px;}
+    .dz-meta b{font-size:14.5px;}
+  }
+
   /* ---- عارض كتالوج اليوم الوطني — كتاب تفاعلي بتقليب صفحات حقيقي ---- */
   .cat-modal{position:fixed;inset:0;z-index:120;background:rgba(4,14,12,.95);display:none;align-items:center;justify-content:center;padding:16px;}
   .cat-modal.open{display:flex;}
@@ -652,7 +682,7 @@
       <div class="cat-entry">
         <div class="cat-entry-thumb">
           <img src="catalog/page-1.jpg" alt="غلاف كتالوج باقات اليوم الوطني 96" loading="lazy" />
-          <span class="cat-entry-badge">6 صفحات</span>
+          <span class="cat-entry-badge">11 صفحة</span>
         </div>
         <div class="cat-entry-info">
           <h4>كتالوج باقات اليوم الوطني 96 كاملاً</h4>
@@ -888,6 +918,7 @@
       if(m){ p.trait = m.t; p.name = m.n; p.tagline = m.s; p.url = m.u; }
     });
     window.__ND_TRAITS = TRAITS; window.__ND_TRAIT_ORDER = TRAIT_ORDER;
+    window.__ND_SET_TRAIT = function(k, sc){ setTrait(k, sc); };
 
     var BRANCHES = [
       { id:'hamdaniyah', name:'فرع الحمدانية', address:'جدة — حي الحمدانية', phone:'966533319382' },
@@ -1156,7 +1187,7 @@
   <!-- عارض كتالوج اليوم الوطني 96 — منطق تقليب الصفحات -->
   <script>
   (function(){
-    var CAT_PAGES = 6;
+    var CAT_PAGES = 11;
     var catIdx = 0;
     var flipping = false;
 
@@ -1326,6 +1357,38 @@
     <div class="traits" id="traits-grid"></div>
     <p class="traits-note" id="traits-note">اضغط على الطبع مرة أخرى لإلغاء التصفية.</p>
 
+  </section>
+
+
+  <!-- ================= معرض تصاميم الحملة ================= -->
+  <section class="block" id="designs" aria-labelledby="designs-h">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">تصاميم الحملة</p>
+        <h2 id="designs-h">تصاميم باقات اليوم الوطني 96 — كما تُنشر على حساباتنا</h2>
+      </div>
+      <p>عشرة تصاميم رسمية تعرض باقات كل طبع بأسعارها ومحتوياتها، إضافة إلى الأعلام والمطبوعات والملابس والهدايا. اسحب أو استخدم الأسهم للتنقل، واضغط على التصميم لعرضه بالحجم الكامل.</p>
+    </div>
+
+    <div class="dz">
+      <div class="dz-stage" id="dz-stage">
+        <img id="dz-img" src="designs/design-1.jpg" alt="تصميم باقات اليوم الوطني 96" loading="lazy" />
+        <button type="button" class="dz-zone dz-prev" id="dz-prev" aria-label="التصميم السابق"><span>›</span></button>
+        <button type="button" class="dz-zone dz-next" id="dz-next" aria-label="التصميم التالي"><span>‹</span></button>
+        <span class="dz-count" id="dz-count">1 / 10</span>
+      </div>
+      <div class="dz-bar">
+        <div class="dz-meta">
+          <b id="dz-title">كل الأسعار في مكان واحد</b>
+          <span id="dz-sub">غلاف عرض الباقات</span>
+        </div>
+        <div class="dz-acts">
+          <button type="button" class="dz-btn ghost" id="dz-trait" hidden></button>
+          <a class="dz-btn" id="dz-full" href="designs/design-1.jpg" target="_blank" rel="noopener">عرض بالحجم الكامل ↗</a>
+        </div>
+      </div>
+      <div class="dz-thumbs" id="dz-thumbs"></div>
+    </div>
   </section>
 
   <div class="sadu thin" aria-hidden="true" style="margin:26px 0 6px;border-radius:999px;"></div>
@@ -1719,6 +1782,101 @@
     /* الجلب المسبق للأغنية الأولى ومحاولة التشغيل التلقائي */
     load(0, true);
     armGesture();
+  })();
+  </script>
+
+
+  <!-- معرض تصاميم الحملة — تنقّل بالأسهم والسحب والمصغّرات -->
+  <script>
+  (function(){
+    var DESIGNS = [
+      { f:'designs/design-1.jpg',  t:'كل الأسعار في مكان واحد',            s:'غلاف عرض باقات اليوم الوطني 96' },
+      { f:'designs/design-2.jpg',  t:'باقات الكرم',                        s:'للشركات · للضيافة · للموظفين', k:'karam' },
+      { f:'designs/design-3.jpg',  t:'باقات الجود',                        s:'للشركات · للضيافة · للموظفين', k:'jood' },
+      { f:'designs/design-4.jpg',  t:'باقات الهمّة',                       s:'للأفراد · للعيادات · للمحلات · للضيافة', k:'himma' },
+      { f:'designs/design-5.jpg',  t:'باقات الأصالة',                      s:'للأفراد · التعليمية', k:'asala' },
+      { f:'designs/design-6.jpg',  t:'باقات الشجاعة',                      s:'للأفراد · للمحلات والعيادات', k:'shajaa' },
+      { f:'designs/design-7.jpg',  t:'باقات الرؤية',                       s:'للموظفين · التعليمية · للمحلات · للعيادات', k:'ruya' },
+      { f:'designs/design-8.jpg',  t:'الأعلام والمطبوعات',                 s:'أبرز العروض والأصناف المخفَّضة' },
+      { f:'designs/design-9.jpg',  t:'التصوير والفعاليات · الملابس والهدايا', s:'مكعبات الفوتوبوث والأوشحة والهدايا' },
+      { f:'designs/design-10.jpg', t:'شكراً لكم',                          s:'امسح الباركود للاطلاع على كامل العروض' }
+    ];
+    var stage = document.getElementById('dz-stage'); if(!stage) return;
+    var img    = document.getElementById('dz-img');
+    var prevB  = document.getElementById('dz-prev');
+    var nextB  = document.getElementById('dz-next');
+    var countE = document.getElementById('dz-count');
+    var titleE = document.getElementById('dz-title');
+    var subE   = document.getElementById('dz-sub');
+    var fullE  = document.getElementById('dz-full');
+    var traitB = document.getElementById('dz-trait');
+    var thumbs = document.getElementById('dz-thumbs');
+    var i = -1;
+
+    function thumbSrc(n){ return DESIGNS[n].f.replace('.jpg','-t.jpg'); }
+
+    function renderThumbs(){
+      thumbs.innerHTML = DESIGNS.map(function(d,n){
+        return '<button type="button" data-i="'+n+'" aria-label="'+d.t+'"><img src="'+thumbSrc(n)+'" alt="'+d.t+'" loading="lazy" /></button>';
+      }).join('');
+      Array.prototype.forEach.call(thumbs.querySelectorAll('button'), function(b){
+        b.addEventListener('click', function(){ go(parseInt(b.getAttribute('data-i'),10)); });
+      });
+    }
+    function syncThumbs(){
+      Array.prototype.forEach.call(thumbs.querySelectorAll('button'), function(b,n){
+        var on = (n===i); b.classList.toggle('active', on);
+        if(on && b.scrollIntoView) b.scrollIntoView({block:'nearest', inline:'nearest'});
+      });
+    }
+    function go(n){
+      if(n<0 || n>=DESIGNS.length || n===i) return;
+      i = n;
+      var d = DESIGNS[i];
+      stage.classList.add('fading');
+      var pre = new Image();
+      pre.onload = pre.onerror = function(){ img.src = d.f; img.alt = 'تصميم ' + d.t; stage.classList.remove('fading'); };
+      pre.src = d.f;
+      titleE.textContent = d.t;
+      subE.textContent = d.s;
+      fullE.href = d.f;
+      countE.textContent = (i+1) + ' / ' + DESIGNS.length;
+      prevB.disabled = (i===0);
+      nextB.disabled = (i===DESIGNS.length-1);
+      if(d.k){ traitB.hidden = false; traitB.textContent = 'اعرض ' + d.t + ' في قسم الطلب'; traitB.setAttribute('data-k', d.k); }
+      else { traitB.hidden = true; traitB.removeAttribute('data-k'); }
+      syncThumbs();
+    }
+
+    prevB.addEventListener('click', function(){ go(i-1); });   /* يمين = السابق (RTL) */
+    nextB.addEventListener('click', function(){ go(i+1); });   /* يسار = التالي */
+    traitB.addEventListener('click', function(){
+      var k = traitB.getAttribute('data-k');
+      if(k && typeof window.__ND_SET_TRAIT === 'function') window.__ND_SET_TRAIT(k, true);
+    });
+
+    /* السحب على الجوال */
+    var x0 = null;
+    stage.addEventListener('touchstart', function(e){ x0 = e.touches[0].clientX; }, {passive:true});
+    stage.addEventListener('touchend', function(e){
+      if(x0===null) return;
+      var dx = e.changedTouches[0].clientX - x0; x0 = null;
+      if(Math.abs(dx) < 40) return;
+      go(dx < 0 ? i+1 : i-1);   /* السحب لليسار = التالي */
+    }, {passive:true});
+
+    /* أسهم لوحة المفاتيح عندما يكون المعرض في الشاشة */
+    document.addEventListener('keydown', function(e){
+      if(e.key!=='ArrowLeft' && e.key!=='ArrowRight') return;
+      if(document.getElementById('cat-modal') && document.getElementById('cat-modal').classList.contains('open')) return;
+      var r = stage.getBoundingClientRect();
+      if(r.bottom < 80 || r.top > (window.innerHeight-80)) return;
+      e.preventDefault();
+      go(e.key==='ArrowLeft' ? i+1 : i-1);
+    });
+
+    renderThumbs();
+    go(0);
   })();
   </script>
 
