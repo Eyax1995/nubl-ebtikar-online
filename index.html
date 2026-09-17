@@ -969,6 +969,8 @@
       if(scroll){ document.getElementById('ndw-s1').scrollIntoView({behavior:'smooth',block:'start'}); }
     }
     function renderTraitsGrid(){
+      /* قسم الأطباع يأتي بعد هذا السكربت في الصفحة، لذا نبحث عن العنصر عند التنفيذ لا عند التحميل */
+      traitsGrid = traitsGrid || document.getElementById('traits-grid');
       if(!traitsGrid) return;
       traitsGrid.innerHTML = TRAIT_ORDER.map(function(k){
         var t = TRAITS[k];
@@ -1180,6 +1182,7 @@
 
     /* ---- تشغيل ---- */
     renderChips(); renderTraitsGrid(); renderTraitChips(); renderPkgs(); renderBranches(); calc();
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ renderTraitsGrid(); renderTraitChips(); });
     ['ndw-s1','ndw-s2','ndw-s3'].forEach(function(id){ obs.observe(document.getElementById(id)); });
   })();
   </script>
