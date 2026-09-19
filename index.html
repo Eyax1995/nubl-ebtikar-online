@@ -1607,7 +1607,7 @@
             <button type="button" class="mute" id="pl-mute" aria-label="كتم الصوت"><svg id="pl-vol-ico" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/></svg></button>
             <input class="pl-range" type="range" id="pl-vol" min="0" max="100" value="70" step="1" aria-label="مستوى الصوت" />
           </div>
-          <button type="button" class="pl-start" id="pl-start">▶ شغّل الأغاني الوطنية</button>
+          <button type="button" class="pl-start" id="pl-start">🔊 ارفع صوت الأناشيد الوطنية</button>
         </div>
         <div class="pl-status" id="pl-status"></div>
         <p class="pl-note">المصدر: <a href="https://www.gea.gov.sa/nd/#national-songs" target="_blank" rel="noopener">موقع اليوم الوطني — الهيئة العامة للترفيه</a>. الحقوق محفوظة للهيئة.</p>
@@ -1737,12 +1737,41 @@
         setIcons(false);
       });
     }
+    /* التشغيل: نحاول بصوت أولاً. إن منع المتصفح التشغيل التلقائي (سياسة الصوت)
+       نبدأ التشغيل صامتاً — وهو مسموح — ثم نرفع الصوت من بدايته عند أول تفاعل للزائر. */
+    var silentStart = false;
     function play(){
       var p = audio.play();
       if(p && p.then){
         return p.then(function(){ userPaused=false; setIcons(true); btnStart.classList.remove('show'); setStatus(''); })
-                .catch(function(){ /* المتصفح يمنع التشغيل التلقائي قبل تفاعل المستخدم */ setIcons(false); btnStart.classList.add('show'); setStatus('المتصفح يطلب نقرة واحدة قبل تشغيل الصوت.'); armGesture(); });
+                .catch(function(){ return playMuted(); });
       }
+    }
+    function playMuted(){
+      audio.muted = true;
+      var p2 = audio.play();
+      if(p2 && p2.then){
+        return p2.then(function(){
+          silentStart = true; userPaused = false; setIcons(true);
+          btnStart.classList.add('show');
+          setStatus('النشيد يعمل بلا صوت — المس الشاشة أو اضغط أي مكان لرفع الصوت.');
+          armGesture();
+        }).catch(function(){
+          audio.muted = false; setIcons(false);
+          btnStart.classList.add('show');
+          setStatus('اضغط لتشغيل الأناشيد الوطنية.');
+          armGesture();
+        });
+      }
+    }
+    /* رفع الصوت من بداية النشيد عند أول تفاعل */
+    function unmuteFromStart(){
+      audio.muted = false; silentStart = false;
+      try{ audio.currentTime = 0; }catch(e){}
+      btnStart.classList.remove('show'); setStatus('');
+      setVol(elVol.value>0 ? elVol.value : 70);
+      var p = audio.play(); if(p && p.catch) p.catch(function(){});
+      setIcons(true);
     }
     function pause(){ audio.pause(); userPaused=true; setIcons(false); }
     function toggle(){ if(audio.paused){ wantPlay=true; if(!audio.src) load(idx,true); else play(); } else pause(); }
@@ -1754,10 +1783,12 @@
     function armGesture(){
       if(armed) return; armed = true;
       var h = function(){
-        document.removeEventListener('pointerdown', h, true); document.removeEventListener('keydown', h, true); document.removeEventListener('touchstart', h, true);
+        document.removeEventListener('pointerdown', h, true); document.removeEventListener('keydown', h, true); document.removeEventListener('touchstart', h, true); document.removeEventListener('wheel', h, true);
+        armed = false;
+        if(silentStart || audio.muted){ unmuteFromStart(); return; }
         if(audio.paused && !userPaused){ wantPlay = true; if(!audio.src) load(idx,true); else play(); }
       };
-      document.addEventListener('pointerdown', h, true); document.addEventListener('keydown', h, true); document.addEventListener('touchstart', h, true);
+      document.addEventListener('pointerdown', h, true); document.addEventListener('keydown', h, true); document.addEventListener('touchstart', h, true); document.addEventListener('wheel', h, true);
     }
 
     audio.addEventListener('loadedmetadata', function(){ durations[idx] = audio.duration; elDur.textContent = fmt(audio.duration); renderList(); });
@@ -1777,7 +1808,10 @@
     btnMute.addEventListener('click', function(){ audio.muted = !audio.muted; icoVol.querySelector('path').setAttribute('d', audio.muted?VOL_OFF:VOL_ON); });
     btnPlay.addEventListener('click', toggle); mpPlay.addEventListener('click', toggle);
     btnNext.addEventListener('click', next); mpNext.addEventListener('click', next); btnPrev.addEventListener('click', prev);
-    btnStart.addEventListener('click', function(){ wantPlay=true; if(!audio.src) load(idx,true); else play(); });
+    btnStart.addEventListener('click', function(){
+      if(silentStart || audio.muted){ unmuteFromStart(); return; }
+      wantPlay=true; if(!audio.src) load(idx,true); else play();
+    });
     document.addEventListener('keydown', function(e){ if(e.target && /INPUT|TEXTAREA|BUTTON/.test(e.target.tagName)) return; if(e.code==='Space' && mini.classList.contains('show')){ e.preventDefault(); toggle(); } });
 
     setVol(70);
