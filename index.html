@@ -627,6 +627,55 @@
     .trait,.social-btn,.btn{transition:none;}
     .cat-page-flip.animating{transition:none;}
   }
+
+  /* ---- ساحة الأطباع: فعالية اليوم الوطني 96 ---- */
+  .saha{position:relative;margin-top:16px;border:1px solid #ffffff1f;border-radius:22px;overflow:hidden;
+        background:linear-gradient(180deg,#0d3038 0%,#0a242a 55%,#081d22 100%);box-shadow:0 22px 50px #00000045;}
+  .saha .sadu{position:absolute;inset:0 0 auto 0;}
+  .saha-in{padding:26px 22px 22px;}
+  .saha-top{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap;}
+  .saha-ttl h2{font-family:var(--font-display);font-size:clamp(22px,3.4vw,30px);font-weight:700;margin:6px 0 0;color:#fff;letter-spacing:-.2px;}
+  .saha-ttl p{margin:6px 0 0;font-size:13.5px;color:var(--mut);max-width:520px;line-height:1.75;}
+  .saha-live{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:800;padding:5px 12px;border-radius:999px;
+             background:#ffffff12;border:1px solid #ffffff26;color:var(--ink2);}
+  .saha-live i{width:7px;height:7px;border-radius:50%;background:var(--pix2);display:inline-block;}
+  .saha-live.on{background:#1f6b3a33;border-color:#54be3666;color:#d8f5cf;}
+  .saha-live.on i{animation:sahaPulse 1.2s infinite;}
+  @keyframes sahaPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+
+  .saha-count{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;}
+  .saha-count .u{min-width:68px;text-align:center;background:#ffffff0f;border:1px solid #ffffff1f;border-radius:13px;padding:9px 6px;}
+  .saha-count .u b{display:block;font-family:var(--font-display);font-size:24px;font-weight:700;color:#fff;line-height:1.1;direction:ltr;}
+  .saha-count .u span{display:block;font-size:10.5px;color:var(--mut2);margin-top:3px;letter-spacing:.2px;}
+  .saha-countlbl{font-size:12.5px;color:var(--mut);margin:12px 0 0;}
+
+  .saha-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:10px;margin-top:18px;}
+  .saha-facts div{background:#ffffff0a;border:1px solid #ffffff17;border-radius:13px;padding:11px 13px;}
+  .saha-facts b{display:block;font-size:13.5px;color:#fff;font-weight:800;}
+  .saha-facts span{display:block;font-size:11.5px;color:var(--mut2);margin-top:3px;}
+
+  .saha-stations{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:18px;}
+  .saha-st{display:flex;align-items:center;gap:10px;background:#ffffff08;border:1px solid #ffffff17;border-radius:13px;padding:10px 12px;
+           border-right:3px solid var(--c,#54BE36);}
+  .saha-st b{font-size:12px;font-weight:800;color:var(--c,#fff);display:block;}
+  .saha-st span{font-size:12.5px;color:var(--ink2);display:block;margin-top:2px;line-height:1.55;}
+
+  .saha-time{margin-top:18px;border-top:1px solid #ffffff17;padding-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 14px;}
+  .saha-time div{display:flex;align-items:baseline;gap:8px;}
+  .saha-time b{font-family:var(--font-display);font-size:15px;color:#fff;white-space:nowrap;}
+  .saha-time span{font-size:12.5px;color:var(--mut);}
+
+  .saha-acts{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px;}
+  .saha-note{margin:12px 0 0;font-size:12px;color:var(--mut2);line-height:1.7;}
+  .saha-stamp{margin-top:14px;background:#ffffff0a;border:1px dashed #ffffff2e;border-radius:13px;padding:11px 13px;font-size:12.5px;color:var(--ink2);}
+  @media (max-width:900px){ .saha-stations{grid-template-columns:repeat(2,minmax(0,1fr));} }
+  @media (max-width:560px){ .saha-stations{grid-template-columns:1fr;} }
+  @media (max-width:640px){
+    .saha-in{padding:22px 16px 18px;}
+    .saha-count .u{min-width:0;flex:1 1 0;}
+    .saha-count .u b{font-size:20px;}
+  }
+
 </style>
 
 <div class="grid-field" aria-hidden="true"></div>
@@ -665,6 +714,61 @@
     </div>
   </section>
 
+
+
+  <!-- ================= ساحة الأطباع — فعالية اليوم الوطني 96 ================= -->
+  <section class="saha" id="saha" aria-labelledby="saha-h">
+    <div class="sadu" aria-hidden="true"></div>
+    <div class="saha-in">
+      <div class="saha-top">
+        <div class="saha-ttl">
+          <p class="eyebrow">فعالية اليوم الوطني 96</p>
+          <h2 id="saha-h">ساحة الأطباع</h2>
+          <p>ست محطات تحمل أسماء أطباعنا الستة، أمام فرع الحمدانية. تطبع اسمك، وتترك بصمتك على جدار الأسماء، وتشوف الستارة وهي تنكشف. الدخول مجاني للجميع.</p>
+        </div>
+        <span class="saha-live" id="saha-live"><i></i><span id="saha-live-t">الأربعاء 23 سبتمبر</span></span>
+      </div>
+
+      <p class="saha-countlbl" id="saha-lbl">يبدأ بعد</p>
+      <div class="saha-count" id="saha-count" role="timer" aria-live="off">
+        <div class="u"><b id="sc-d">—</b><span>يوم</span></div>
+        <div class="u"><b id="sc-h">—</b><span>ساعة</span></div>
+        <div class="u"><b id="sc-m">—</b><span>دقيقة</span></div>
+        <div class="u"><b id="sc-s">—</b><span>ثانية</span></div>
+      </div>
+
+      <div class="saha-facts">
+        <div><b>الأربعاء 23 سبتمبر 2026</b><span>من 4 العصر حتى 10 الليل</span></div>
+        <div><b>أمام فرع الحمدانية</b><span>شارع الحمدانية الفرعي، جدة 23761</span></div>
+        <div><b>الدخول مجاني</b><span>الفرع الثاني (شارع الأربعين) بدوامه المعتاد</span></div>
+      </div>
+
+      <div class="saha-stations">
+        <div class="saha-st" style="--c:var(--t-himma)"><span><b>الهمّة</b>اطبع اسمك بالليزر على ميداليتك — قبل ما ينتهي العدّاد</span></div>
+        <div class="saha-st" style="--c:var(--t-karam)"><span><b>الكرم</b>كوبك الحراري يتلوّن قدامك ويخرج باسمك</span></div>
+        <div class="saha-st" style="--c:var(--t-asala)"><span><b>الأصالة</b>اطبع نمط السدو بيدك على قطعتك</span></div>
+        <div class="saha-st" style="--c:var(--t-shajaa)"><span><b>الشجاعة</b>ركن التصوير — صوّر أجرأ وقفة</span></div>
+        <div class="saha-st" style="--c:var(--t-jood)"><span><b>الجود</b>محطة الأطفال: طبعة الكف على اللوحة الجماعية</span></div>
+        <div class="saha-st" style="--c:var(--t-rouya)"><span><b>الرؤية</b>خلف الستارة — يُكشف الساعة 9 مساءً</span></div>
+      </div>
+
+      <div class="saha-stamp">اجمع الأختام الستة من المحطات وادخل السحب — وجدار الأسماء يبقى على واجهة الفرع أسبوعاً كاملاً بعد الفعالية.</div>
+
+      <div class="saha-time">
+        <div><b>4:00 م</b><span>افتتاح الساحة</span></div>
+        <div><b>8:00 م</b><span>صورة مواليد 96 الجماعية</span></div>
+        <div><b>9:00 م</b><span>كشف «قريباً»</span></div>
+        <div><b>10:00 م</b><span>الختام</span></div>
+      </div>
+
+      <div class="saha-acts">
+        <a class="btn btn-primary" href="https://maps.google.com/?cid=17164261699875330026" target="_blank" rel="noopener">📍 الاتجاهات إلى الفرع</a>
+        <a class="btn btn-ghost" href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=%D8%B3%D8%A7%D8%AD%D8%A9%20%D8%A7%D9%84%D8%A3%D8%B7%D8%A8%D8%A7%D8%B9%20%E2%80%94%20%D8%A7%D9%84%D9%8A%D9%88%D9%85%20%D8%A7%D9%84%D9%88%D8%B7%D9%86%D9%8A%2096%20%7C%20%D9%86%D9%8F%D8%A8%D9%84%20%D9%88%D8%A7%D8%A8%D8%AA%D9%83%D8%A7%D8%B1&dates=20260923T130000Z/20260923T190000Z&details=%D8%B3%D8%AA%20%D9%85%D8%AD%D8%B7%D8%A7%D8%AA%20%2B%20%D8%AC%D8%AF%D8%A7%D8%B1%20%D8%A7%D9%84%D8%A3%D8%B3%D9%85%D8%A7%D8%A1%20%2B%20%D9%85%D8%AD%D8%B7%D8%A9%20%D8%A7%D9%84%D8%A3%D8%B7%D9%81%D8%A7%D9%84.%20%D8%A7%D9%84%D8%B3%D8%A7%D8%B9%D8%A9%208%20%D8%B5%D9%88%D8%B1%D8%A9%20%D9%85%D9%88%D8%A7%D9%84%D9%8A%D8%AF%2096%D8%8C%20%D9%88%D8%A7%D9%84%D8%B3%D8%A7%D8%B9%D8%A9%209%20%D9%83%D8%B4%D9%81%20%C2%AB%D9%82%D8%B1%D9%8A%D8%A8%D8%A7%D9%8B%C2%BB.%20%D8%A7%D9%84%D8%AF%D8%AE%D9%88%D9%84%20%D9%85%D8%AC%D8%A7%D9%86%D9%8A.&location=%D9%86%D9%8F%D8%A8%D9%84%20%D9%88%D8%A7%D8%A8%D8%AA%D9%83%D8%A7%D8%B1%20%D9%84%D9%84%D8%AF%D8%B9%D8%A7%D9%8A%D8%A9%20%D9%88%D8%A7%D9%84%D8%A5%D8%B9%D9%84%D8%A7%D9%86%20%E2%80%94%20%D8%AD%D9%8A%20%D8%A7%D9%84%D8%AD%D9%85%D8%AF%D8%A7%D9%86%D9%8A%D8%A9%D8%8C%20%D8%AC%D8%AF%D8%A9" target="_blank" rel="noopener">🗓️ أضف الموعد إلى تقويمك</a>
+        <a class="btn btn-ghost" href="https://wa.me/966533319382?text=%D8%A3%D8%B1%D8%BA%D8%A8%20%D8%A8%D8%AA%D8%B3%D8%AC%D9%8A%D9%84%20%D8%A7%D9%87%D8%AA%D9%85%D8%A7%D9%85%D9%8A%20%D8%A8%D8%B9%D8%B1%D8%B6%20%D8%A7%D9%84%D8%AA%D8%A3%D8%B3%D9%8A%D8%B3%20%D8%A7%D9%84%D8%B0%D9%8A%20%D8%B3%D9%8A%D9%8F%D9%83%D8%B4%D9%81%20%D9%81%D9%8A%20%D8%B3%D8%A7%D8%AD%D8%A9%20%D8%A7%D9%84%D8%A3%D8%B7%D8%A8%D8%A7%D8%B9%20%D8%A7%D9%84%D8%A3%D8%B1%D8%A8%D8%B9%D8%A7%D8%A1%2023%20%D8%B3%D8%A8%D8%AA%D9%85%D8%A8%D8%B1%20%D8%A7%D9%84%D8%B3%D8%A7%D8%B9%D8%A9%209%20%D9%85%D8%B3%D8%A7%D8%A1%D9%8B." target="_blank" rel="noopener">سجّل اهتمامك بعرض التأسيس</a>
+      </div>
+      <p class="saha-note">«الرؤية» هو الطبع الوحيد الذي لا باقة له… بعد. ما خلف الستارة يخصّ أصحاب المنشآت في جدة، ومن يسجّل اهتمامه قبل الكشف يحصل على عرض التأسيس.</p>
+    </div>
+  </section>
 
   <!-- ================= باقات اليوم الوطني السعودي 96 — نظام طلب بخطوات (مباشرة بعد السلوجان) ================= -->
   <section class="ndw" id="nd-order" aria-labelledby="ndw-h" style="margin-top:18px;">
@@ -1914,6 +2018,56 @@
 
     renderThumbs();
     go(0);
+  })();
+  </script>
+
+
+  <!-- ساحة الأطباع — العدّ التنازلي وحالات الفعالية (بتوقيت الرياض بصرف النظر عن توقيت جهاز الزائر) -->
+  <script>
+  (function(){
+    var sec = document.getElementById('saha'); if(!sec) return;
+    var START = Date.UTC(2026,8,23,13,0,0);      /* 23 سبتمبر 4:00 م بتوقيت الرياض */
+    var END   = Date.UTC(2026,8,23,19,0,0);      /* 23 سبتمبر 10:00 م */
+    var OFFER = Date.UTC(2026,8,30,20,59,59);    /* 30 سبتمبر 11:59 م — نهاية العرض */
+    var $ = function(id){ return document.getElementById(id); };
+    var live=$('saha-live'), liveT=$('saha-live-t'), lbl=$('saha-lbl');
+    var d=$('sc-d'), h=$('sc-h'), m=$('sc-m'), s=$('sc-s');
+    var intro = sec.querySelector('.saha-ttl p');
+    var stamp = sec.querySelector('.saha-stamp');
+    var times = sec.querySelector('.saha-time');
+    var acts  = sec.querySelector('.saha-acts');
+    var mode = '';
+    function pad(n){ return ('0'+n).slice(-2); }
+    function setMode(x){
+      if(mode===x) return; mode=x;
+      if(x==='before'){
+        live.classList.remove('on'); liveT.textContent='الأربعاء 23 سبتمبر';
+        lbl.textContent='يبدأ بعد';
+      } else if(x==='live'){
+        live.classList.add('on'); liveT.textContent='الساحة مفتوحة الآن';
+        lbl.textContent='تُغلق بعد';
+      } else if(x==='after'){
+        live.classList.remove('on'); liveT.textContent='انتهت الفعالية — شكراً لكل من حضر';
+        lbl.textContent='تبقّى على انتهاء عروض اليوم الوطني';
+        if(intro) intro.textContent='جدة ما قصّرت: جدار الأسماء امتلأ، وكفوف الأطفال صارت لوحة، و«قريباً» انكشف. والعروض مستمرة في الفرعين حتى 30 سبتمبر.';
+        if(stamp) stamp.textContent='جدار الأسماء باقٍ على واجهة فرع الحمدانية أسبوعاً كاملاً — مرّ وصوّر اسمك.';
+        if(times) times.hidden = true;
+        if(acts) acts.innerHTML = '<a class="btn btn-primary" href="#nd-order">اطلب باقتك قبل انتهاء العرض</a>';
+      }
+    }
+    function tick(){
+      var now = Date.now(), target;
+      if(now < START){ setMode('before'); target = START; }
+      else if(now < END){ setMode('live'); target = END; }
+      else if(now < OFFER){ setMode('after'); target = OFFER; }
+      else { sec.hidden = true; return; }
+      var t = Math.max(0, Math.floor((target-now)/1000));
+      d.textContent = Math.floor(t/86400);
+      h.textContent = pad(Math.floor(t%86400/3600));
+      m.textContent = pad(Math.floor(t%3600/60));
+      s.textContent = pad(t%60);
+    }
+    tick(); setInterval(tick, 1000);
   })();
   </script>
 
