@@ -12,6 +12,7 @@
  */
 
 const MODEL = '@cf/black-forest-labs/flux-2-klein-4b';
+const BUILD = 'v2';   /* رفع النسخة لإجبار نشر جديد يلتقط ربط Workers AI */
 const MAX_BYTES = 1400000;   /* الصورة تُصغَّر في المتصفح إلى 512px قبل الإرسال */
 
 const BASE =
@@ -55,7 +56,7 @@ function err(code, status, extra) {
 
 export async function onRequestGet(context) {
   /* فحص جاهزية — تستخدمه الصفحة لتُظهر الزر أو تخفيه */
-  return new Response(JSON.stringify({ ready: !!context.env.AI, model: MODEL }), {
+  return new Response(JSON.stringify({ ready: !!context.env.AI, model: MODEL, build: BUILD, keys: Object.keys(context.env || {}) }), {
     headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
   });
 }
