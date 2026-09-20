@@ -690,7 +690,6 @@
       </div>
     </div>
     <div class="head-actions">
-      <a class="pill-link" href="https://nublandebtikar.com" target="_blank" rel="noopener">المتجر الإلكتروني</a>
       <a class="pill-link" href="mirror/">مرآة الأطباع</a>
       <a class="pill-link solid" href="#nd-order">اطلب باقتك</a>
     </div>
@@ -819,9 +818,7 @@
       <div class="ndw-chips traits-row" id="ndw-trait-chips"></div>
       <div class="ndw-pkg-grid" id="ndw-pkg-grid"></div>
 
-      <a class="ndw-store-link" href="https://nublandebtikar.com" target="_blank" rel="noopener" style="margin-top:18px;display:inline-block;">
-        تصفّح المتجر الإلكتروني الكامل لمجموعة نُبل وابتكار ←
-      </a>
+      
 
       <!-- 2: بيانات الطلب -->
       <div class="ndw-sec-title" id="ndw-s2"><span class="num">2</span><h3>بيانات الطلب</h3></div>
@@ -1027,6 +1024,22 @@
     window.__ND_TRAITS = TRAITS; window.__ND_TRAIT_ORDER = TRAIT_ORDER;
     window.__ND_SET_TRAIT = function(k, sc){ setTrait(k, sc); };
 
+    /* وصول مباشر لطبع محدّد من مرآة الأطباع: ../?t=karam#nd-order */
+    (function(){
+      try{
+        var t = new URLSearchParams(location.search).get('t');
+        if(t && TRAITS[t]){
+          var go = function(){
+            setTrait(t, true);
+            var el = document.getElementById('nd-order');
+            if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+          };
+          if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
+          else setTimeout(go, 60);
+        }
+      }catch(e){}
+    })();
+
     var BRANCHES = [
       { id:'hamdaniyah', name:'فرع الحمدانية', address:'جدة — حي الحمدانية', phone:'966533319382' },
       { id:'arbaeen',     name:'فرع الأربعين',  address:'جدة — شارع الأربعين', phone:'966567283040' }
@@ -1111,7 +1124,7 @@
           ? '<span class="trait-tag"><span class="dot"></span>'+t.word+'</span><span class="sector-tag">'+c.name+'</span>'
           : '<span class="trait-tag"><span class="dot"></span>'+c.name+'</span>';
         var tagline = p.tagline ? '<p class="tagline">'+p.tagline+'</p>' : '';
-        var store = p.url ? '<a class="store-link" href="'+p.url+'" target="_blank" rel="noopener">صفحة الباقة في المتجر ←</a>' : '';
+        var store = '';   /* المتجر الإلكتروني غير فعّال — الطلب يتم من هذه الصفحة عبر واتساب */
         return '<div class="ndw-pkg'+(q?' on':'')+(t?' has-trait':'')+'" style="'+style+'">'
           +'<div class="pkg-top">'+ico+'<div class="pkg-meta">'+tag+'</div></div>'
           +'<h4>'+p.name+'</h4>'
