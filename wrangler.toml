@@ -1,0 +1,9 @@
+name = "nubl-ebtikar-online"
+pages_build_output_dir = "."
+compatibility_date = "2026-09-16"
+
+# ربط Workers AI لاستوديو الأطباع (functions/api/restyle.js يقرؤه باسم env.AI).
+# نُعرّفه هنا داخل المستودع بدل لوحة Cloudflare: هذا الملف يصبح مصدر الحقيقة
+# لإعدادات المشروع، فلا يحتاج أحد إلى فتح اللوحة عند أي تغيير لاحق.
+[ai]
+binding = "AI"
