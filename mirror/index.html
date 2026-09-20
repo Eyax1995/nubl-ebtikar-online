@@ -151,6 +151,19 @@
     font-size:11.5px;color:var(--mut2);line-height:1.9;}
   footer a{color:var(--mut);}
 
+
+  .aibox{margin-top:16px;background:#ffffff08;border:1px solid var(--line);border-radius:14px;
+    padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .aibox.busy{border-color:#54be3666;background:#54be360f;}
+  .aibox p{margin:0;font-size:12px;color:var(--mut2);flex:1 1 200px;line-height:1.65;}
+  .aitoggle{background:#ffffff12;border:1px solid var(--line2);border-radius:999px;padding:7px 15px;
+    color:var(--mut);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;
+    display:inline-flex;align-items:center;gap:7px;}
+  .aitoggle::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--mut2);}
+  .aitoggle.on{background:#54be361f;border-color:#54be3666;color:#d8f5cf;}
+  .aitoggle.on::before{background:var(--pix2);}
+  .aitoggle:disabled{opacity:.6;cursor:default;}
+  .aibox.busy .aitoggle::before{animation:sp 1s linear infinite;border:2px solid #ffffff44;border-top-color:#fff;background:none;width:10px;height:10px;}
   .hide{display:none!important;}
   .spin{display:inline-block;width:13px;height:13px;border:2px solid #ffffff44;border-top-color:#fff;
     border-radius:50%;animation:sp .7s linear infinite;}
@@ -190,14 +203,14 @@
     <div class="hero">
       <p class="eyebrow"><i></i> اليوم الوطني السعودي 96 · عزّنا بطبعنا</p>
       <h1>مرآة <em>الأطباع</em></h1>
-      <p>ارفع صورتك… نعرف طبعك من الأطباع الستة، ونعطيك بطاقتك الوطنية صورةً وGIF وفيديو جاهزة للنشر.</p>
+      <p>ارفع صورتك… نعرف طبعك من الأطباع الستة، ويفصلك الذكاء الاصطناعي عن خلفيتك ويضعك داخل عالم طبعك بألوانه ونقوشه — صورةً وGIF وفيديو جاهزة للنشر.</p>
     </div>
 
     <div class="card">
       <div class="drop" id="drop">
         <div class="big" aria-hidden="true"><svg viewBox="0 0 60 60" width="56" height="56" fill="none"><rect x="2" y="2" width="25" height="25" rx="5" fill="#54BE36" opacity=".92"/><rect x="33" y="2" width="25" height="25" rx="5" fill="#F3EFE3" opacity=".28"/><rect x="2" y="33" width="25" height="25" rx="5" fill="#F3EFE3" opacity=".28"/><rect x="33" y="33" width="25" height="25" rx="5" fill="#F3EFE3" opacity=".55"/></svg></div>
         <h2>ارفع صورتك أو التقطها الآن</h2>
-        <p>اسحب الصورة هنا، أو اختر من جهازك — JPG أو PNG</p>
+        <p>اسحب الصورة هنا، أو اختر من جهازك — JPG أو PNG<br><span style="color:var(--mut)">أفضل نتيجة: صورة يظهر فيها شخص واضح وقريب.</span></p>
         <div class="pickrow">
           <button type="button" class="btn primary" id="btn-pick">اختر صورة</button>
           <button type="button" class="btn" id="btn-cam">التقط بالكاميرا</button>
@@ -213,7 +226,7 @@
 
       <div class="privacy">
         <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#54BE36" stroke-width="2" style="flex:0 0 15px;margin-top:3px"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-        <span><b>صورتك لا تغادر جهازك.</b> كل المعالجة تتم داخل متصفحك — لا رفع ولا حفظ على أي خادم، ولا نحتفظ بشيء.</span>
+        <span><b>صورتك لا تغادر جهازك.</b> حتى نموذج الذكاء الاصطناعي الذي يفصلك عن الخلفية يعمل داخل متصفحك — لا رفع ولا حفظ على أي خادم، ولا نحتفظ بشيء. (يُنزَّل النموذج مرة واحدة فقط عند أول استخدام.)</span>
       </div>
     </div>
   </section>
@@ -259,6 +272,11 @@
       </div>
       <div class="prog" id="prog"><i></i></div>
       <p class="note" id="dl-note"></p>
+
+      <div class="aibox" id="ai-box">
+        <button type="button" id="ai-toggle" class="aitoggle" aria-pressed="true" disabled>المعالجة الذكية</button>
+        <p id="ai-state">يبدأ فصل الشخص عن خلفيته تلقائياً بعد رفع الصورة.</p>
+      </div>
 
       <div class="traitchips" id="chips"></div>
       <p class="note">ما ضبط الطبع؟ بدّله من هنا — البطاقة تتحدّث فوراً.</p>
@@ -391,6 +409,255 @@
   function ease(t){ return t<0 ? 0 : t>1 ? 1 : 1-Math.pow(1-t,3); }
   function seg(t,a,b){ return ease((t-a)/(b-a)); }
 
+
+  /* ================= المعالجة الذكية =================
+     نموذج فصل الأشخاص (MediaPipe Selfie Segmenter) يعمل **داخل جهاز الزائر**:
+     لا ترفع الصورة لأي خادم. النتيجة: نقص الشخص من خلفيته العشوائية ونضعه
+     داخل «عالم طبعه» المبني من ألوان الهوية ونقوشها ورمز الطبع الرسمي. */
+  var AI = {
+    on: true,            /* رغبة المستخدم */
+    state: 'idle',       /* idle | loading | ready | none | error */
+    subject: null,       /* كانفس الشخص بقناة شفافية */
+    box: null,           /* حدود الشخص داخل كانفس الشخص */
+    coverage: 0,
+    segmenter: null,
+    art: null, artKey: ''
+  };
+
+  function aiNote(msg){ var el = $('ai-state'); if(el) el.textContent = msg || ''; }
+  function aiSync(){
+    var box = $('ai-box'); if(!box) return;
+    box.classList.toggle('busy', AI.state === 'loading');
+    var btn = $('ai-toggle');
+    btn.setAttribute('aria-pressed', AI.on ? 'true' : 'false');
+    btn.classList.toggle('on', AI.on && AI.state === 'ready');
+    btn.textContent = AI.on ? 'المعالجة الذكية: مفعّلة' : 'المعالجة الذكية: معطّلة';
+    btn.disabled = (AI.state !== 'ready');
+  }
+
+  function aiReset(){
+    AI.state='idle'; AI.subject=null; AI.box=null; AI.coverage=0; AI.art=null; AI.artKey='';
+  }
+
+  /* تحميل النموذج عند أول استخدام فقط */
+  function getSegmenter(){
+    if(AI.segmenter) return Promise.resolve(AI.segmenter);
+    return import('./ai/vision_bundle.mjs').then(function(m){
+      return m.FilesetResolver.forVisionTasks('./ai/wasm').then(function(fs){
+        return m.ImageSegmenter.createFromOptions(fs, {
+          baseOptions: { modelAssetPath: './ai/selfie_segmenter.tflite' },
+          runningMode: 'IMAGE', outputCategoryMask: true, outputConfidenceMasks: false
+        });
+      });
+    }).then(function(s){ AI.segmenter = s; return s; });
+  }
+
+  /* يبني كانفس الشخص بقناة شفافية ناعمة الحواف */
+  function prepareAI(img){
+    aiReset();
+    AI.state = 'loading'; aiSync();
+    aiNote('أجهّز المعالجة الذكية على جهازك… (أول مرة فقط، لا تُرفع صورتك).');
+    return getSegmenter().then(function(seg2){
+      var MAX = 640;
+      var r = Math.min(1, MAX/Math.max(img.width, img.height));
+      var w = Math.max(2, Math.round(img.width*r)), h = Math.max(2, Math.round(img.height*r));
+      var src = document.createElement('canvas'); src.width=w; src.height=h;
+      var sx = src.getContext('2d', {willReadFrequently:true});
+      sx.drawImage(img, 0, 0, w, h);
+
+      var res = seg2.segment(src);
+      var m = res.categoryMask;
+      var raw = m.getAsUint8Array();
+      var mw = m.width, mh = m.height;
+      try{ res.close ? res.close() : m.close(); }catch(e){}
+
+      /* قناع الشخص: الفئة 1 */
+      var cnt = 0, minX=mw, minY=mh, maxX=0, maxY=0;
+      var maskCv = document.createElement('canvas'); maskCv.width=mw; maskCv.height=mh;
+      var mx = maskCv.getContext('2d');
+      var id = mx.createImageData(mw, mh), d = id.data;
+      /* في هذا النموذج: 0 = الشخص، 255 = الخلفية (تأكد عملياً من مخرجات القناع) */
+      for(var i=0;i<raw.length;i++){
+        var v = raw[i] ? 0 : 255;
+        if(v){ cnt++;
+          var px = i % mw, py = (i/mw)|0;
+          if(px<minX)minX=px; if(px>maxX)maxX=px; if(py<minY)minY=py; if(py>maxY)maxY=py;
+        }
+        d[i*4]=255; d[i*4+1]=255; d[i*4+2]=255; d[i*4+3]=v;
+      }
+      mx.putImageData(id, 0, 0);
+      AI.coverage = cnt/(mw*mh);
+
+      if(AI.coverage < 0.05 || AI.coverage > 0.88){
+        AI.state = 'none'; aiSync();
+        aiNote('ما لقيت شخصاً واضحاً في الصورة — طبّقت تدرّج ألوان الطبع على الصورة كاملة.');
+        AI.art = null; AI.artKey = '';
+        return;
+      }
+
+      /* تنعيم حواف القناع ثم قصّ الشخص بالدقة الأصلية */
+      var W2 = Math.min(img.width, 1400), r2 = W2/img.width;
+      var H2 = Math.round(img.height*r2);
+      var sub = document.createElement('canvas'); sub.width=W2; sub.height=H2;
+      var cx2 = sub.getContext('2d');
+      cx2.drawImage(img, 0, 0, W2, H2);
+      cx2.globalCompositeOperation = 'destination-in';
+      if(typeof cx2.filter === 'string') cx2.filter = 'blur(' + Math.max(1, W2*0.0022) + 'px)';
+      cx2.drawImage(maskCv, 0, 0, W2, H2);
+      cx2.filter = 'none';
+      cx2.globalCompositeOperation = 'source-over';
+
+      AI.subject = sub;
+      AI.box = { x: minX/mw*W2, y: minY/mh*H2, w: (maxX-minX+1)/mw*W2, h: (maxY-minY+1)/mh*H2 };
+      AI.state = 'ready'; aiSync();
+      aiNote('تمّت المعالجة على جهازك: فصلت الشخص ووضعته داخل عالم طبعه.');
+    }).catch(function(e){
+      AI.state = 'error'; aiSync();
+      aiNote('تعذّرت المعالجة الذكية على هذا المتصفح — البطاقة تعمل بالتصميم العادي.');
+    });
+  }
+
+  function shade(hex, k){ /* k>0 يفتح، k<0 يغمق */
+    var r = parseInt(hex.substr(1,2),16), g = parseInt(hex.substr(3,2),16), b = parseInt(hex.substr(5,2),16);
+    var f = function(v){ return Math.max(0, Math.min(255, Math.round(k>0 ? v+(255-v)*k : v*(1+k)))); };
+    return 'rgb(' + f(r) + ',' + f(g) + ',' + f(b) + ')';
+  }
+
+  /* يبني «عالم الطبع» بالصورة المقصوصة — ويُخزَّن ليُعاد استعماله في كل إطار */
+  function buildArt(w, h, tr){
+    var key = tr + '|' + w + 'x' + h + '|' + (AI.on && AI.state==='ready' ? 'ai' : AI.state);
+    if(AI.art && AI.artKey === key) return AI.art;
+    var T = TRAITS[tr];
+    var cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
+    var c = cvs.getContext('2d');
+    var useAI = (AI.on && AI.state === 'ready' && AI.subject);
+
+    if(!useAI){
+      /* بلا قصّ: ثنائية لونية (Duotone) نظيفة بلون الطبع — تبقى الصورة مقروءة */
+      var sup = (typeof c.filter === 'string');
+      c.save();
+      if(sup) c.filter = 'grayscale(1) contrast(1.10) brightness(1.03)';
+      cover(c, st.photo, 0, 0, w, h);
+      c.filter = 'none';
+      c.globalCompositeOperation = 'multiply';
+      c.fillStyle = shade(T.color, 0.58); c.fillRect(0,0,w,h);
+      c.globalCompositeOperation = 'screen';
+      c.fillStyle = shade(T.color, -0.62); c.fillRect(0,0,w,h);
+      c.globalCompositeOperation = 'source-over';
+      c.globalAlpha = 0.16;
+      var pat0 = ASSETS['pat_'+tr];
+      if(pat0){
+        var ps0 = Math.round(w/2.1);
+        for(var y0=0; y0<h; y0+=ps0) for(var x0=0; x0<w; x0+=ps0) c.drawImage(pat0, x0, y0, ps0, ps0);
+      }
+      c.globalAlpha = 1;
+      var vg0 = c.createRadialGradient(w/2, h*0.44, Math.min(w,h)*0.32, w/2, h*0.5, Math.max(w,h)*0.78);
+      vg0.addColorStop(0,'rgba(7,21,15,0)'); vg0.addColorStop(1,'rgba(7,21,15,.42)');
+      c.fillStyle = vg0; c.fillRect(0,0,w,h);
+      c.restore();
+    } else {
+      /* 1) خلفية عالم الطبع */
+      var g = c.createLinearGradient(0,0,0,h);
+      g.addColorStop(0, shade(T.color, 0.18));
+      g.addColorStop(0.55, T.color);
+      g.addColorStop(1, shade(T.color, -0.52));
+      c.fillStyle = g; c.fillRect(0,0,w,h);
+
+      var pat = ASSETS['pat_'+tr];
+      if(pat){
+        c.save();
+        if(typeof c.filter === 'string') c.filter = 'blur(' + Math.round(w*0.012) + 'px)';
+        c.globalAlpha = 0.46;
+        var ps = Math.round(w/1.9);
+        for(var yy=-ps*0.2; yy<h+ps; yy+=ps) for(var xx=-ps*0.2; xx<w+ps; xx+=ps) c.drawImage(pat, xx, yy, ps, ps);
+        c.restore();
+      }
+
+      /* 2) موتيف الطبع كختم كبير خلف الشخص — نقصّ قلب البلاطة بلا إطارها */
+      var ico = ASSETS['icon_'+tr];
+      if(ico){
+        var cs = ico.width*0.56, co = (ico.width-cs)/2;
+        var es = Math.round(Math.min(w,h)*0.82);
+        /* نبني الختم على كانفس منفصل ونتلاشى حوافّه لئلا يظهر كمربّع صريح */
+        var em = document.createElement('canvas'); em.width = es; em.height = es;
+        var ec = em.getContext('2d');
+        ec.drawImage(ico, co, co, cs, cs, 0, 0, es, es);
+        ec.globalCompositeOperation = 'destination-in';
+        var fg = ec.createRadialGradient(es/2, es/2, es*0.16, es/2, es/2, es*0.52);
+        fg.addColorStop(0, 'rgba(0,0,0,1)');
+        fg.addColorStop(0.72, 'rgba(0,0,0,.85)');
+        fg.addColorStop(1, 'rgba(0,0,0,0)');
+        ec.fillStyle = fg; ec.fillRect(0,0,es,es);
+        c.save();
+        c.globalCompositeOperation = 'overlay'; c.globalAlpha = 0.55;
+        c.drawImage(em, (w-es)/2, h*0.44 - es/2);
+        c.globalCompositeOperation = 'soft-light'; c.globalAlpha = 0.34;
+        c.drawImage(em, (w-es)/2, h*0.44 - es/2);
+        c.restore();
+      }
+
+      /* 3) هالة ضوء خلف الرأس */
+      var bx = AI.box, sub = AI.subject;
+      var scale = Math.min((h*0.97)/bx.h, (w*0.92)/bx.w);
+      var dw = sub.width*scale, dh = sub.height*scale;
+      var dx = w/2 - (bx.x + bx.w/2)*scale;
+      var dy = h*0.985 - (bx.y + bx.h)*scale;
+      var headX = w/2, headY = dy + (bx.y + bx.h*0.16)*scale;
+      var rg = c.createRadialGradient(headX, headY, 0, headX, headY, Math.max(w,h)*0.46);
+      rg.addColorStop(0, 'rgba(255,255,255,.34)');
+      rg.addColorStop(0.42, shade(T.color, 0.30).replace('rgb','rgba').replace(')',',.28)'));
+      rg.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = rg; c.fillRect(0,0,w,h);
+
+      /* 4) ظل الشخص */
+      c.save();
+      c.globalAlpha = 0.34;
+      if(typeof c.filter === 'string') c.filter = 'blur(' + Math.round(w*0.018) + 'px) brightness(0)';
+      c.drawImage(sub, dx + w*0.012, dy + h*0.012, dw, dh);
+      c.restore();
+
+      /* 5) ضوء حافّي بلون الطبع */
+      c.save();
+      c.globalAlpha = 1;
+      if(typeof c.filter === 'string') c.filter = 'blur(' + Math.round(w*0.009) + 'px)';
+      var k = 1.024;
+      c.translate(dx + dw/2, dy + dh/2); c.scale(k,k); c.translate(-(dx + dw/2), -(dy + dh/2));
+      var rim = document.createElement('canvas'); rim.width = sub.width; rim.height = sub.height;
+      var rc = rim.getContext('2d');
+      rc.drawImage(sub,0,0);
+      rc.globalCompositeOperation = 'source-atop';
+      rc.fillStyle = shade(T.color, 0.78); rc.fillRect(0,0,rim.width,rim.height);
+      c.drawImage(rim, dx, dy, dw, dh);
+      c.restore();
+
+      /* 6) الشخص نفسه بتدرّج خفيف نحو لون الطبع (الوجه كما هو) */
+      var gr = document.createElement('canvas'); gr.width = sub.width; gr.height = sub.height;
+      var gc = gr.getContext('2d');
+      if(typeof gc.filter === 'string') gc.filter = 'contrast(1.06) saturate(.95)';
+      gc.drawImage(sub,0,0);
+      gc.filter = 'none';
+      gc.globalCompositeOperation = 'source-atop';
+      gc.globalAlpha = 0.13; gc.fillStyle = T.color; gc.fillRect(0,0,gr.width,gr.height);
+      gc.globalAlpha = 1; gc.globalCompositeOperation = 'source-over';
+      c.drawImage(gr, dx, dy, dw, dh);
+
+      /* 7) تعتيم الأطراف */
+      var vg = c.createRadialGradient(w/2, h*0.44, Math.min(w,h)*0.30, w/2, h*0.5, Math.max(w,h)*0.78);
+      vg.addColorStop(0,'rgba(7,21,15,0)'); vg.addColorStop(1,'rgba(7,21,15,.46)');
+      c.fillStyle = vg; c.fillRect(0,0,w,h);
+    }
+
+    AI.art = cvs; AI.artKey = key;
+    return cvs;
+  }
+
+  function paintPhoto(c, x, y, w, h){
+    if(!st.photo) return;
+    var art = null;
+    try { art = buildArt(Math.round(w), Math.round(h), st.trait); } catch(e){ art = null; }
+    if(art) c.drawImage(art, x, y, w, h); else cover(c, st.photo, x, y, w, h);
+  }
+
   /* ============ رسم البطاقة ============ */
   /* t من 0 إلى 1: 1 = البطاقة النهائية الساكنة */
   function draw(c, W, H, tr, name, t){
@@ -443,15 +710,15 @@
       var supportsFilter = (typeof c.filter === 'string');
       if(rev < 1 && supportsFilter){
         c.save(); c.filter = 'grayscale(1) contrast(1.05)';
-        cover(c, st.photo, pad, top, cw, photoH);
+        paintPhoto(c, pad, top, cw, photoH);
         c.restore();
         c.save();
         var revX = pad + cw*(1-rev);
         c.beginPath(); c.rect(revX, top, cw-(revX-pad), photoH); c.clip();
-        cover(c, st.photo, pad, top, cw, photoH);
+        paintPhoto(c, pad, top, cw, photoH);
         c.restore();
       } else {
-        cover(c, st.photo, pad, top, cw, photoH);
+        paintPhoto(c, pad, top, cw, photoH);
       }
       /* موجة السدو أثناء الكشف */
       if(rev > 0 && rev < 1 && ASSETS.sadu){
@@ -587,6 +854,10 @@
         st.name = ($('uname').value || '').trim().slice(0,22);
         st.suggest = suggestFromPhoto(im);
         startQuiz();
+        /* المعالجة تعمل بالتوازي مع الأسئلة — فتكون جاهزة قبل ما يوصل للنتيجة */
+        prepareAI(im).then(function(){
+          if(!$('s-result').classList.contains('hide')){ AI.art=null; AI.artKey=''; animateIn(); }
+        });
       };
       im.onerror = function(){ alert('تعذّر فتح هذه الصورة، جرّب صورة ثانية.'); };
       im.src = fr.result;
@@ -697,12 +968,22 @@
       b.type='button'; b.setAttribute('data-k',k); b.textContent = TRAITS[k].name;
       b.style.setProperty('--c', TRAITS[k].color);
       b.addEventListener('click', function(){
-        st.trait = k; paintTraitUI(); animateIn();
+        st.trait = k; AI.art=null; AI.artKey=''; paintTraitUI(); animateIn();
       });
       box.appendChild(b);
     });
   }
   buildChips();
+
+  $('ai-toggle').addEventListener('click', function(){
+    if(AI.state !== 'ready') return;
+    AI.on = !AI.on; AI.art=null; AI.artKey='';
+    aiSync();
+    aiNote(AI.on ? 'المعالجة الذكية مفعّلة — الشخص مفصول وموضوع داخل عالم طبعه.'
+                 : 'المعالجة الذكية معطّلة — الصورة كما هي بتدرّج ألوان الطبع.');
+    animateIn();
+  });
+  aiSync();
 
   function showResult(animate){
     show('s-result');
@@ -766,12 +1047,12 @@
     if(typeof GIF === 'undefined'){ $('dl-note').textContent = 'محرّك GIF لم يُحمَّل — حدّث الصفحة وجرّب مرة ثانية.'; return; }
     setBusy(true, 'أجهّز الـ GIF… خلّك بالصفحة.');
     var f = FORMATS[st.fmt];
-    var scale = Math.min(1, 480/f.w);
+    var scale = Math.min(1, 420/f.w);
     var W = Math.round(f.w*scale), H = Math.round(f.h*scale);
     var tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H;
     var tc = tmp.getContext('2d');
-    var gif = new GIF({ workers:2, quality:12, width:W, height:H, workerScript:'gif.worker.js', dither:false });
-    var N = 30;
+    var gif = new GIF({ workers:2, quality:16, width:W, height:H, workerScript:'gif.worker.js', dither:false });
+    var N = 24;
     for(var i=0;i<=N;i++){
       var t = i/N;
       tc.clearRect(0,0,W,H);
@@ -895,6 +1176,7 @@
 
   $('btn-again').addEventListener('click', function(){
     st.photo = null; $('file').value = ''; $('filecam').value = '';
+    aiReset(); aiSync(); aiNote('');
     show('s-start');
   });
 
@@ -923,6 +1205,7 @@
 
   /* واجهة للاختبار الآلي */
   window.__mirror = {
+    ai: AI,
     setPhoto: function(img){ st.photo = img; st.suggest = suggestFromPhoto(img); },
     setName: function(n){ st.name = n; },
     startQuiz: startQuiz,
