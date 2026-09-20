@@ -164,6 +164,28 @@
   .aitoggle.on::before{background:var(--pix2);}
   .aitoggle:disabled{opacity:.6;cursor:default;}
   .aibox.busy .aitoggle::before{animation:sp 1s linear infinite;border:2px solid #ffffff44;border-top-color:#fff;background:none;width:10px;height:10px;}
+
+  .offer-eyebrow{margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--mut2);}
+  .offer .pr em{display:block;font-style:normal;font-size:12px;color:var(--mut2);text-decoration:line-through;
+    font-weight:400;margin-top:-2px;}
+  .of-specs{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:7px;}
+  .of-specs li{display:flex;gap:10px;align-items:baseline;background:#ffffff07;border:1px solid var(--line);
+    border-radius:11px;padding:9px 12px;}
+  .of-specs span{flex:0 0 66px;font-size:11.5px;color:var(--mut2);}
+  .of-specs b{font-size:13px;font-weight:600;color:var(--ink2);line-height:1.6;}
+  .offer-note{margin:10px 0 0;font-size:11px;color:var(--mut2);line-height:1.7;}
+
+  .studio{margin-top:14px;background:linear-gradient(180deg,#123b34,#0c2a28);border:1px solid #54be3640;
+    border-radius:16px;padding:14px 15px;}
+  .st-head{display:flex;align-items:center;gap:9px;margin-bottom:7px;flex-wrap:wrap;}
+  .st-head b{font-size:14.5px;}
+  .st-badge{font-size:10px;font-weight:700;letter-spacing:.05em;background:#54be361f;border:1px solid #54be3666;
+    color:#d8f5cf;border-radius:999px;padding:3px 9px;}
+  .studio p{margin:0;font-size:12px;color:var(--mut);line-height:1.75;}
+  .studio p b{color:var(--ink2);}
+  .st-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .st-state{margin-top:9px!important;font-size:11.5px;color:var(--mut2);}
+  .st-state.err{color:#ffb4a8;}
   .hide{display:none!important;}
   .spin{display:inline-block;width:13px;height:13px;border:2px solid #ffffff44;border-top-color:#fff;
     border-radius:50%;animation:sp .7s linear infinite;}
@@ -278,20 +300,44 @@
         <p id="ai-state">يبدأ فصل الشخص عن خلفيته تلقائياً بعد رفع الصورة.</p>
       </div>
 
+      <div class="studio hide" id="studio">
+        <div class="st-head">
+          <b>استوديو الأطباع</b>
+          <span class="st-badge">ذكاء اصطناعي متقدّم</span>
+        </div>
+        <p>يعيد بناء صورتك بالكامل داخل مشهد طبعك — إضاءة وعمق وبيئة حقيقية، لا خلفية خلف قصاصة.
+           <b>تنبيه:</b> هذا الخيار يرسل صورتك إلى خوادم نُبل وابتكار على Cloudflare للمعالجة، ولا تُحفظ بعدها.
+           المعالجة على جهازك تبقى الافتراضية إن لم ترغب.</p>
+        <div class="st-acts">
+          <button type="button" class="btn primary sm" id="st-go">أعد بناء صورتي بطبعي</button>
+          <button type="button" class="btn sm hide" id="st-off">ارجع للمعالجة على الجهاز</button>
+        </div>
+        <p class="st-state" id="st-state"></p>
+      </div>
+
       <div class="traitchips" id="chips"></div>
       <p class="note">ما ضبط الطبع؟ بدّله من هنا — البطاقة تتحدّث فوراً.</p>
 
       <div class="offer" id="offer-wrap">
+        <p class="offer-eyebrow">الباقة التي تناسب طبعك</p>
         <div class="in" id="offer-in">
           <img id="of-img" src="../nd/trait-karam-icon.jpg" alt="">
           <div class="tx">
             <b id="of-name">—</b>
             <span id="of-sub">—</span>
           </div>
-          <div class="pr"><span id="of-price">—</span> <small>ريال</small></div>
+          <div class="pr"><span id="of-price">—</span> <small>ريال</small>
+            <em id="of-was">—</em>
+          </div>
         </div>
+        <ul class="of-specs">
+          <li><span>المحتويات</span><b id="of-contents">—</b></li>
+          <li><span>تكفي</span><b id="of-qty">—</b></li>
+          <li><span>التوفير</span><b id="of-save">—</b></li>
+        </ul>
+        <p class="offer-note">الأسعار شاملة الخصم ويُضاف عليها ضريبة القيمة المضافة عند الفوترة. العرض ساري حتى 30 سبتمبر 2026.</p>
         <div class="acts">
-          <a class="btn trait sm" id="of-link" href="#" target="_blank" rel="noopener">اطلب باقة طبعك</a>
+          <a class="btn trait sm" id="of-link" href="../#nd-order">اطلب باقة طبعك ←</a>
           <a class="btn wa sm" id="of-wa" href="#" target="_blank" rel="noopener">أرسل لي النسخة عالية الدقة</a>
           <button type="button" class="btn sm" id="btn-again">جرّب صورة ثانية</button>
         </div>
@@ -313,17 +359,17 @@
   /* ============ البيانات ============ */
   var TRAITS = {
     karam:  { name:'الكرم',   color:'#2C4EA7', word:'عزّنا بكرمنا',   line:'تستقبل الناس قبل ما تستقبل المناسبة — بيتك ومكانك أول من يحتفل.',
-              pkg:'باقة الكرم للموظفين (3 موظفين)', sub:'الكرم… امتنان ينعكس على الفريق', price:96, url:'https://nublandebtikar.com/p28583846' },
+              pkg:'باقة الكرم للموظفين (3 موظفين)', sub:'الكرم… امتنان ينعكس على الفريق', contents:'طقم لكل موظف: نوت بوك + قلم + كاس سيراميك', qty:'لثلاثة موظفين', price:96, was:200, href:'../?t=karam#nd-order' },
     jood:   { name:'الجود',   color:'#5F5BB2', word:'عزّنا بجودنا',   line:'العطاء عندك تفصيل صغير يلاحظه الناس ويتذكرونه طويلاً.',
-              pkg:'باقة الجود للموظفين (2 موظفين)', sub:'الجود… تقدير يبدأ من الداخل', price:69, url:'https://nublandebtikar.com/p1046002778' },
+              pkg:'باقة الجود للموظفين (موظفان)', sub:'الجود… تقدير يبدأ من الداخل', contents:'طقم لكل موظف: نوت بوك + قلم', qty:'لموظفَين', price:69, was:100, href:'../?t=jood#nd-order' },
     himma:  { name:'الهمّة',  color:'#95144A', word:'عزّنا بهمّتنا',  line:'ما تأجّل شيء لبكرة — أول من يبدأ وأول من يخلّص.',
-              pkg:'باقة الهمّة للأفراد', sub:'الهمّة… بداية المشاركة', price:46, url:'https://nublandebtikar.com/p757553509' },
+              pkg:'باقة الهمّة للأفراد', sub:'الهمّة… بداية المشاركة', contents:'استيكر دايكت 2 متر + بروشان لليوم الوطني', qty:'مجموعة واحدة', price:46, was:80, href:'../?t=himma#nd-order' },
     asala:  { name:'الأصالة', color:'#54BE36', word:'عزّنا بأصالتنا', line:'تعرف من وين جينا، وتحرص أن كل تفصيل يحمل جذورنا.',
-              pkg:'باقة الأصالة للأفراد', sub:'الأصالة… اعتزاز بالجذور', price:146, url:'https://nublandebtikar.com/p621154653' },
+              pkg:'باقة الأصالة للأفراد', sub:'الأصالة… اعتزاز بالجذور', contents:'3 أمتار قص بلوتر + 3 وشاحات + 10 بروشات', qty:'مجموعة واحدة', price:146, was:200, href:'../?t=asala#nd-order' },
     shajaa: { name:'الشجاعة', color:'#577C48', word:'عزّنا بشجاعتنا', line:'تجرّب اللي ما جرّبه أحد، وواجهتك أول من يعلن الفرح.',
-              pkg:'باقة الشجاعة للأفراد', sub:'الشجاعة… فخر يظهر للعلن', price:96, url:'https://nublandebtikar.com/p1571460433' },
+              pkg:'باقة الشجاعة للأفراد', sub:'الشجاعة… فخر يظهر للعلن', contents:'2 متر قص بلوتر + 5 بروشات + وشاحان', qty:'مجموعة واحدة', price:96, was:135, href:'../?t=shajaa#nd-order' },
     ruya:   { name:'الرؤية',  color:'#75561D', word:'عزّنا برؤيتنا',  line:'تشوف السنة الجاية قبل ما تبدأ، وتبني اليوم على أساس بكرة.',
-              pkg:'باقة الرؤية للموظفين (5 موظفين)', sub:'الرؤية… فريق يصنع المستقبل', price:196, url:'https://nublandebtikar.com/p2135196833' }
+              pkg:'باقة الرؤية للموظفين (5 موظفين)', sub:'الرؤية… فريق يصنع المستقبل', contents:'طقم لكل موظف: نوت بوك + قلم + كاس + بروش', qty:'لخمسة موظفين', price:196, was:275, href:'../?t=ruya#nd-order' }
   };
   var ORDER = ['karam','jood','himma','asala','shajaa','ruya'];
 
@@ -658,6 +704,99 @@
     if(art) c.drawImage(art, x, y, w, h); else cover(c, st.photo, x, y, w, h);
   }
 
+
+  /* ================= استوديو الأطباع =================
+     إعادة بناء الصورة بالكامل على خوادم نُبل وابتكار (Cloudflare Workers AI · FLUX.2 klein).
+     اختياري تماماً: الزر لا يظهر إلا إذا كانت الخدمة مهيّأة، ولا تُرسل الصورة إلا بضغطة صريحة. */
+  var STUDIO = { ready:false, busy:false, result:null, forTrait:null, original:null };
+
+  function stState(msg, isErr){
+    var el = $('st-state'); if(!el) return;
+    el.textContent = msg || ''; el.classList.toggle('err', !!isErr);
+  }
+
+  /* تصغير الصورة إلى 512px كحدّ أقصى — شرط النموذج */
+  function photoTo512(img){
+    return new Promise(function(res){
+      var m = 512, r = Math.min(1, m/Math.max(img.width, img.height));
+      var w = Math.max(64, Math.round(img.width*r)), h = Math.max(64, Math.round(img.height*r));
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      c.toBlob(function(b){ res(b); }, 'image/png');
+    });
+  }
+
+  function studioProbe(){
+    fetch('/api/restyle', { method:'GET' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        STUDIO.ready = !!(j && j.ready);
+        var box = $('studio');
+        if(box) box.classList.toggle('hide', !STUDIO.ready);
+      })
+      .catch(function(){ STUDIO.ready = false; });
+  }
+
+  function studioRun(){
+    if(STUDIO.busy || !st.photo) return;
+    STUDIO.busy = true;
+    $('st-go').disabled = true;
+    stState('أرسل صورتك وأعيد بناء المشهد… قد يستغرق من 10 إلى 25 ثانية.');
+    photoTo512(STUDIO.original || st.photo).then(function(blob){
+      var fd = new FormData();
+      fd.append('trait', st.trait);
+      fd.append('photo', blob, 'photo.png');
+      return fetch('/api/restyle', { method:'POST', body:fd });
+    }).then(function(r){
+      if(!r.ok){
+        return r.json().catch(function(){ return {}; }).then(function(j){
+          throw new Error(j.error || ('http_' + r.status));
+        });
+      }
+      return r.blob();
+    }).then(function(b){
+      return new Promise(function(res, rej){
+        var im = new Image();
+        im.onload = function(){ res(im); };
+        im.onerror = function(){ rej(new Error('bad_image')); };
+        im.src = URL.createObjectURL(b);
+      });
+    }).then(function(im){
+      if(!STUDIO.original) STUDIO.original = st.photo;
+      STUDIO.result = im; STUDIO.forTrait = st.trait;
+      st.photo = im;
+      AI.on = false;            /* الصورة صارت مشهداً كاملاً: لا قصّ بعد الآن */
+      AI.art = null; AI.artKey = '';
+      aiSync();
+  $('st-go').addEventListener('click', studioRun);
+  $('st-off').addEventListener('click', studioOff);
+  studioProbe();
+      $('st-off').classList.remove('hide');
+      stState('تمّت إعادة البناء داخل مشهد ' + TRAITS[st.trait].name + '.');
+      animateIn();
+    }).catch(function(e){
+      var m = String(e && e.message || e);
+      var txt = 'تعذّرت إعادة البناء — جرّب مرة ثانية.';
+      if(m === 'not_configured') txt = 'الاستوديو غير مفعّل بعد على الخادم.';
+      else if(m === 'too_large')  txt = 'الصورة كبيرة — جرّب صورة أصغر.';
+      else if(m === 'model_failed' || m === 'unexpected_output') txt = 'الخدمة مزدحمة الآن — أعد المحاولة بعد قليل.';
+      stState(txt, true);
+    }).then(function(){
+      STUDIO.busy = false; $('st-go').disabled = false;
+    });
+  }
+
+  function studioOff(){
+    if(!STUDIO.original) return;
+    st.photo = STUDIO.original;
+    STUDIO.result = null;
+    AI.on = true; AI.art = null; AI.artKey = '';
+    aiSync();
+    $('st-off').classList.add('hide');
+    stState('رجعت للمعالجة على جهازك.');
+    animateIn();
+  }
+
   /* ============ رسم البطاقة ============ */
   /* t من 0 إلى 1: 1 = البطاقة النهائية الساكنة */
   function draw(c, W, H, tr, name, t){
@@ -950,13 +1089,18 @@
     $('of-name').textContent = T.pkg;
     $('of-sub').textContent = T.sub;
     $('of-price').textContent = T.price;
-    $('of-link').href = T.url;
+    $('of-was').textContent = T.was + ' ريال';
+    $('of-contents').textContent = T.contents;
+    $('of-qty').textContent = T.qty;
+    $('of-save').textContent = (T.was - T.price) + ' ريال (' + Math.round((1 - T.price/T.was)*100) + '%)';
+    $('of-link').href = T.href;
     $('offer-in').style.setProperty('--c', T.color);
     $('offer-wrap').style.setProperty('--c', T.color);
     $('of-wa').href = 'https://wa.me/' + WA_NUM + '?text=' + encodeURIComponent(
       'السلام عليكم، طلعت نتيجتي في مرآة الأطباع: ' + T.name + '.' +
       (st.name ? ' الاسم: ' + st.name + '.' : '') +
-      ' أرغب بالنسخة عالية الدقة من بطاقتي، وأبغى أعرف تفاصيل ' + T.pkg + '.');
+      ' أرغب بالنسخة عالية الدقة من بطاقتي، وأبغى أطلب ' + T.pkg +
+      ' (' + T.contents + ') بسعر ' + T.price + ' ريال.');
     Array.prototype.forEach.call($('chips').children, function(b){
       b.classList.toggle('on', b.getAttribute('data-k') === st.trait);
     });
@@ -969,6 +1113,7 @@
       b.style.setProperty('--c', TRAITS[k].color);
       b.addEventListener('click', function(){
         st.trait = k; AI.art=null; AI.artKey=''; paintTraitUI(); animateIn();
+        if(STUDIO.result && STUDIO.forTrait !== k) stState('بدّلت الطبع — اضغط «أعد بناء صورتي» ليتغيّر المشهد أيضاً.');
       });
       box.appendChild(b);
     });
@@ -1177,6 +1322,8 @@
   $('btn-again').addEventListener('click', function(){
     st.photo = null; $('file').value = ''; $('filecam').value = '';
     aiReset(); aiSync(); aiNote('');
+    STUDIO.result=null; STUDIO.original=null; STUDIO.forTrait=null;
+    $('st-off').classList.add('hide'); stState('');
     show('s-start');
   });
 
