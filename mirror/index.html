@@ -571,14 +571,21 @@
 
   /* يبني «عالم الطبع» بالصورة المقصوصة — ويُخزَّن ليُعاد استعماله في كل إطار */
   function buildArt(w, h, tr){
-    var key = tr + '|' + w + 'x' + h + '|' + (AI.on && AI.state==='ready' ? 'ai' : AI.state);
+    var key = tr + '|' + w + 'x' + h + '|' + ((STUDIO.result && st.photo === STUDIO.result) ? 'studio' : (AI.on && AI.state==='ready' ? 'ai' : AI.state));
     if(AI.art && AI.artKey === key) return AI.art;
     var T = TRAITS[tr];
     var cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
     var c = cvs.getContext('2d');
     var useAI = (AI.on && AI.state === 'ready' && AI.subject);
+    var fromStudio = !!(STUDIO.result && st.photo === STUDIO.result);
 
-    if(!useAI){
+    if(fromStudio){
+      /* الصورة أصلاً مشهد كامل من الاستوديو — تُعرض كما هي بلا أي تدرّج يفسدها */
+      cover(c, st.photo, 0, 0, w, h);
+      var vgs = c.createRadialGradient(w/2, h*0.44, Math.min(w,h)*0.42, w/2, h*0.5, Math.max(w,h)*0.80);
+      vgs.addColorStop(0,'rgba(7,21,15,0)'); vgs.addColorStop(1,'rgba(7,21,15,.30)');
+      c.fillStyle = vgs; c.fillRect(0,0,w,h);
+    } else if(!useAI){
       /* بلا قصّ: ثنائية لونية (Duotone) نظيفة بلون الطبع — تبقى الصورة مقروءة */
       var sup = (typeof c.filter === 'string');
       c.save();
