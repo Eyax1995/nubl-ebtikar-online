@@ -6,13 +6,13 @@
  * ويقبل حتى أربع صور مرجعية (كل واحدة أصغر من 512×512).
  *
  * المدخل: multipart/form-data فيه trait + photo
- * المخرج: image/png
+ * المخرج: image/jpeg
  *
  * لا يُخزَّن شيء: الصورة تمرّ في الذاكرة وتُعاد النتيجة مباشرة.
  */
 
 const MODEL = '@cf/black-forest-labs/flux-2-klein-4b';
-const BUILD = 'v2';   /* رفع النسخة لإجبار نشر جديد يلتقط ربط Workers AI */
+const BUILD = 'v4';   /* رفع النسخة لإجبار نشر جديد يلتقط ربط Workers AI */
 const MAX_BYTES = 1400000;   /* الصورة تُصغَّر في المتصفح إلى 512px قبل الإرسال */
 
 const BASE =
@@ -56,7 +56,9 @@ function err(code, status, extra) {
 
 export async function onRequestGet(context) {
   /* فحص جاهزية — تستخدمه الصفحة لتُظهر الزر أو تخفيه */
-  return new Response(JSON.stringify({ ready: !!context.env.AI, model: MODEL, build: BUILD, keys: Object.keys(context.env || {}) }), {
+  const e = context.env || {};
+  const via = e.AI ? 'binding' : ((e.CF_AI_TOKEN && e.CF_ACCOUNT_ID) ? 'rest' : null);
+  return new Response(JSON.stringify({ ready: !!via, via: via, model: MODEL, build: BUILD }), {
     headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
   });
 }
@@ -64,7 +66,9 @@ export async function onRequestGet(context) {
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  if (!env.AI) return err('not_configured', 503);
+  const viaBinding = !!env.AI;
+  const viaRest = !!(env.CF_AI_TOKEN && env.CF_ACCOUNT_ID);
+  if (!viaBinding && !viaRest) return err('not_configured', 503);
 
   let form;
   try { form = await request.formData(); }
@@ -93,6 +97,39 @@ export async function onRequestPost(context) {
 
   const packed = new Response(out);
 
+  /* مسار ثانٍ: واجهة REST بمتغيّرين محفوظين في إعدادات المشروع، حين لا يكون الربط مضافاً */
+  if (!viaBinding) {
+    let r;
+    try {
+      r = await fetch(
+        'https://api.cloudflare.com/client/v4/accounts/' + env.CF_ACCOUNT_ID + '/ai/run/' + MODEL,
+        {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + env.CF_AI_TOKEN,
+                     'content-type': packed.headers.get('content-type') },
+          body: packed.body
+        }
+      );
+    } catch (e) {
+      return err('model_failed', 502, { detail: String(e && e.message || e).slice(0, 200) });
+    }
+    if (!r.ok) {
+      const t = await r.text().catch(function () { return ''; });
+      return err('model_failed', 502, { status: r.status, detail: t.slice(0, 300) });
+    }
+    const ct = r.headers.get('content-type') || '';
+    if (ct.indexOf('image') > -1) {
+      return new Response(r.body, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'no-store' } });
+    }
+    const j = await r.json().catch(function () { return null; });
+    const b64r = j && (j.result && (j.result.image || j.result) || j.image);
+    if (typeof b64r === 'string') {
+      const bin2 = Uint8Array.from(atob(b64r), function (c) { return c.charCodeAt(0); });
+      return new Response(bin2, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'no-store' } });
+    }
+    return err('unexpected_output', 502);
+  }
+
   let res;
   try {
     res = await env.AI.run(MODEL, {
@@ -108,12 +145,12 @@ export async function onRequestPost(context) {
   /* المخرجات تختلف بحسب النموذج: تدفّق ثنائي، أو كائن فيه صورة base64 */
   if (res && typeof res.getReader === 'function') {
     return new Response(res, {
-      headers: { 'content-type': 'image/png', 'cache-control': 'no-store' }
+      headers: { 'content-type': 'image/jpeg', 'cache-control': 'no-store' }
     });
   }
   if (res instanceof Response) {
     return new Response(res.body, {
-      headers: { 'content-type': 'image/png', 'cache-control': 'no-store' }
+      headers: { 'content-type': 'image/jpeg', 'cache-control': 'no-store' }
     });
   }
   if (res && typeof res === 'object') {
@@ -121,7 +158,7 @@ export async function onRequestPost(context) {
     if (typeof b64 === 'string') {
       const bin = Uint8Array.from(atob(b64), function (c) { return c.charCodeAt(0); });
       return new Response(bin, {
-        headers: { 'content-type': 'image/png', 'cache-control': 'no-store' }
+        headers: { 'content-type': 'image/jpeg', 'cache-control': 'no-store' }
       });
     }
   }
