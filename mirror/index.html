@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مرآة الأطباع — نُبل وابتكار | اليوم الوطني السعودي 96</title>
+<meta name="description" content="ارفع صورتك، اعرف طبعك من الأطباع الستة، واحصل على بطاقتك الوطنية صورة وGIF وفيديو — من مجموعة نُبل وابتكار.">
+<meta property="og:title" content="مرآة الأطباع — ارفع صورتك… نعرف طبعك">
+<meta property="og:description" content="بطاقتك الوطنية بهوية «عزّنا بطبعنا» — صورة وGIF وفيديو، وكل شيء داخل متصفحك.">
+<meta property="og:image" content="https://nubl-ebtikar.online/nd/kv-horizontal.jpg">
+<meta name="theme-color" content="#0F353C">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0F353C; --bg2:#0A2A2F; --bg3:#071C1F;
+    --panel:#ffffff0c; --panel2:#ffffff14; --line:#ffffff1f; --line2:#ffffff33;
+    --ink:#F3F1E8; --ink2:#DCE6DD; --mut:#B9C9BB; --mut2:#8FA69A;
+    --pix2:#54BE36; --gold:#C79A46; --cream:#F3EFE3; --whatsapp:#2f9d5e;
+    --t-karam:#2C4EA7; --t-jood:#5F5BB2; --t-himma:#95144A;
+    --t-asala:#54BE36; --t-shajaa:#577C48; --t-ruya:#75561D;
+    --accent:var(--pix2);
+    --font:'IBM Plex Sans Arabic','Tajawal',system-ui,sans-serif;
+  }
+  *,*::before,*::after{box-sizing:border-box;}
+  html{background:var(--bg);direction:rtl;}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+    line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden;text-align:right;
+  }
+  img{display:block;max-width:100%;}
+  button{font-family:inherit;}
+  a{color:inherit;}
+
+  .wrap{max-width:880px;margin:0 auto;padding:0 16px 48px;position:relative;z-index:1;}
+
+  /* الهيدر */
+  header.site{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:14px 0;border-bottom:1px solid var(--line);margin-bottom:22px;flex-wrap:wrap;}
+  .bm{display:flex;align-items:center;gap:10px;}
+  .bm img{width:40px;height:auto;}
+  .bm b{font-size:14px;font-weight:700;display:block;line-height:1.3;}
+  .bm small{display:block;font-size:9.5px;color:var(--mut2);letter-spacing:.14em;}
+  .back{font-size:12.5px;color:var(--mut);text-decoration:none;border:1px solid var(--line);
+    border-radius:999px;padding:6px 14px;white-space:nowrap;}
+  .back:hover{background:var(--panel);}
+
+  /* شريط السدو */
+  .sadu{height:26px;background-image:url("../nd/sadu-strip.jpg");background-size:auto 100%;
+    background-repeat:repeat-x;opacity:.9;}
+
+  .hero{text-align:center;padding:14px 0 6px;}
+  .hero .eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;
+    letter-spacing:.06em;color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:5px 13px;margin:0 0 12px;}
+  .hero .eyebrow i{width:6px;height:6px;border-radius:50%;background:var(--pix2);}
+  .hero h1{font-size:clamp(28px,6.4vw,44px);margin:0;font-weight:700;letter-spacing:-.5px;line-height:1.25;}
+  .hero h1 em{font-style:normal;color:var(--pix2);}
+  .hero p{margin:10px auto 0;font-size:14.5px;color:var(--mut);max-width:470px;}
+
+  .card{background:linear-gradient(180deg,#0d3038,#0a242a);border:1px solid var(--line);
+    border-radius:22px;padding:22px 18px;box-shadow:0 20px 48px #00000040;margin-top:18px;}
+
+  /* الرفع */
+  .drop{border:2px dashed #ffffff2e;border-radius:18px;padding:30px 18px;text-align:center;
+    background:#ffffff07;transition:border-color .18s,background .18s;}
+  .drop.over{border-color:var(--pix2);background:#54be361a;}
+  .drop .big{line-height:0;margin-bottom:14px;display:flex;justify-content:center;}
+  .drop h2{font-size:17px;margin:0 0 6px;font-weight:700;}
+  .drop p{margin:0;font-size:12.5px;color:var(--mut2);}
+  .pickrow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px;}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:0;border-radius:999px;
+    padding:11px 20px;font-size:14px;font-weight:700;cursor:pointer;text-decoration:none;
+    background:var(--panel2);color:var(--ink);border:1px solid var(--line2);transition:filter .15s,transform .08s;}
+  .btn:hover{filter:brightness(1.12);}
+  .btn:active{transform:translateY(1px);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .btn.primary{background:var(--pix2);color:#04210A;border-color:transparent;}
+  .btn.wa{background:transparent;color:var(--whatsapp);border-color:#2f9d5e66;}
+  .btn.wa:hover{background:#2f9d5e1f;}
+  .btn.trait{background:var(--c,var(--pix2));color:#fff;border-color:transparent;}
+  .btn.sm{padding:8px 15px;font-size:12.5px;}
+
+  .field{margin-top:16px;}
+  .field label{display:block;font-size:12.5px;color:var(--mut);margin-bottom:6px;}
+  .field input{width:100%;background:#ffffff0d;border:1px solid var(--line2);border-radius:12px;
+    color:var(--ink);font:inherit;font-size:15px;padding:11px 14px;text-align:right;}
+  .field input:focus{outline:2px solid var(--pix2);outline-offset:1px;}
+  .privacy{margin-top:14px;font-size:12px;color:var(--mut2);display:flex;gap:8px;align-items:flex-start;
+    background:#ffffff08;border:1px solid var(--line);border-radius:12px;padding:10px 12px;}
+  .privacy b{color:var(--ink2);font-weight:700;}
+
+  /* الأسئلة */
+  .qhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;}
+  .qhead span{font-size:12px;color:var(--mut2);direction:ltr;}
+  .qbar{height:4px;background:#ffffff14;border-radius:999px;overflow:hidden;margin-bottom:18px;}
+  .qbar i{display:block;height:100%;background:var(--pix2);border-radius:999px;transition:width .3s ease;}
+  .q h2{font-size:clamp(18px,4.2vw,23px);margin:0 0 16px;font-weight:700;line-height:1.45;}
+  .opts{display:grid;gap:9px;}
+  .opt{display:flex;align-items:center;gap:11px;width:100%;text-align:right;background:#ffffff0a;
+    border:1px solid var(--line);border-radius:14px;padding:13px 15px;color:var(--ink);font-size:14.5px;
+    cursor:pointer;transition:background .15s,border-color .15s,transform .08s;}
+  .opt:hover{background:#ffffff14;border-color:var(--line2);}
+  .opt:active{transform:translateY(1px);}
+  .opt b{width:26px;height:26px;flex:0 0 26px;border-radius:8px;background:#ffffff14;display:grid;
+    place-items:center;font-size:12px;color:var(--mut);font-weight:700;}
+  .skip{margin-top:16px;text-align:center;font-size:12.5px;color:var(--mut2);}
+  .skip button{background:none;border:0;color:var(--pix2);font:inherit;font-size:12.5px;cursor:pointer;
+    text-decoration:underline;padding:0;}
+
+  /* النتيجة */
+  .stage{position:relative;border-radius:16px;overflow:hidden;background:#07150f;
+    max-width:420px;margin:0 auto;box-shadow:0 14px 34px #00000055;}
+  .stage canvas{width:100%;height:auto;display:block;}
+  .verdict{text-align:center;margin:16px 0 4px;}
+  .verdict .lbl{font-size:12px;color:var(--mut2);letter-spacing:.1em;}
+  .verdict h2{font-size:clamp(24px,5.6vw,34px);margin:2px 0 0;font-weight:700;}
+  .verdict p{margin:6px auto 0;font-size:13.5px;color:var(--mut);max-width:420px;}
+
+  .sizes{display:flex;gap:7px;justify-content:center;margin:16px 0 6px;flex-wrap:wrap;}
+  .sizes button{background:#ffffff0d;border:1px solid var(--line);border-radius:999px;padding:7px 15px;
+    color:var(--ink2);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;}
+  .sizes button.on{background:var(--cream);color:#0b2018;border-color:transparent;}
+
+  .traitchips{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:14px;}
+  .traitchips button{background:#ffffff0a;border:1px solid var(--line);border-radius:999px;padding:6px 13px;
+    color:var(--ink2);font:inherit;font-size:12px;font-weight:600;cursor:pointer;
+    border-right:3px solid var(--c,#fff);}
+  .traitchips button.on{background:var(--c);color:#fff;border-color:transparent;border-right-color:var(--c);}
+
+  .dls{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:18px;}
+  .dls .btn{width:100%;}
+  .note{margin:12px 0 0;font-size:11.5px;color:var(--mut2);text-align:center;line-height:1.7;}
+  .prog{margin-top:12px;height:4px;background:#ffffff14;border-radius:999px;overflow:hidden;display:none;}
+  .prog.on{display:block;}
+  .prog i{display:block;height:100%;width:0;background:var(--gold);transition:width .2s;}
+
+  .offer{margin-top:20px;border-top:1px solid var(--line);padding-top:18px;}
+  .offer .in{display:flex;align-items:center;gap:14px;background:#ffffff0a;border:1px solid var(--line);
+    border-radius:16px;padding:14px 15px;border-right:3px solid var(--c,var(--pix2));flex-wrap:wrap;}
+  .offer img{width:56px;height:56px;border-radius:11px;object-fit:cover;flex:0 0 56px;}
+  .offer .tx{flex:1 1 180px;min-width:0;}
+  .offer .tx b{display:block;font-size:14.5px;}
+  .offer .tx span{display:block;font-size:12px;color:var(--mut2);margin-top:2px;}
+  .offer .pr{font-size:19px;font-weight:700;white-space:nowrap;}
+  .offer .pr small{font-size:11px;color:var(--mut2);font-weight:400;}
+  .offer .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+
+  footer{margin-top:28px;border-top:1px solid var(--line);padding-top:16px;text-align:center;
+    font-size:11.5px;color:var(--mut2);line-height:1.9;}
+  footer a{color:var(--mut);}
+
+  .hide{display:none!important;}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid #ffffff44;border-top-color:#fff;
+    border-radius:50%;animation:sp .7s linear infinite;}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* وضع الكشك للتابلت في ساحة الأطباع */
+  body.kiosk .wrap{max-width:720px;}
+  body.kiosk .btn{padding:15px 26px;font-size:16px;}
+  body.kiosk .opt{padding:17px 18px;font-size:16.5px;}
+  body.kiosk .back,body.kiosk footer{display:none;}
+  body.kiosk .hero h1{font-size:clamp(32px,5vw,46px);}
+
+  @media (max-width:560px){
+    .card{padding:18px 14px;border-radius:18px;}
+    .offer .pr{font-size:17px;}
+  }
+  @media (prefers-reduced-motion:reduce){ *{animation-duration:.01ms!important;transition-duration:.01ms!important;} }
+</style>
+</head>
+<body>
+<div class="sadu" aria-hidden="true"></div>
+<div class="wrap">
+
+  <header class="site">
+    <div class="bm">
+      <img src="../nd/logo-nubl.png" alt="نُبل وابتكار" style="background:#F3EFE3;border-radius:8px;padding:3px;">
+      <div>
+        <b>مجموعة نُبل وابتكار</b>
+        <small>NUBL &amp; EBTIKAR GROUP</small>
+      </div>
+    </div>
+    <a class="back" href="../">← باقات اليوم الوطني 96</a>
+  </header>
+
+  <!-- ============ 1) البداية ============ -->
+  <section id="s-start">
+    <div class="hero">
+      <p class="eyebrow"><i></i> اليوم الوطني السعودي 96 · عزّنا بطبعنا</p>
+      <h1>مرآة <em>الأطباع</em></h1>
+      <p>ارفع صورتك… نعرف طبعك من الأطباع الستة، ونعطيك بطاقتك الوطنية صورةً وGIF وفيديو جاهزة للنشر.</p>
+    </div>
+
+    <div class="card">
+      <div class="drop" id="drop">
+        <div class="big" aria-hidden="true"><svg viewBox="0 0 60 60" width="56" height="56" fill="none"><rect x="2" y="2" width="25" height="25" rx="5" fill="#54BE36" opacity=".92"/><rect x="33" y="2" width="25" height="25" rx="5" fill="#F3EFE3" opacity=".28"/><rect x="2" y="33" width="25" height="25" rx="5" fill="#F3EFE3" opacity=".28"/><rect x="33" y="33" width="25" height="25" rx="5" fill="#F3EFE3" opacity=".55"/></svg></div>
+        <h2>ارفع صورتك أو التقطها الآن</h2>
+        <p>اسحب الصورة هنا، أو اختر من جهازك — JPG أو PNG</p>
+        <div class="pickrow">
+          <button type="button" class="btn primary" id="btn-pick">اختر صورة</button>
+          <button type="button" class="btn" id="btn-cam">التقط بالكاميرا</button>
+        </div>
+      </div>
+      <input type="file" id="file" accept="image/*" class="hide">
+      <input type="file" id="filecam" accept="image/*" capture="user" class="hide">
+
+      <div class="field">
+        <label for="uname">اسمك كما تريده على البطاقة <span style="color:var(--mut2)">(اختياري)</span></label>
+        <input type="text" id="uname" maxlength="22" placeholder="مثال: إياد" autocomplete="name">
+      </div>
+
+      <div class="privacy">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#54BE36" stroke-width="2" style="flex:0 0 15px;margin-top:3px"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+        <span><b>صورتك لا تغادر جهازك.</b> كل المعالجة تتم داخل متصفحك — لا رفع ولا حفظ على أي خادم، ولا نحتفظ بشيء.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2) الأسئلة ============ -->
+  <section id="s-quiz" class="hide">
+    <div class="card">
+      <div class="qhead">
+        <strong style="font-size:13px;color:var(--mut)">ثلاثة أسئلة… ونعرف طبعك</strong>
+        <span id="q-count">1 / 3</span>
+      </div>
+      <div class="qbar"><i id="q-bar" style="width:33%"></i></div>
+      <div class="q">
+        <h2 id="q-text">—</h2>
+        <div class="opts" id="q-opts"></div>
+      </div>
+      <p class="skip">ما عندك وقت؟ <button type="button" id="btn-skip">اختر طبعك بنفسك</button></p>
+    </div>
+  </section>
+
+  <!-- ============ 3) النتيجة ============ -->
+  <section id="s-result" class="hide">
+    <div class="card">
+      <div class="stage"><canvas id="cv" width="1080" height="1080"></canvas></div>
+
+      <div class="verdict">
+        <p class="lbl">طبعك</p>
+        <h2 id="r-name">—</h2>
+        <p id="r-line">—</p>
+      </div>
+
+      <div class="sizes" id="sizes">
+        <button type="button" data-f="sq" class="on">مربّع 1:1</button>
+        <button type="button" data-f="po">بوست 4:5</button>
+        <button type="button" data-f="st">ستوري 9:16</button>
+      </div>
+
+      <div class="dls">
+        <button type="button" class="btn primary" id="dl-img">⬇︎ حمّل الصورة</button>
+        <button type="button" class="btn" id="dl-gif">حمّل GIF متحرك</button>
+        <button type="button" class="btn" id="dl-vid">حمّل فيديو</button>
+        <button type="button" class="btn" id="btn-share">مشاركة</button>
+      </div>
+      <div class="prog" id="prog"><i></i></div>
+      <p class="note" id="dl-note"></p>
+
+      <div class="traitchips" id="chips"></div>
+      <p class="note">ما ضبط الطبع؟ بدّله من هنا — البطاقة تتحدّث فوراً.</p>
+
+      <div class="offer" id="offer-wrap">
+        <div class="in" id="offer-in">
+          <img id="of-img" src="../nd/trait-karam-icon.jpg" alt="">
+          <div class="tx">
+            <b id="of-name">—</b>
+            <span id="of-sub">—</span>
+          </div>
+          <div class="pr"><span id="of-price">—</span> <small>ريال</small></div>
+        </div>
+        <div class="acts">
+          <a class="btn trait sm" id="of-link" href="#" target="_blank" rel="noopener">اطلب باقة طبعك</a>
+          <a class="btn wa sm" id="of-wa" href="#" target="_blank" rel="noopener">أرسل لي النسخة عالية الدقة</a>
+          <button type="button" class="btn sm" id="btn-again">جرّب صورة ثانية</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    هوية «عزّنا بطبعنا» والأطباع الستة من الملفات الرسمية للهيئة العامة للترفيه — اليوم الوطني السعودي 96.<br>
+    مرآة الأطباع من <a href="../">مجموعة نُبل وابتكار</a> · جدة · العروض سارية حتى 30 سبتمبر 2026.
+  </footer>
+</div>
+
+<script src="gif.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  /* ============ البيانات ============ */
+  var TRAITS = {
+    karam:  { name:'الكرم',   color:'#2C4EA7', word:'عزّنا بكرمنا',   line:'تستقبل الناس قبل ما تستقبل المناسبة — بيتك ومكانك أول من يحتفل.',
+              pkg:'باقة الكرم للموظفين (3 موظفين)', sub:'الكرم… امتنان ينعكس على الفريق', price:96, url:'https://nublandebtikar.com/p28583846' },
+    jood:   { name:'الجود',   color:'#5F5BB2', word:'عزّنا بجودنا',   line:'العطاء عندك تفصيل صغير يلاحظه الناس ويتذكرونه طويلاً.',
+              pkg:'باقة الجود للموظفين (2 موظفين)', sub:'الجود… تقدير يبدأ من الداخل', price:69, url:'https://nublandebtikar.com/p1046002778' },
+    himma:  { name:'الهمّة',  color:'#95144A', word:'عزّنا بهمّتنا',  line:'ما تأجّل شيء لبكرة — أول من يبدأ وأول من يخلّص.',
+              pkg:'باقة الهمّة للأفراد', sub:'الهمّة… بداية المشاركة', price:46, url:'https://nublandebtikar.com/p757553509' },
+    asala:  { name:'الأصالة', color:'#54BE36', word:'عزّنا بأصالتنا', line:'تعرف من وين جينا، وتحرص أن كل تفصيل يحمل جذورنا.',
+              pkg:'باقة الأصالة للأفراد', sub:'الأصالة… اعتزاز بالجذور', price:146, url:'https://nublandebtikar.com/p621154653' },
+    shajaa: { name:'الشجاعة', color:'#577C48', word:'عزّنا بشجاعتنا', line:'تجرّب اللي ما جرّبه أحد، وواجهتك أول من يعلن الفرح.',
+              pkg:'باقة الشجاعة للأفراد', sub:'الشجاعة… فخر يظهر للعلن', price:96, url:'https://nublandebtikar.com/p1571460433' },
+    ruya:   { name:'الرؤية',  color:'#75561D', word:'عزّنا برؤيتنا',  line:'تشوف السنة الجاية قبل ما تبدأ، وتبني اليوم على أساس بكرة.',
+              pkg:'باقة الرؤية للموظفين (5 موظفين)', sub:'الرؤية… فريق يصنع المستقبل', price:196, url:'https://nublandebtikar.com/p2135196833' }
+  };
+  var ORDER = ['karam','jood','himma','asala','shajaa','ruya'];
+
+  var QUESTIONS = [
+    { q:'وش أول شي يلفت انتباهك في أي مناسبة وطنية؟', a:[
+      { t:'الضيافة وكرم الاستقبال', s:{karam:2, jood:1} },
+      { t:'الهدايا والتوزيعات الصغيرة', s:{jood:2, karam:1} },
+      { t:'الحماس والتنظيم والسرعة', s:{himma:2} },
+      { t:'التفاصيل التراثية والسدو والنقوش', s:{asala:2} }
+    ]},
+    { q:'أقرب وصف لك في شغلك؟', a:[
+      { t:'أول من يبادر وينجز', s:{himma:2} },
+      { t:'أجرّب أشياء ما جرّبها أحد قبلي', s:{shajaa:2} },
+      { t:'أخطّط للسنة الجاية قبل ما تبدأ', s:{ruya:2} },
+      { t:'أحرص أن كل واحد بالفريق يحس بالتقدير', s:{jood:2, karam:1} }
+    ]},
+    { q:'لو تجهّز اليوم الوطني لمكانك، تبدأ بـ؟', a:[
+      { t:'واجهة تلفت كل من يمرّ', s:{shajaa:2, himma:1} },
+      { t:'ركن ضيافة يجلس فيه الناس', s:{karam:2} },
+      { t:'هوية كاملة تخدمني السنة كلها', s:{ruya:2} },
+      { t:'لمسة أصيلة من تراثنا', s:{asala:2} }
+    ]}
+  ];
+
+  var FORMATS = {
+    sq:{ w:1080, h:1080, label:'مربّع' },
+    po:{ w:1080, h:1350, label:'بوست' },
+    st:{ w:1080, h:1920, label:'ستوري' }
+  };
+
+  var WA_NUM = '966533319382';
+  var SITE   = 'https://nubl-ebtikar.online/mirror/';
+  var HASH   = '#عزنا_بطبعنا #طبعك_له_يوم #اليوم_الوطني_السعودي #نبل_وابتكار';
+
+  /* ============ الحالة ============ */
+  var st = { photo:null, name:'', trait:'karam', fmt:'sq', qi:0, score:{}, busy:false };
+  ORDER.forEach(function(k){ st.score[k]=0; });
+
+  var $ = function(id){ return document.getElementById(id); };
+  var cv = $('cv'), ctx = cv.getContext('2d');
+
+  /* ============ تحميل أصول الهوية ============ */
+  var ASSETS = {};
+  function loadImg(src){
+    return new Promise(function(res){
+      var i = new Image();
+      i.onload = function(){ res(i); };
+      i.onerror = function(){ res(null); };
+      i.src = src;
+    });
+  }
+  var assetsReady = (function(){
+    var jobs = [ loadImg('../nd/sadu-strip.jpg').then(function(i){ ASSETS.sadu=i; }),
+                 loadImg('../nd/logo-nubl.png').then(function(i){ ASSETS.logo=i; }) ];
+    ORDER.forEach(function(k){
+      var f = (k==='ruya') ? 'ruya' : k;
+      jobs.push(loadImg('../nd/trait-'+f+'-icon.jpg').then(function(i){ ASSETS['icon_'+k]=i; }));
+      jobs.push(loadImg('../nd/trait-'+f+'-pattern.jpg').then(function(i){ ASSETS['pat_'+k]=i; }));
+      jobs.push(loadImg('../nd/trait-'+f+'-word.jpg').then(function(i){ ASSETS['word_'+k]=i; }));
+    });
+    return Promise.all(jobs);
+  })();
+
+  var fontsReady = (document.fonts && document.fonts.load)
+    ? Promise.all([ document.fonts.load('700 90px "IBM Plex Sans Arabic"'),
+                    document.fonts.load('400 40px "IBM Plex Sans Arabic"') ]).catch(function(){})
+    : Promise.resolve();
+
+  /* ============ أدوات الرسم ============ */
+  function rr(c,x,y,w,h,r){
+    r = Math.min(r, w/2, h/2);
+    c.beginPath();
+    c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+    c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+  }
+  function cover(c,img,x,y,w,h){
+    if(!img) return;
+    var ir = img.width/img.height, tr = w/h, sw, sh, sx, sy;
+    if(ir > tr){ sh = img.height; sw = sh*tr; sx = (img.width-sw)/2; sy = 0; }
+    else { sw = img.width; sh = sw/tr; sx = 0; sy = (img.height-sh)/2; }
+    c.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+  function ease(t){ return t<0 ? 0 : t>1 ? 1 : 1-Math.pow(1-t,3); }
+  function seg(t,a,b){ return ease((t-a)/(b-a)); }
+
+  /* ============ رسم البطاقة ============ */
+  /* t من 0 إلى 1: 1 = البطاقة النهائية الساكنة */
+  function draw(c, W, H, tr, name, t){
+    var T = TRAITS[tr];
+    var pad = Math.round(W*0.046), gut = Math.round(W*0.015);
+    var cw  = W - pad*2;
+    var tile = Math.round((cw - gut*2)/3);
+    var photoH = Math.min(H - pad*2 - tile - gut, Math.round(W*1.25));
+    var blockH = photoH + gut + tile;
+    var top = Math.round((H - blockH)/2);
+
+    /* الخلفية: لون الطبع + نقشه */
+    c.save();
+    c.fillStyle = T.color; c.fillRect(0,0,W,H);
+    var pat = ASSETS['pat_'+tr];
+    if(pat){
+      c.globalAlpha = 0.5*ease(t/0.25);
+      var ps = Math.round(W/2.4);
+      for(var yy=0; yy<H; yy+=ps) for(var xx=0; xx<W; xx+=ps) c.drawImage(pat, xx, yy, ps, ps);
+      c.globalAlpha = 1;
+    }
+    /* تعتيم متدرّج ليبرز المحتوى */
+    var g = c.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'rgba(7,21,15,.30)'); g.addColorStop(.5,'rgba(7,21,15,.12)'); g.addColorStop(1,'rgba(7,21,15,.42)');
+    c.fillStyle = g; c.fillRect(0,0,W,H);
+    c.restore();
+
+    /* شريطا السدو */
+    if(ASSETS.sadu){
+      var sh2 = Math.round(W*0.024);
+      var tw = Math.round(sh2 * (ASSETS.sadu.width/ASSETS.sadu.height));
+      for(var x2=0; x2<W+tw; x2+=tw){
+        c.drawImage(ASSETS.sadu, x2, 0, tw, sh2);
+        c.drawImage(ASSETS.sadu, x2, H-sh2, tw, sh2);
+      }
+    }
+
+    /* بلاطة الصورة */
+    var pIn = seg(t,0,0.18);
+    c.save();
+    c.globalAlpha = pIn;
+    var scl = 1 + (1-pIn)*0.05, cx = W/2, cy = top + photoH/2;
+    c.translate(cx,cy); c.scale(scl,scl); c.translate(-cx,-cy);
+    rr(c, pad, top, cw, photoH, Math.round(W*0.022));
+    c.save(); c.clip();
+    c.fillStyle = '#07150f'; c.fillRect(pad, top, cw, photoH);
+    if(st.photo){
+      /* الكشف: رمادي ثم يتلوّن من اليمين لليسار خلف موجة السدو */
+      var rev = seg(t,0.16,0.46);
+      var supportsFilter = (typeof c.filter === 'string');
+      if(rev < 1 && supportsFilter){
+        c.save(); c.filter = 'grayscale(1) contrast(1.05)';
+        cover(c, st.photo, pad, top, cw, photoH);
+        c.restore();
+        c.save();
+        var revX = pad + cw*(1-rev);
+        c.beginPath(); c.rect(revX, top, cw-(revX-pad), photoH); c.clip();
+        cover(c, st.photo, pad, top, cw, photoH);
+        c.restore();
+      } else {
+        cover(c, st.photo, pad, top, cw, photoH);
+      }
+      /* موجة السدو أثناء الكشف */
+      if(rev > 0 && rev < 1 && ASSETS.sadu){
+        var wx = pad + cw*(1-rev), ww = Math.round(W*0.05);
+        c.save();
+        c.globalAlpha = .95;
+        c.drawImage(ASSETS.sadu, wx-ww/2, top, ww, photoH);
+        c.globalAlpha = .35; c.fillStyle = '#F3EFE3';
+        c.fillRect(wx-ww/2-2, top, 3, photoH);
+        c.restore();
+      }
+    }
+    /* تدرّج أسفل الصورة + كلمة الطبع */
+    var gg = c.createLinearGradient(0, top+photoH*0.55, 0, top+photoH);
+    gg.addColorStop(0,'rgba(7,21,15,0)'); gg.addColorStop(1,'rgba(7,21,15,.80)');
+    c.fillStyle = gg; c.fillRect(pad, top+photoH*0.55, cw, photoH*0.45);
+
+    var wIn = seg(t,0.62,0.82);
+    if(wIn > 0){
+      c.save();
+      c.globalAlpha = wIn;
+      c.direction = 'rtl'; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+      c.fillStyle = '#F3EFE3';
+      c.font = '700 ' + Math.round(W*0.052) + 'px "IBM Plex Sans Arabic", sans-serif';
+      c.fillText(T.word, W/2, top + photoH - Math.round(W*0.074));
+      c.fillStyle = 'rgba(243,239,227,.72)';
+      c.font = '500 ' + Math.round(W*0.024) + 'px "IBM Plex Sans Arabic", sans-serif';
+      c.fillText('مرآة الأطباع · nubl-ebtikar.online', W/2, top + photoH - Math.round(W*0.030));
+      c.restore();
+    }
+    c.restore(); /* clip */
+
+    /* إطار الصورة */
+    c.save();
+    rr(c, pad, top, cw, photoH, Math.round(W*0.022));
+    c.strokeStyle = 'rgba(243,239,227,.55)'; c.lineWidth = Math.max(2, W*0.0032); c.stroke();
+    c.restore();
+
+    /* شعار نُبل على رقعة كريمية — يبقى واضحاً فوق أي صورة */
+    if(ASSETS.logo && pIn > .5){
+      var lw = Math.round(W*0.125), lh = lw*(ASSETS.logo.height/ASSETS.logo.width);
+      var cp = Math.round(W*0.016);
+      var bx = W - pad - Math.round(W*0.028) - lw - cp, by = top + Math.round(W*0.028);
+      c.save();
+      c.globalAlpha = (pIn-.5)*2;
+      c.shadowColor = 'rgba(0,0,0,.35)'; c.shadowBlur = W*0.014; c.shadowOffsetY = W*0.003;
+      rr(c, bx, by, lw+cp*2, lh+cp*2, Math.round(W*0.014));
+      c.fillStyle = '#F3EFE3'; c.fill();
+      c.shadowColor = 'transparent';
+      c.drawImage(ASSETS.logo, bx+cp, by+cp, lw, lh);
+      c.restore();
+    }
+    c.restore();
+
+    /* صف البلاطات الثلاث — من اليمين: الرمز · الحكم · القفل */
+    var ty = top + photoH + gut;
+    var xRight = W - pad - tile, xMid = xRight - gut - tile, xLeft = xMid - gut - tile;
+    var rad = Math.round(W*0.018);
+
+    /* 1) بلاطة الرمز */
+    var a1 = seg(t,0.44,0.62);
+    if(a1 > 0) tileImg(c, ASSETS['icon_'+tr], xRight, ty, tile, rad, a1);
+
+    /* 2) بلاطة الحكم */
+    var a2 = seg(t,0.56,0.76);
+    if(a2 > 0){
+      c.save();
+      c.globalAlpha = a2;
+      var s2 = 0.9 + 0.1*a2;
+      c.translate(xMid+tile/2, ty+tile/2); c.scale(s2,s2); c.translate(-(xMid+tile/2), -(ty+tile/2));
+      rr(c, xMid, ty, tile, tile, rad);
+      c.fillStyle = 'rgba(7,21,15,.72)'; c.fill();
+      c.strokeStyle = 'rgba(243,239,227,.22)'; c.lineWidth = Math.max(1.5, W*0.002); c.stroke();
+      c.save(); rr(c, xMid, ty, tile, tile, rad); c.clip();
+      c.direction='rtl'; c.textAlign='center'; c.textBaseline='alphabetic';
+      c.fillStyle = 'rgba(243,239,227,.66)';
+      c.font = '500 ' + Math.round(tile*0.105) + 'px "IBM Plex Sans Arabic", sans-serif';
+      c.fillText('طبعي', xMid+tile/2, ty + tile*0.30);
+      c.fillStyle = '#F3EFE3';
+      c.font = '700 ' + Math.round(tile*0.245) + 'px "IBM Plex Sans Arabic", sans-serif';
+      c.fillText(T.name, xMid+tile/2, ty + tile*0.585);
+      if(name){
+        c.fillStyle = 'rgba(243,239,227,.80)';
+        c.font = '600 ' + Math.round(tile*0.115) + 'px "IBM Plex Sans Arabic", sans-serif';
+        var nIn = seg(t,0.72,0.9);
+        c.globalAlpha = a2 * nIn;
+        c.fillText(name, xMid+tile/2, ty + tile*0.80);
+      }
+      c.restore();
+      c.restore();
+    }
+
+    /* 3) بلاطة القفل المشترك */
+    var a3 = seg(t,0.78,0.96);
+    if(a3 > 0) tileImg(c, ASSETS['word_'+tr], xLeft, ty, tile, rad, a3);
+  }
+
+  function tileImg(c, img, x, y, s, rad, a){
+    c.save();
+    c.globalAlpha = a;
+    var k = 0.88 + 0.12*a;
+    c.translate(x+s/2, y+s/2); c.scale(k,k); c.translate(-(x+s/2), -(y+s/2));
+    rr(c, x, y, s, s, rad);
+    c.save(); c.clip();
+    if(img) c.drawImage(img, x, y, s, s); else { c.fillStyle='rgba(7,21,15,.5)'; c.fillRect(x,y,s,s); }
+    c.restore();
+    c.strokeStyle = 'rgba(243,239,227,.22)'; c.lineWidth = Math.max(1.5, s*0.007); c.stroke();
+    c.restore();
+  }
+
+  function render(t){
+    var f = FORMATS[st.fmt];
+    if(cv.width !== f.w || cv.height !== f.h){ cv.width = f.w; cv.height = f.h; }
+    draw(ctx, f.w, f.h, st.trait, st.name, (t===undefined ? 1 : t));
+  }
+
+  /* ============ شاشات ============ */
+  function show(which){
+    ['s-start','s-quiz','s-result'].forEach(function(id){
+      $(id).classList.toggle('hide', id !== which);
+    });
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+
+  /* ============ الرفع ============ */
+  function handleFile(file){
+    if(!file || !/^image\//.test(file.type)) { alert('اختر ملف صورة من فضلك.'); return; }
+    var fr = new FileReader();
+    fr.onload = function(){
+      var im = new Image();
+      im.onload = function(){
+        st.photo = im;
+        st.name = ($('uname').value || '').trim().slice(0,22);
+        st.suggest = suggestFromPhoto(im);
+        startQuiz();
+      };
+      im.onerror = function(){ alert('تعذّر فتح هذه الصورة، جرّب صورة ثانية.'); };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  }
+
+  /* اقتراح مبني على اللون الغالب في الصورة (يُستخدم لفكّ التعادل فقط) */
+  function suggestFromPhoto(im){
+    try{
+      var c = document.createElement('canvas'); c.width = 40; c.height = 40;
+      var x = c.getContext('2d'); x.drawImage(im,0,0,40,40);
+      var d = x.getImageData(0,0,40,40).data, r=0,g=0,b=0,n=0;
+      for(var i=0;i<d.length;i+=4){ r+=d[i]; g+=d[i+1]; b+=d[i+2]; n++; }
+      r/=n; g/=n; b/=n;
+      var best=null, bd=1e9;
+      ORDER.forEach(function(k){
+        var h = TRAITS[k].color, rr2=parseInt(h.substr(1,2),16), gg2=parseInt(h.substr(3,2),16), bb2=parseInt(h.substr(5,2),16);
+        var dd = (r-rr2)*(r-rr2) + (g-gg2)*(g-gg2) + (b-bb2)*(b-bb2);
+        if(dd<bd){ bd=dd; best=k; }
+      });
+      return best;
+    }catch(e){ return null; }
+  }
+
+  $('btn-pick').addEventListener('click', function(){ $('file').click(); });
+  $('btn-cam').addEventListener('click', function(){ $('filecam').click(); });
+  $('file').addEventListener('change', function(e){ handleFile(e.target.files[0]); });
+  $('filecam').addEventListener('change', function(e){ handleFile(e.target.files[0]); });
+
+  var drop = $('drop');
+  ['dragenter','dragover'].forEach(function(ev){
+    drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave','drop'].forEach(function(ev){
+    drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function(e){
+    if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+
+  /* ============ الأسئلة ============ */
+  function startQuiz(){
+    st.qi = 0; ORDER.forEach(function(k){ st.score[k]=0; });
+    show('s-quiz'); renderQ();
+  }
+  function renderQ(){
+    var q = QUESTIONS[st.qi];
+    $('q-count').textContent = (st.qi+1) + ' / ' + QUESTIONS.length;
+    $('q-bar').style.width = Math.round((st.qi+1)/QUESTIONS.length*100) + '%';
+    $('q-text').textContent = q.q;
+    var box = $('q-opts'); box.innerHTML = '';
+    q.a.forEach(function(o, n){
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'opt';
+      b.innerHTML = '<b>' + (n+1) + '</b><span></span>';
+      b.querySelector('span').textContent = o.t;
+      b.addEventListener('click', function(){ answer(o); });
+      box.appendChild(b);
+    });
+  }
+  function answer(o){
+    for(var k in o.s){ if(st.score[k]!==undefined) st.score[k] += o.s[k]; }
+    st.qi++;
+    if(st.qi < QUESTIONS.length) renderQ(); else finish();
+  }
+  function finish(){
+    var top = [], best = -1;
+    ORDER.forEach(function(k){
+      if(st.score[k] > best){ best = st.score[k]; top = [k]; }
+      else if(st.score[k] === best) top.push(k);
+    });
+    var pick = top[0];
+    if(top.length > 1 && st.suggest && top.indexOf(st.suggest) > -1) pick = st.suggest;
+    st.trait = pick;
+    showResult(true);
+  }
+  $('btn-skip').addEventListener('click', function(){
+    st.trait = st.suggest || 'karam';
+    showResult(true);
+  });
+
+  /* ============ النتيجة ============ */
+  function paintTraitUI(){
+    var T = TRAITS[st.trait];
+    $('r-name').textContent = T.name;
+    $('r-name').style.color = T.color;
+    $('r-line').textContent = T.line;
+    $('of-img').src = '../nd/trait-' + st.trait + '-icon.jpg';
+    $('of-name').textContent = T.pkg;
+    $('of-sub').textContent = T.sub;
+    $('of-price').textContent = T.price;
+    $('of-link').href = T.url;
+    $('offer-in').style.setProperty('--c', T.color);
+    $('offer-wrap').style.setProperty('--c', T.color);
+    $('of-wa').href = 'https://wa.me/' + WA_NUM + '?text=' + encodeURIComponent(
+      'السلام عليكم، طلعت نتيجتي في مرآة الأطباع: ' + T.name + '.' +
+      (st.name ? ' الاسم: ' + st.name + '.' : '') +
+      ' أرغب بالنسخة عالية الدقة من بطاقتي، وأبغى أعرف تفاصيل ' + T.pkg + '.');
+    Array.prototype.forEach.call($('chips').children, function(b){
+      b.classList.toggle('on', b.getAttribute('data-k') === st.trait);
+    });
+  }
+  function buildChips(){
+    var box = $('chips'); box.innerHTML = '';
+    ORDER.forEach(function(k){
+      var b = document.createElement('button');
+      b.type='button'; b.setAttribute('data-k',k); b.textContent = TRAITS[k].name;
+      b.style.setProperty('--c', TRAITS[k].color);
+      b.addEventListener('click', function(){
+        st.trait = k; paintTraitUI(); animateIn();
+      });
+      box.appendChild(b);
+    });
+  }
+  buildChips();
+
+  function showResult(animate){
+    show('s-result');
+    paintTraitUI();
+    $('dl-note').textContent = '';
+    if(animate) animateIn(); else render(1);
+  }
+
+  var raf = null;
+  function animateIn(){
+    if(raf) cancelAnimationFrame(raf);
+    var t0 = performance.now(), DUR = 3000;
+    (function step(now){
+      var t = Math.min(1, (now - t0)/DUR);
+      render(t);
+      if(t < 1) raf = requestAnimationFrame(step); else raf = null;
+    })(t0);
+  }
+
+  /* تبديل المقاس */
+  Array.prototype.forEach.call($('sizes').children, function(b){
+    b.addEventListener('click', function(){
+      Array.prototype.forEach.call($('sizes').children, function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      st.fmt = b.getAttribute('data-f');
+      render(1);
+    });
+  });
+
+  /* ============ التحميل ============ */
+  function fname(ext){
+    return 'مرآة-الأطباع-' + TRAITS[st.trait].name + (st.name ? '-' + st.name : '') + '.' + ext;
+  }
+  function saveBlob(blob, name){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+  }
+  function setBusy(on, msg){
+    st.busy = on;
+    ['dl-img','dl-gif','dl-vid'].forEach(function(id){ $(id).disabled = on; });
+    $('prog').classList.toggle('on', on);
+    if(!on) $('prog').querySelector('i').style.width = '0%';
+    $('dl-note').textContent = msg || '';
+  }
+
+  $('dl-img').addEventListener('click', function(){
+    if(st.busy) return;
+    render(1);
+    cv.toBlob(function(b){
+      if(!b) { $('dl-note').textContent = 'تعذّر إنشاء الصورة على هذا المتصفح.'; return; }
+      saveBlob(b, fname('png'));
+      $('dl-note').textContent = 'تم تحميل الصورة (' + FORMATS[st.fmt].label + ' ' + FORMATS[st.fmt].w + '×' + FORMATS[st.fmt].h + ').';
+    }, 'image/png');
+  });
+
+  /* GIF */
+  $('dl-gif').addEventListener('click', function(){
+    if(st.busy) return;
+    if(typeof GIF === 'undefined'){ $('dl-note').textContent = 'محرّك GIF لم يُحمَّل — حدّث الصفحة وجرّب مرة ثانية.'; return; }
+    setBusy(true, 'أجهّز الـ GIF… خلّك بالصفحة.');
+    var f = FORMATS[st.fmt];
+    var scale = Math.min(1, 480/f.w);
+    var W = Math.round(f.w*scale), H = Math.round(f.h*scale);
+    var tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H;
+    var tc = tmp.getContext('2d');
+    var gif = new GIF({ workers:2, quality:12, width:W, height:H, workerScript:'gif.worker.js', dither:false });
+    var N = 30;
+    for(var i=0;i<=N;i++){
+      var t = i/N;
+      tc.clearRect(0,0,W,H);
+      draw(tc, W, H, st.trait, st.name, t);
+      gif.addFrame(tc, { copy:true, delay: (i===N ? 1400 : 100) });
+    }
+    gif.on('progress', function(p){ $('prog').querySelector('i').style.width = Math.round(p*100) + '%'; });
+    gif.on('finished', function(blob){
+      saveBlob(blob, fname('gif'));
+      setBusy(false, 'تم تحميل الـ GIF (' + Math.round(blob.size/1024) + ' كيلوبايت) — يعمل على كل الأجهزة وفي واتساب.');
+    });
+    gif.render();
+  });
+
+  /* فيديو */
+  function supported(list){
+    for(var i=0;i<list.length;i++){ if(MediaRecorder.isTypeSupported(list[i])) return list[i]; }
+    return null;
+  }
+  /* بعض المتصفحات تقول إنها تدعم MP4 ثم تُخرج VP9 داخل حاوية MP4 — ملف لا يفتح على الآيفون.
+     لذلك نسجّل قصاصة اختبار (0.2 ثانية) ونفحص نوع الترميز فعلياً قبل التسجيل الحقيقي. */
+  function probeMime(){
+    return new Promise(function(res){
+      if(typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported || !document.createElement('canvas').captureStream){
+        res(null); return;
+      }
+      var webm = supported(['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']);
+      var mp4  = supported(['video/mp4;codecs=avc1.42E01E','video/mp4']);
+      if(!mp4){ res(webm); return; }
+      var c = document.createElement('canvas'); c.width = 32; c.height = 32;
+      var x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0,0,32,32);
+      var s = c.captureStream(10), r, parts = [];
+      try { r = new MediaRecorder(s, { mimeType: mp4 }); } catch(e){ res(webm || null); return; }
+      var done = false;
+      var finish = function(m){ if(done) return; done = true; try{ s.getTracks().forEach(function(t){t.stop();}); }catch(e){} res(m); };
+      r.ondataavailable = function(e){ if(e.data && e.data.size) parts.push(e.data); };
+      r.onerror = function(){ finish(webm || null); };
+      r.onstop = function(){
+        var blob = new Blob(parts, {type:mp4});
+        blob.slice(0, 6000).arrayBuffer().then(function(buf){
+          var u = new Uint8Array(buf), s2 = '';
+          for(var i=0;i<u.length;i++) s2 += String.fromCharCode(u[i]);
+          if(s2.indexOf('avc1') > -1) finish(mp4);
+          else finish(webm || mp4);
+        }).catch(function(){ finish(webm || mp4); });
+      };
+      try {
+        r.start();
+        setTimeout(function(){ try{ r.stop(); }catch(e){ finish(webm||null); } }, 220);
+      } catch(e){ finish(webm || null); }
+      setTimeout(function(){ finish(webm || mp4); }, 2500);
+    });
+  }
+  var mimePromise = null;
+  function pickMime(){
+    if(!mimePromise) mimePromise = probeMime();
+    return mimePromise;
+  }
+  $('dl-vid').addEventListener('click', function(){
+    if(st.busy) return;
+    setBusy(true, 'أجهّز التسجيل…');
+    pickMime().then(function(mime){ recordVideo(mime); });
+  });
+
+  function recordVideo(mime){
+    if(!mime || !cv.captureStream){
+      setBusy(false, 'متصفحك لا يدعم تسجيل الفيديو — حمّل الـ GIF، يعمل في كل مكان.');
+      return;
+    }
+    $('dl-note').textContent = 'أسجّل الفيديو… أربع ثوانٍ فقط.';
+    var f = FORMATS[st.fmt];
+    var scale = Math.min(1, 720/f.w);
+    var W = Math.round(f.w*scale), H = Math.round(f.h*scale);
+    var tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H;
+    var tc = tmp.getContext('2d');
+    draw(tc, W, H, st.trait, st.name, 0);
+
+    var stream = tmp.captureStream(30);
+    var chunks = [];
+    var rec;
+    try { rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 4500000 }); }
+    catch(e){ setBusy(false, 'تعذّر بدء التسجيل على هذا المتصفح — حمّل الـ GIF بدلاً منه.'); return; }
+    rec.ondataavailable = function(e){ if(e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = function(){
+      var ext = mime.indexOf('mp4') > -1 ? 'mp4' : 'webm';
+      var blob = new Blob(chunks, { type: mime });
+      saveBlob(blob, fname(ext));
+      setBusy(false, 'تم تحميل الفيديو بصيغة ' + ext.toUpperCase() + ' (' + Math.round(blob.size/1024) + ' كيلوبايت).' +
+        (ext === 'webm' ? ' إذا ما فتح معك على الآيفون، استخدم الـ GIF.' : ''));
+      render(1);
+    };
+    rec.start();
+    var t0 = performance.now(), DUR = 3000, HOLD = 1200;
+    (function step(now){
+      var e = now - t0;
+      var t = Math.min(1, e/DUR);
+      draw(tc, W, H, st.trait, st.name, t);
+      $('prog').querySelector('i').style.width = Math.round(Math.min(1, e/(DUR+HOLD))*100) + '%';
+      if(e < DUR + HOLD) requestAnimationFrame(step);
+      else { try{ rec.stop(); }catch(err){} }
+    })(t0);
+  }
+
+  /* مشاركة */
+  $('btn-share').addEventListener('click', function(){
+    var T = TRAITS[st.trait];
+    var text = 'طبعي ' + T.name + ' — ' + T.word + '. اعرف طبعك من مرآة الأطباع 🇸🇦\n' + SITE + '\n' + HASH;
+    render(1);
+    if(navigator.share && navigator.canShare){
+      cv.toBlob(function(b){
+        var file = b ? new File([b], fname('png'), {type:'image/png'}) : null;
+        var data = (file && navigator.canShare({files:[file]})) ? {files:[file], text:text} : {text:text, url:SITE};
+        navigator.share(data).catch(function(){});
+      }, 'image/png');
+    } else if(navigator.share){
+      navigator.share({ text:text, url:SITE }).catch(function(){});
+    } else {
+      window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+    }
+  });
+
+  $('btn-again').addEventListener('click', function(){
+    st.photo = null; $('file').value = ''; $('filecam').value = '';
+    show('s-start');
+  });
+
+  /* ============ وضع الكشك ============ */
+  var qs = new URLSearchParams(location.search);
+  if(qs.get('kiosk') === '1'){
+    document.body.classList.add('kiosk');
+    var idle = null;
+    var reset = function(){
+      clearTimeout(idle);
+      idle = setTimeout(function(){
+        if($('s-result').classList.contains('hide') === false || $('s-quiz').classList.contains('hide') === false){
+          st.photo = null; $('uname').value = ''; st.name=''; show('s-start');
+        }
+      }, 90000);
+    };
+    ['click','touchstart','keydown'].forEach(function(e){ document.addEventListener(e, reset, true); });
+    reset();
+  }
+
+  /* ============ التهيئة ============ */
+  Promise.all([assetsReady, fontsReady]).then(function(){
+    window.__MIRROR_READY = true;
+    if(!$('s-result').classList.contains('hide')) render(1);
+  });
+
+  /* واجهة للاختبار الآلي */
+  window.__mirror = {
+    setPhoto: function(img){ st.photo = img; st.suggest = suggestFromPhoto(img); },
+    setName: function(n){ st.name = n; },
+    startQuiz: startQuiz,
+    result: function(k){ st.trait = k || st.trait; showResult(false); },
+    render: render,
+    state: st
+  };
+})();
+</script>
+</body>
+</html>
