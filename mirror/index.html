@@ -768,9 +768,6 @@
       AI.on = false;            /* الصورة صارت مشهداً كاملاً: لا قصّ بعد الآن */
       AI.art = null; AI.artKey = '';
       aiSync();
-  $('st-go').addEventListener('click', studioRun);
-  $('st-off').addEventListener('click', studioOff);
-  studioProbe();
       $('st-off').classList.remove('hide');
       stState('تمّت إعادة البناء داخل مشهد ' + TRAITS[st.trait].name + '.');
       animateIn();
@@ -1129,6 +1126,9 @@
     animateIn();
   });
   aiSync();
+  $('st-go').addEventListener('click', studioRun);
+  $('st-off').addEventListener('click', studioOff);
+  studioProbe();
 
   function showResult(animate){
     show('s-result');
