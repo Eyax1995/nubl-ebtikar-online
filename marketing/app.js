@@ -1,4 +1,8 @@
 /* نُبل وابتكار للتسويق — سلوك الموقع المشترك */
+/* Meta Pixel — موقع نبل وابتكار للتسويق (993831000407341) */
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('init','993831000407341');fbq('track','PageView');
+window.nublTrack=function(ev,data){try{fbq('track',ev,data||{})}catch(e){}};
 (function(){
   // mobile nav
   var b=document.querySelector('.burger'),m=document.querySelector('.mnav');
@@ -36,6 +40,7 @@
     }
     function render(i){
       var s=S[i];
+      window.nublSku='PKG-'+String(s.id).toUpperCase();nublTrack('ViewContent',{content_ids:[window.nublSku],content_type:'product',content_name:s.name,value:s.price,currency:'SAR'});
       document.getElementById('sector-body').innerHTML=
         '<div class="painbox"><div class="pb a"><h4>الألم في هذا القطاع</h4>'+s.pain+'</div><div class="pb b"><h4>ما نغيّره</h4>'+s.win+'</div></div>'+
         '<div class="cards">'+s.rows.map(function(r,ri){var t=T[ri];var disc=[0,5,10,15][ri];
@@ -65,6 +70,7 @@
   var form=document.getElementById('lead-form');
   if(form){form.addEventListener('submit',function(e){e.preventDefault();var d=new FormData(form);
     var msg='السلام عليكم، أرغب بحجز جلسة تشخيص مجانية.\n'+'الاسم: '+d.get('name')+'\n'+'النشاط: '+d.get('biz')+'\n'+'القطاع: '+d.get('sector')+'\n'+'الهدف الأهم: '+d.get('goal')+(d.get('note')?'\nملاحظة: '+d.get('note'):'');
+    nublTrack('Lead',{content_name:'جلسة تشخيص مجانية',content_category:String(d.get('sector')||'')});
     window.open('https://wa.me/'+window.WA+'?text='+encodeURIComponent(msg),'_blank');})}
 
   // generic quiz engine (find-service & readiness)
@@ -83,3 +89,8 @@
     show();
   }
 })();
+
+/* تتبّع نقرات واتساب كحدث تواصل */
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href*="wa.me"]');if(!a)return;
+  var d={content_name:(a.textContent||'').trim().slice(0,60)};if(window.nublSku&&location.pathname.indexOf('packages')>-1){d.content_ids=[window.nublSku];d.content_type='product';}
+  nublTrack('Contact',d);},true);
