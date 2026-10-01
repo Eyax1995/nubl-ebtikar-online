@@ -203,6 +203,12 @@
     .offer .pr{font-size:17px;}
   }
   @media (prefers-reduced-motion:reduce){ *{animation-duration:.01ms!important;transition-duration:.01ms!important;} }
+
+  .of-specs,.offer .in,.offer-eyebrow,.offer-note{display:none!important;}
+  .ended{background:#ffffff0a;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px;}
+  .ended b{display:block;font-size:14px;color:var(--ink);}
+  .ended span{display:block;font-size:12.5px;color:var(--mut2);margin-top:5px;line-height:1.75;}
+
 </style>
 </head>
 <body>
@@ -217,7 +223,7 @@
         <small>NUBL &amp; EBTIKAR GROUP</small>
       </div>
     </div>
-    <a class="back" href="../">← باقات اليوم الوطني 96</a>
+    <a class="back" href="/">← الموقع الرئيسي</a>
   </header>
 
   <!-- ============ 1) البداية ============ -->
@@ -319,6 +325,10 @@
       <p class="note">ما ضبط الطبع؟ بدّله من هنا — البطاقة تتحدّث فوراً.</p>
 
       <div class="offer" id="offer-wrap">
+        <div class="ended">
+          <b>انتهت عروض اليوم الوطني 96</b>
+          <span>العروض الموسمية انتهت في 30 سبتمبر 2026. البطاقة تبقى لك — ولطلب أي تنفيذ أو معرفة أسعارنا الحالية تواصل معنا مباشرة.</span>
+        </div>
         <p class="offer-eyebrow">الباقة التي تناسب طبعك</p>
         <div class="in" id="offer-in">
           <img id="of-img" src="../nd/trait-karam-icon.jpg" alt="">
@@ -337,7 +347,7 @@
         </ul>
         <p class="offer-note">الأسعار شاملة الخصم ويُضاف عليها ضريبة القيمة المضافة عند الفوترة. العرض ساري حتى 30 سبتمبر 2026.</p>
         <div class="acts">
-          <a class="btn trait sm" id="of-link" href="../#nd-order">اطلب باقة طبعك ←</a>
+          <a class="btn trait sm" id="of-link" href="/">موقع نُبل وابتكار ←</a>
           <a class="btn wa sm" id="of-wa" href="#" target="_blank" rel="noopener">أرسل لي النسخة عالية الدقة</a>
           <button type="button" class="btn sm" id="btn-again">جرّب صورة ثانية</button>
         </div>
@@ -347,7 +357,7 @@
 
   <footer>
     هوية «عزّنا بطبعنا» والأطباع الستة من الملفات الرسمية للهيئة العامة للترفيه — اليوم الوطني السعودي 96.<br>
-    مرآة الأطباع من <a href="../">مجموعة نُبل وابتكار</a> · جدة · العروض سارية حتى 30 سبتمبر 2026.
+    مرآة الأطباع من <a href="/">مجموعة نُبل وابتكار</a> · جدة.
   </footer>
 </div>
 
@@ -1097,14 +1107,13 @@
     $('of-contents').textContent = T.contents;
     $('of-qty').textContent = T.qty;
     $('of-save').textContent = (T.was - T.price) + ' ريال (' + Math.round((1 - T.price/T.was)*100) + '%)';
-    $('of-link').href = T.href;
+    $('of-link').href = '/';
     $('offer-in').style.setProperty('--c', T.color);
     $('offer-wrap').style.setProperty('--c', T.color);
     $('of-wa').href = 'https://wa.me/' + WA_NUM + '?text=' + encodeURIComponent(
       'السلام عليكم، طلعت نتيجتي في مرآة الأطباع: ' + T.name + '.' +
       (st.name ? ' الاسم: ' + st.name + '.' : '') +
-      ' أرغب بالنسخة عالية الدقة من بطاقتي، وأبغى أطلب ' + T.pkg +
-      ' (' + T.contents + ') بسعر ' + T.price + ' ريال.');
+      ' أرغب بالنسخة عالية الدقة من بطاقتي، وأبغى أعرف أسعاركم الحالية.');
     Array.prototype.forEach.call($('chips').children, function(b){
       b.classList.toggle('on', b.getAttribute('data-k') === st.trait);
     });
