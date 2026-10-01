@@ -1,0 +1,12 @@
+{
+  "name": "منصة نُبل وابتكار للتسويق",
+  "short_name": "منصة نُبل",
+  "start_url": "/marketing/hub/",
+  "scope": "/marketing/hub/",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#082A37",
+  "theme_color": "#082A37",
+  "icons": [{ "src": "/marketing/logo-large.png", "sizes": "620x540", "type": "image/png" }]
+}
