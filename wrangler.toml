@@ -7,3 +7,9 @@ compatibility_date = "2026-09-16"
 # لإعدادات المشروع، فلا يحتاج أحد إلى فتح اللوحة عند أي تغيير لاحق.
 [ai]
 binding = "AI"
+
+# قاعدة بيانات منصة التسويق الإدارية (/marketing/hub) — Cloudflare D1
+[[d1_databases]]
+binding = "DB"
+database_name = "nubl-marketing-hub"
+database_id = "8c8d114b-f0dd-43cf-8845-208e1d589657"

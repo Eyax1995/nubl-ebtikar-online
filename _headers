@@ -2,3 +2,6 @@
   Cache-Control: public, max-age=86400
 /catalog/*
   Cache-Control: public, max-age=86400
+/marketing/hub/*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-cache
