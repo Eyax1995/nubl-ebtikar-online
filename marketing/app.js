@@ -1,6 +1,8 @@
 /* نُبل وابتكار للتسويق — سلوك الموقع المشترك */
 /* Meta Pixel — موقع نبل وابتكار للتسويق (993831000407341) */
 !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+var nublC=null;try{nublC=localStorage.getItem('nubl_consent')}catch(e){}
+if(nublC!=='yes')fbq('consent','revoke');
 fbq('init','993831000407341');fbq('track','PageView');
 window.nublTrack=function(ev,data){try{fbq('track',ev,data||{})}catch(e){}};
 (function(){
@@ -94,3 +96,20 @@ window.nublTrack=function(ev,data){try{fbq('track',ev,data||{})}catch(e){}};
 document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href*="wa.me"]');if(!a)return;
   var d={content_name:(a.textContent||'').trim().slice(0,60)};if(window.nublSku&&location.pathname.indexOf('packages')>-1){d.content_ids=[window.nublSku];d.content_type='product';}
   nublTrack('Contact',d);},true);
+
+/* شريط موافقة ملفات تعريف الارتباط + رابط سياسة الخصوصية */
+document.addEventListener('DOMContentLoaded',function(){
+  var fb=document.querySelector('.fbottom');
+  if(fb&&!fb.querySelector('.pp-link')){var d=document.createElement('div');d.className='pp-link';d.innerHTML='<a href="/marketing/privacy" style="color:inherit;text-decoration:underline">سياسة الخصوصية</a>';fb.appendChild(d);}
+  if(nublC==='yes'||nublC==='no')return;
+  var b=document.createElement('div');b.setAttribute('role','dialog');b.setAttribute('aria-label','موافقة ملفات تعريف الارتباط');
+  b.style.cssText='position:fixed;inset-inline:12px;bottom:12px;z-index:9999;max-width:720px;margin-inline:auto;background:#082A37;color:#F4EDE1;border:1px solid rgba(220,156,71,.45);border-radius:14px;padding:14px 16px;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.35);font-size:.92rem;line-height:1.7';
+  b.innerHTML='<span style="flex:1 1 280px">نستخدم ملفات تعريف الارتباط وأداة قياس Meta لتحسين الموقع وإعلاناتنا. <a href="/marketing/privacy" style="color:#DC9C47;text-decoration:underline">التفاصيل</a></span>'+
+    '<span style="display:flex;gap:8px"><button type="button" data-c="yes" style="background:#D2652A;color:#fff;border:0;border-radius:10px;padding:8px 18px;font:inherit;font-weight:700;cursor:pointer">موافق</button>'+
+    '<button type="button" data-c="no" style="background:transparent;color:#F4EDE1;border:1px solid rgba(244,237,225,.4);border-radius:10px;padding:8px 14px;font:inherit;cursor:pointer">الضرورية فقط</button></span>';
+  b.addEventListener('click',function(e){var v=e.target.getAttribute&&e.target.getAttribute('data-c');if(!v)return;
+    try{localStorage.setItem('nubl_consent',v)}catch(x){}
+    if(v==='yes'){try{fbq('consent','grant');fbq('track','PageView')}catch(x){}}
+    b.remove();});
+  document.body.appendChild(b);
+});
