@@ -201,3 +201,27 @@ table.t td.n{white-space:nowrap}
 .card h3 svg,.list-i svg,.kpi svg,.toolbar svg,.col-h svg{width:18px;height:18px;flex:none}
 .card h3 svg{color:var(--terra)}
 .btn-wa svg{width:16px;height:16px}
+/* ===== القوالب وقوائم التحقق وتلجرام ===== */
+.prog{display:inline-block;width:56px;height:6px;border-radius:6px;background:var(--line);overflow:hidden;vertical-align:middle}
+.prog i{display:block;height:100%;background:var(--teal);border-radius:6px}
+.cklist{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+.cklist .chk input:checked+span{text-decoration:line-through;color:var(--muted)}
+.qs{display:flex;flex-direction:column;gap:8px}
+.qlist{display:flex;flex-direction:column;gap:8px}
+.qrow{display:grid;grid-template-columns:2fr 1fr 1.1fr 2fr auto auto auto;gap:6px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+@media (max-width:760px){.qrow{grid-template-columns:1fr 1fr}.qrow [data-q="l"],.qrow [data-q="o"]{grid-column:1/-1}}
+.tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.tpl{display:flex;flex-direction:column;gap:6px;text-align:start;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--card);cursor:pointer;font:inherit;color:inherit;transition:border-color .15s,box-shadow .15s}
+.tpl:hover{border-color:var(--teal);box-shadow:0 4px 14px rgba(8,42,55,.08)}
+.tpl .e{font-size:24px;line-height:1}
+.tpl b{color:var(--deep);font-size:15px}
+.tpl .m{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--muted)}
+.tpl.off{opacity:.55}
+.tpl-cat{margin:18px 0 10px;color:var(--deep);font-size:15px;display:flex;align-items:center;gap:8px}
+.tpl-cat:first-child{margin-top:0}
+.kc .m .src{font-size:11px}
+.tg-box{display:flex;flex-direction:column;gap:10px}
+.tg-box code{direction:ltr;display:block;padding:8px 10px;border-radius:10px;background:var(--soft);border:1px solid var(--line);font-size:12px;word-break:break-all}
+.steps{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.tgi{color:#229ED9;display:inline-flex;align-items:center}.tgi svg{width:16px;height:16px}
+.modal-h h3 svg,.card h3 svg{width:18px;height:18px}

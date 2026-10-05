@@ -1,5 +1,6 @@
 // أدوات مشتركة: الاستجابات، كلمات المرور، الجلسات، تهيئة قاعدة البيانات
-import { DDL, SCHEMA_VERSION, DEFAULT_SETTINGS } from './schema.js';
+import { DDL, SCHEMA_VERSION, DEFAULT_SETTINGS, MIGRATIONS, SECRET_SETTINGS } from './schema.js';
+import { TEMPLATES } from './templates.js';
 import { catalogRows, SEASONS, ARTICLES } from './seed.js';
 
 export const COOKIE = 'nh_s';
@@ -61,7 +62,7 @@ export async function currentUser(db, request) {
   const token = getCookie(request, COOKIE);
   if (!token) return null;
   const row = await db.prepare(
-    `SELECT u.id, u.name, u.email, u.role, u.title, u.must_change, u.active, u.commission_rate, s.expires_at
+    `SELECT u.id, u.name, u.email, u.role, u.title, u.must_change, u.active, u.commission_rate, u.tg_chat_id, u.tg_username, s.expires_at
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?`).bind(token).first();
   if (!row || !row.active || row.expires_at < new Date().toISOString()) return null;
   row.token = token;
@@ -76,6 +77,7 @@ export async function ensureDb(db) {
   try { ver = await db.prepare("SELECT value FROM settings WHERE key = 'schema_version'").first('value'); } catch (_) { /* أول تشغيل */ }
   if (String(ver) !== String(SCHEMA_VERSION)) {
     await db.batch(DDL.map((s) => db.prepare(s)));
+    for (const m of MIGRATIONS) { try { await db.prepare(m).run(); } catch (_) { /* موجود مسبقاً */ } }
     const stmts = Object.entries(DEFAULT_SETTINGS).map(([k, v]) =>
       db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').bind(k, v));
     stmts.push(db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', ?)").bind(String(SCHEMA_VERSION)));
@@ -98,6 +100,13 @@ async function seedIfEmpty(db) {
     await db.batch(SEASONS.map(([name, date, sectors, notes]) =>
       db.prepare('INSERT INTO seasons (name, date, sectors, notes) VALUES (?,?,?,?)').bind(name, date, sectors, notes)));
   }
+  const tp = await db.prepare('SELECT COUNT(*) AS n FROM templates').first('n');
+  if (!tp) {
+    await db.batch(TEMPLATES.map((t, i) => db.prepare(
+      `INSERT INTO templates (code, name, category, kind, emoji, description, role, priority, due_days, est_hours, title_tpl, fields, checklist, roles, sort)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(t.code, t.name, t.category, t.kind, t.emoji, t.description || null, t.role || null, t.priority,
+      t.due_days, t.est_hours || null, t.title_tpl || null, JSON.stringify(t.fields), JSON.stringify(t.checklist), t.roles || null, (i + 1) * 10)));
+  }
   const a = await db.prepare('SELECT COUNT(*) AS n FROM articles').first('n');
   if (!a) {
     await db.batch(ARTICLES.map(([cat, title, body]) =>
@@ -108,6 +117,15 @@ async function seedIfEmpty(db) {
 export async function getSettings(db) {
   const { results } = await db.prepare('SELECT key, value FROM settings').all();
   const o = {}; for (const r of results) o[r.key] = r.value; return o;
+}
+
+// الإعدادات المرسلة للواجهة: بلا أسرار، مع مؤشر أن التوكن مضبوط
+export async function publicSettings(db) {
+  const s = await getSettings(db);
+  const out = {};
+  for (const [k, v] of Object.entries(s)) if (!SECRET_SETTINGS.includes(k)) out[k] = v;
+  out.tg_connected = s.tg_token ? '1' : '';
+  return out;
 }
 
 const COLS_CACHE = {};

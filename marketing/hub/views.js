@@ -263,6 +263,7 @@ async function clientView(id, tab = 'over') {
   const tabs = [['over', 'نظرة عامة'], can('contracts') && ['contracts', 'العقود'], can('invoices') && ['invoices', 'الفواتير'], ['tasks', 'المهام'], can('content') && ['content', 'المحتوى'], can('activities') && ['log', 'السجل']].filter(Boolean);
   V().innerHTML = `<div class="toolbar"><a href="#/clients" class="btn btn-g btn-s">→ العملاء</a><span class="sp"></span>
     ${c.phone ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLink(c.phone)}">${I.wa} واتساب</a>` : ''}
+    ${c.drive_link ? `<a class="btn btn-g" target="_blank" rel="noopener" href="${esc(c.drive_link)}">${I.folder} مجلد العميل</a>` : ''}
     ${can('activities', 'w') ? `<button class="btn btn-n" id="log">${I.chat} توثيق تواصل</button>` : ''}
     ${can('quotes', 'w') ? `<button class="btn btn-g" id="q">+ عرض سعر</button>` : ''}
     ${can('contracts', 'w') ? `<button class="btn btn-g" id="ct">+ عقد</button>` : ''}
@@ -550,7 +551,7 @@ async function settingsView() {
   const { settings: s } = await api('settings');
   const F2 = [['company_name', 'اسم الكيان'], ['company_city', 'العنوان'], ['cr_number', 'السجل التجاري'], ['vat_number', 'الرقم الضريبي'], ['sales_phone', 'رقم التواصل'],
     ['vat_rate', 'نسبة الضريبة %'], ['quote_validity_days', 'صلاحية عرض السعر (يوم)'], ['hour_cost', 'تكلفة ساعة الفريق (ر.س)'], ['commission_rep', 'عمولة المندوب %'],
-    ['commission_close', 'عمولة الإغلاق %'], ['renewal_uplift', 'زيادة سعر التجديد %'], ['stale_days', 'الصفقة راكدة بعد (يوم)']];
+    ['commission_close', 'عمولة الإغلاق %'], ['renewal_uplift', 'زيادة سعر التجديد %'], ['stale_days', 'الصفقة راكدة بعد (يوم)'], ['drive_root', 'رابط مجلد التسويق في Drive'], ['drive_clients', 'رابط مجلد العملاء في Drive']];
   V().innerHTML = `<div class="grid g2"><div class="card"><h3>${I.gear} إعدادات الكيان والتشغيل</h3><form class="fgrid" id="sf">${F2.map(([k, l]) => `<label class="f"><span>${l}</span><input class="inp" name="${k}" value="${esc(s[k] || '')}"></label>`).join('')}</form>
     <button class="btn btn-p" id="sv">حفظ الإعدادات</button></div>
     <div><div class="card"><h3>${I.upload} البيانات</h3><p class="muted small" style="margin-bottom:10px">النسخة الاحتياطية ملف JSON بكل السجلات — احفظها أسبوعياً في Drive.</p>
@@ -649,5 +650,4 @@ ROUTES = {
   settings: { title: 'الإعدادات', render: settingsView },
   search: { title: 'بحث', render: searchView },
 };
-
-boot();
+// يبدأ التشغيل من tpl.js بعد تحميل كل الشاشات
