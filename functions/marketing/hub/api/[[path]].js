@@ -2,8 +2,12 @@
 // كل الطلبات تمر من هنا: /marketing/hub/api/...
 import {
   json, bad, HttpError, ensureDb, currentUser, createSession, sessionCookie, hashPassword, verifyPassword,
-  tempPassword, getSettings, tableCols, audit, nextNumber, today, addMonths, addDays, round2,
+  tempPassword, getSettings, publicSettings, tableCols, audit, nextNumber, today, addMonths, addDays, round2, randomToken,
 } from './_lib/core.js';
+import { SECRET_SETTINGS } from './_lib/schema.js';
+import { tgCall, tgToken, notifyUser } from './_lib/telegram.js';
+import { handleUpdate, dailyDigest, newLinkCode } from './_lib/bot.js';
+import { loadTemplate, templatesFor, tplAllowed, runTemplate, taskChanged } from './_lib/engine.js';
 import { ENTITIES, HIDDEN, ROLES } from './_lib/schema.js';
 import { SECTORS } from './_lib/seed.js';
 
@@ -19,6 +23,8 @@ export async function onRequest(ctx) {
     if (parts[0] === 'health') return json({ ok: true, time: new Date().toISOString() });
     if (parts[0] === 'public' && parts[1] === 'lead' && method === 'POST') return await publicLead(db, request);
     if (parts[0] === 'auth' && parts[1] === 'login' && method === 'POST') return await login(db, request);
+    if (parts[0] === 'telegram' && parts[1] === 'webhook' && method === 'POST') return await tgWebhook(ctx, db, env, request);
+    if (parts[0] === 'telegram' && parts[1] === 'digest') return await tgDigest(db, env, request);
 
     // ---------- كل ما بعده يتطلب تسجيل دخول ----------
     const user = await currentUser(db, request);
@@ -46,7 +52,9 @@ export async function onRequest(ctx) {
 async function dispatch(db, env, request, user, parts) {
     switch (parts[0]) {
       case 'meta': return meta(db, user);
-      case 'e': return entityRoute(db, request, user, parts[1], parts[2]);
+      case 'e': return entityRoute(db, request, user, parts[1], parts[2], env);
+      case 'templates': return templatesRoute(db, env, request, user, parts[1], parts[2]);
+      case 'telegram': return telegramRoute(db, env, request, user, parts[1]);
       case 'dashboard': return dashboard(db, user);
       case 'myday': return myDay(db, user);
       case 'reports': return reports(db, request, user);
@@ -66,7 +74,7 @@ async function dispatch(db, env, request, user, parts) {
 }
 
 // ======================================================================
-const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, title: u.title, must_change: !!u.must_change });
+const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, title: u.title, must_change: !!u.must_change, tg_linked: !!u.tg_chat_id, tg_username: u.tg_username || null });
 function sameOrigin(request) {
   const o = request.headers.get('origin');
   if (!o) return true;
@@ -111,8 +119,8 @@ async function changePassword(db, request, user) {
 
 // ---------- البيانات الوصفية ----------
 async function meta(db, user) {
-  const { results: users } = await db.prepare('SELECT id, name, role, title, active FROM users ORDER BY active DESC, name').all();
-  const settings = await getSettings(db);
+  const { results: users } = await db.prepare('SELECT id, name, role, title, active, (tg_chat_id IS NOT NULL) AS tg FROM users ORDER BY active DESC, name').all();
+  const settings = await publicSettings(db);
   const perms = {};
   for (const [k, v] of Object.entries(ENTITIES)) perms[k] = v.perms[user.role] || '';
   return json({ user: publicUser(user), users, roles: ROLES, perms, settings, sectors: SECTORS });
@@ -134,7 +142,7 @@ async function inScope(db, user, entity, id) {
   return row;
 }
 
-async function entityRoute(db, request, user, entity, id) {
+async function entityRoute(db, request, user, entity, id, env) {
   const def = ENTITIES[entity];
   if (!def) return bad('كيان غير معروف', 404);
   const method = request.method.toUpperCase();
@@ -161,7 +169,7 @@ async function entityRoute(db, request, user, entity, id) {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '500', 10) || 500, 2000);
     const offset = parseInt(url.searchParams.get('offset') || '0', 10) || 0;
     const w = where.length ? ' WHERE ' + where.join(' AND ') : '';
-    const sel = entity === 'users' ? 'id, name, email, phone, role, title, active, commission_rate, last_login, created_at'
+    const sel = entity === 'users' ? 'id, name, email, phone, role, title, active, commission_rate, last_login, created_at, tg_username, (tg_chat_id IS NOT NULL) AS tg_linked'
       : entity === 'files' ? 'id, name, mime, size' : '*';
     const { results } = await db.prepare(`SELECT ${sel} FROM ${entity}${w} ORDER BY ${def.order} LIMIT ? OFFSET ?`)
       .bind(...args, limit, offset).all();
@@ -172,13 +180,14 @@ async function entityRoute(db, request, user, entity, id) {
   if (method === 'GET' && id) {
     need(user, entity, 'r');
     const row = await inScope(db, user, entity, id);
-    if (entity === 'users') { delete row.pass_hash; delete row.pass_salt; }
+    if (entity === 'users') { delete row.pass_hash; delete row.pass_salt; delete row.tg_chat_id; }
     return json({ row: strip(user, row) });
   }
 
   if (method === 'POST' && !id) {
     need(user, entity, 'w');
     if (entity === 'users') return bad('استخدم شاشة الفريق لإضافة مستخدم');
+    if (entity === 'tasks') return bad('كل مهمة تبدأ من قالب — استخدم «مهمة جديدة» واختر القالب المناسب');
     const data = await body(request);
     const cols = await tableCols(db, entity);
     const rec = {};
@@ -225,7 +234,8 @@ async function entityRoute(db, request, user, entity, id) {
     await afterSave(db, user, entity, Number(id), rec, before);
     await audit(db, user, 'update', entity, id, keys.join(','));
     let row = await db.prepare(`SELECT * FROM ${entity} WHERE id = ?`).bind(id).first();
-    if (entity === 'users') { delete row.pass_hash; delete row.pass_salt; }
+    if (entity === 'tasks') await taskChanged(db, env, user, before, row);
+    if (entity === 'users') { delete row.pass_hash; delete row.pass_salt; delete row.tg_chat_id; }
     return json({ row: strip(user, row) });
   }
 
@@ -591,15 +601,15 @@ async function reports(db, request, user) {
 
 // ---------- الإعدادات والمستخدمون ----------
 async function settingsRoute(db, request, user) {
-  if (request.method === 'GET') return json({ settings: await getSettings(db) });
+  if (request.method === 'GET') return json({ settings: await publicSettings(db) });
   if (request.method === 'PUT') {
     if (user.role !== 'admin') return bad('للمدير فقط', 403);
     const d = await body(request);
-    const stmts = Object.entries(d).filter(([k]) => /^[a-z_]{2,40}$/.test(k) && k !== 'schema_version')
+    const stmts = Object.entries(d).filter(([k]) => /^[a-z_]{2,40}$/.test(k) && k !== 'schema_version' && !SECRET_SETTINGS.includes(k) && !k.startsWith('tg_'))
       .map(([k, v]) => db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind(k, v == null ? '' : String(v)));
     if (stmts.length) await db.batch(stmts);
     await audit(db, user, 'settings', 'settings', null, Object.keys(d).join(','));
-    return json({ settings: await getSettings(db) });
+    return json({ settings: await publicSettings(db) });
   }
   return bad('طريقة غير مدعومة', 405);
 }
@@ -689,9 +699,10 @@ async function exportAll(db, user) {
   const out = { exported_at: new Date().toISOString() };
   for (const t of Object.keys(ENTITIES)) {
     const sel = t === 'users' ? 'id, name, email, phone, role, title, active, commission_rate, created_at' : '*';
+    if (t === 'files') continue;
     out[t] = (await db.prepare(`SELECT ${sel} FROM ${t}`).all()).results;
   }
-  out.settings = await getSettings(db);
+  out.settings = await publicSettings(db);
   return json(out, 200, { 'content-disposition': `attachment; filename="nubl-hub-backup-${today()}.json"` });
 }
 
@@ -751,4 +762,125 @@ async function aiRoute(env, db, request, user) {
   });
   await audit(db, user, 'ai', d.action, null);
   return json({ text: res.response || '' });
+}
+
+// ======================================================================
+// القوالب: كل مهمة تُنشأ من قالب — من المنصة أو من بوت تلجرام
+async function templatesRoute(db, env, request, user, id, action) {
+  const method = request.method.toUpperCase();
+  if (id === 'mine' && method === 'GET') return json({ rows: await templatesFor(db, user) });
+  if (id && action === 'run' && method === 'POST') {
+    const tpl = await loadTemplate(db, id);
+    if (!tpl) return bad('القالب غير موجود', 404);
+    if (!tplAllowed(user, tpl)) return bad('لا تملك صلاحية استخدام هذا القالب', 403);
+    const d = await body(request);
+    const r = await runTemplate(db, env, user, tpl, d.answers || {}, 'المنصة');
+    return json(r, 201);
+  }
+  if (id && action === 'duplicate' && method === 'POST') {
+    need(user, 'templates', 'w');
+    const t = await db.prepare('SELECT * FROM templates WHERE id = ?').bind(id).first();
+    if (!t) return bad('القالب غير موجود', 404);
+    const r = await db.prepare(`INSERT INTO templates (code, name, category, kind, emoji, description, role, default_assignee_id, priority, due_days, est_hours, title_tpl, fields, checklist, roles, active, sort, created_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`).bind(null, t.name + ' (نسخة)', t.category, t.kind, t.emoji, t.description, t.role, t.default_assignee_id, t.priority, t.due_days,
+      t.est_hours, t.title_tpl, t.fields, t.checklist, t.roles, (t.sort || 0) + 1, user.id).run();
+    await audit(db, user, 'duplicate', 'templates', id, r.meta.last_row_id);
+    return json({ id: r.meta.last_row_id }, 201);
+  }
+  return bad('إجراء غير معروف', 404);
+}
+
+// ======================================================================
+// تلجرام
+async function tgWebhook(ctx, db, env, request) {
+  const s = await getSettings(db);
+  const secret = request.headers.get('x-telegram-bot-api-secret-token');
+  if (!s.tg_secret || secret !== s.tg_secret) return bad('مرفوض', 403);
+  let update = null; try { update = await request.json(); } catch { return json({ ok: true }); }
+  const p = handleUpdate(db, env, update, new URL(request.url).origin);
+  if (ctx.waitUntil) ctx.waitUntil(p); else await p;
+  return json({ ok: true });
+}
+
+async function tgDigest(db, env, request) {
+  const s = await getSettings(db);
+  const key = new URL(request.url).searchParams.get('key') || request.headers.get('x-cron-key');
+  if (!s.tg_cron_key || key !== s.tg_cron_key) return bad('مرفوض', 403);
+  return json(await dailyDigest(db, env));
+}
+
+const BOT_COMMANDS = [
+  { command: 'new', description: 'مهمة جديدة من قالب' }, { command: 'tasks', description: 'مهامي المفتوحة' },
+  { command: 'today', description: 'ملخص يومي' }, { command: 'lead', description: 'عميل محتمل جديد' },
+  { command: 'log', description: 'تسجيل تواصل' }, { command: 'visit', description: 'زيارة ميدانية' },
+  { command: 'search', description: 'بحث' }, { command: 'board', description: 'لوحة القطاع (للإدارة)' },
+  { command: 'cancel', description: 'إلغاء العملية الحالية' }, { command: 'help', description: 'مساعدة' },
+];
+
+async function telegramRoute(db, env, request, user, action) {
+  const method = request.method.toUpperCase();
+  const origin = new URL(request.url).origin;
+  const saveSet = (pairs) => db.batch(Object.entries(pairs).map(([k, v]) => db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind(k, v == null ? '' : String(v))));
+
+  if (action === 'link' && method === 'POST') {
+    const s = await getSettings(db);
+    if (!(await tgToken(db, env)) || !s.tg_bot_username) return bad('البوت غير مفعّل بعد — يفعّله المدير من الإعدادات', 409);
+    const code = newLinkCode();
+    await db.prepare('DELETE FROM tg_codes WHERE user_id = ?').bind(user.id).run();
+    await db.prepare('INSERT INTO tg_codes (code, user_id, expires_at) VALUES (?,?,?)').bind(code, user.id, new Date(Date.now() + 20 * 60e3).toISOString()).run();
+    return json({ url: `https://t.me/${s.tg_bot_username}?start=${code}`, bot: s.tg_bot_username, expires_in: 20 });
+  }
+  if (action === 'unlink' && method === 'POST') {
+    await db.prepare('UPDATE users SET tg_chat_id = NULL, tg_username = NULL WHERE id = ?').bind(user.id).run();
+    await audit(db, user, 'tg-unlink', 'users', user.id);
+    return json({ ok: true });
+  }
+  if (action === 'test' && method === 'POST') {
+    const ok = await notifyUser(db, env, user.id, `✅ رسالة اختبار من منصة نُبل وابتكار للتسويق — أهلاً ${user.name}`);
+    return ok ? json({ ok }) : bad('لم تصل الرسالة — تأكد من ربط حسابك وتفعيل البوت');
+  }
+
+  if (user.role !== 'admin') return bad('للمدير فقط', 403);
+
+  if (action === 'setup' && method === 'POST') {
+    const d = await body(request);
+    const token = String(d.token || '').trim();
+    if (!/^\d{6,12}:[A-Za-z0-9_-]{30,}$/.test(token)) return bad('صيغة التوكن غير صحيحة — انسخه كما هو من BotFather');
+    const me = await tgCall(env, token, 'getMe', {});
+    if (!me.ok) return bad('التوكن مرفوض من تلجرام: ' + (me.description || 'تحقق منه'));
+    const secret = randomToken(24);
+    const s = await getSettings(db);
+    const cron = s.tg_cron_key || randomToken(16);
+    const hook = await tgCall(env, token, 'setWebhook', {
+      url: `${origin}/marketing/hub/api/telegram/webhook`, secret_token: secret, allowed_updates: ['message', 'callback_query'], drop_pending_updates: true,
+    });
+    if (!hook.ok) return bad('تعذّر ضبط Webhook: ' + (hook.description || ''));
+    await tgCall(env, token, 'setMyCommands', { commands: BOT_COMMANDS });
+    await tgCall(env, token, 'setMyDescription', { description: 'البوت الداخلي لفريق نُبل وابتكار للتسويق — المهام والقوالب والعملاء المحتملون والزيارات، متصل مباشرة بمنصة التسويق.' });
+    await tgCall(env, token, 'setMyShortDescription', { short_description: 'بوت فريق نُبل وابتكار للتسويق — خاص بالفريق' });
+    await saveSet({ tg_token: token, tg_secret: secret, tg_cron_key: cron, tg_bot_username: me.result.username, tg_bot_name: me.result.first_name });
+    await audit(db, user, 'tg-setup', 'settings', null, me.result.username);
+    return json({ ok: true, bot: me.result.username });
+  }
+  if (action === 'status' && method === 'GET') {
+    const s = await getSettings(db);
+    const token = await tgToken(db, env);
+    if (!token) return json({ connected: false });
+    const info = await tgCall(env, token, 'getWebhookInfo', {});
+    const linked = await db.prepare('SELECT COUNT(*) AS n FROM users WHERE tg_chat_id IS NOT NULL AND active = 1').first('n');
+    return json({
+      connected: true, bot: s.tg_bot_username, name: s.tg_bot_name, linked,
+      webhook: info.result ? { url: info.result.url, pending: info.result.pending_update_count, last_error: info.result.last_error_message || null } : null,
+      digest_url: `${origin}/marketing/hub/api/telegram/digest?key=${s.tg_cron_key}`,
+    });
+  }
+  if (action === 'disconnect' && method === 'POST') {
+    const token = await tgToken(db, env);
+    if (token) await tgCall(env, token, 'deleteWebhook', {});
+    await saveSet({ tg_token: '', tg_secret: '', tg_bot_username: '', tg_bot_name: '' });
+    await audit(db, user, 'tg-disconnect', 'settings', null);
+    return json({ ok: true });
+  }
+  if (action === 'digest' && method === 'POST') return json(await dailyDigest(db, env));
+  return bad('إجراء غير معروف', 404);
 }
