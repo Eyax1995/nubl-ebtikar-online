@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -61,6 +61,12 @@ export const DDL = [
     created_at TEXT DEFAULT (datetime('now')))`,
   `CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, action TEXT, entity TEXT, entity_id INTEGER,
     detail TEXT, at TEXT DEFAULT (datetime('now')))`,
+  `CREATE TABLE IF NOT EXISTS templates (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, name TEXT NOT NULL, category TEXT, kind TEXT DEFAULT 'task',
+    emoji TEXT, description TEXT, role TEXT, default_assignee_id INTEGER, priority TEXT DEFAULT 'عادية', due_days INTEGER DEFAULT 2, est_hours REAL,
+    title_tpl TEXT, fields TEXT, checklist TEXT, roles TEXT, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0, uses INTEGER DEFAULT 0,
+    created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS tg_state (chat_id TEXT PRIMARY KEY, user_id INTEGER, state TEXT, updated_at TEXT DEFAULT (datetime('now')))`,
+  `CREATE TABLE IF NOT EXISTS tg_codes (code TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at TEXT NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS ix_leads_owner ON leads(owner_id)`,
   `CREATE INDEX IF NOT EXISTS ix_leads_phone ON leads(phone)`,
   `CREATE INDEX IF NOT EXISTS ix_deals_stage ON deals(stage)`,
@@ -69,6 +75,21 @@ export const DDL = [
   `CREATE INDEX IF NOT EXISTS ix_content_client ON content(client_id, publish_date)`,
   `CREATE INDEX IF NOT EXISTS ix_inv_client ON invoices(client_id, status)`,
 ];
+
+// ترحيلات تُطبّق مرة واحدة على قواعد قائمة (فشل أي سطر = العمود موجود مسبقاً)
+export const MIGRATIONS = [
+  'ALTER TABLE tasks ADD COLUMN template_id INTEGER',
+  'ALTER TABLE tasks ADD COLUMN checklist TEXT',
+  'ALTER TABLE tasks ADD COLUMN data TEXT',
+  "ALTER TABLE tasks ADD COLUMN source TEXT DEFAULT 'المنصة'",
+  'ALTER TABLE users ADD COLUMN tg_chat_id TEXT',
+  'ALTER TABLE users ADD COLUMN tg_username TEXT',
+  'CREATE INDEX IF NOT EXISTS ix_tasks_tpl ON tasks(template_id)',
+  'CREATE INDEX IF NOT EXISTS ix_users_tg ON users(tg_chat_id)',
+];
+
+// إعدادات سرية لا تُرسل للواجهة أبداً
+export const SECRET_SETTINGS = ['tg_token', 'tg_secret', 'tg_cron_key'];
 
 // الأدوار
 export const ROLES = {
@@ -147,7 +168,8 @@ export const ENTITIES = {
     perms: { ...ALL, account: 'rw', designer: 'r', sales: 'r', finance: 'r' }, order: 'id DESC',
   },
   tasks: {
-    cols: ['title', 'project_id', 'client_id', 'assignee_id', 'status', 'priority', 'due_date', 'revisions', 'est_hours', 'spent_hours', 'description', 'link', 'done_at'],
+    cols: ['title', 'project_id', 'client_id', 'assignee_id', 'status', 'priority', 'due_date', 'revisions', 'est_hours', 'spent_hours', 'description', 'link', 'done_at',
+      'template_id', 'checklist', 'data', 'source'],
     search: ['title', 'description'],
     perms: { ...ALL, account: 'rw', designer: 'rw', sales: 'rw', finance: 'rw' },
     own: { designer: 'assignee_id', sales: 'assignee_id', finance: 'assignee_id' }, ownAlsoCreator: true, order: 'due_date IS NULL, due_date, id DESC',
@@ -161,6 +183,12 @@ export const ENTITIES = {
     cols: ['name', 'date', 'sectors', 'notes', 'plan_days', 'print_days'],
     search: ['name', 'notes'],
     perms: { ...ALL, sales: 'r', account: 'rw', designer: 'r', finance: 'r' }, order: 'date',
+  },
+  templates: {
+    cols: ['code', 'name', 'category', 'kind', 'emoji', 'description', 'role', 'default_assignee_id', 'priority', 'due_days', 'est_hours',
+      'title_tpl', 'fields', 'checklist', 'roles', 'active', 'sort'],
+    search: ['name', 'code', 'category', 'description'],
+    perms: { ...ALL, sales: 'r', account: 'r', designer: 'r', finance: 'r' }, order: 'active DESC, sort, category, id',
   },
   articles: {
     cols: ['category', 'title', 'body'],
