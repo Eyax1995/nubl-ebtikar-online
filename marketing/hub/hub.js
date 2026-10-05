@@ -72,6 +72,8 @@ const I = {
   wa: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.5 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.8s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.6-.3.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg>',
   phone: P('<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/>'),
   print: P('<path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z"/>'),
+  tg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.6 18.8 19.3c-.2 1-.8 1.3-1.7.8l-4.7-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.8 8.8-7.9c.4-.3-.1-.5-.6-.2L6.7 13.2 2 11.7c-1-.3-1-1 .2-1.5l18.4-7.1c.9-.3 1.6.2 1.3 1.5z"/></svg>',
+  layers: P('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'),
   spark: P('<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>'),
 };
 
@@ -102,6 +104,10 @@ const L = {
   pillar: ['تعليمي', 'عرض / بيع', 'خلف الكواليس', 'موسمي', 'دليل اجتماعي', 'هوية وقيم'],
   artCat: ['البيع', 'التشغيل', 'العقود', 'الهوية', 'أدلة الأدوات', 'أخرى'],
   kind: [['package', 'باقة'], ['service', 'خدمة مفردة'], ['print', 'مطبوعات']],
+  tplCat: ['المبيعات', 'إدارة الحسابات', 'التصميم والإنتاج', 'المالية والإدارة', 'عام'],
+  tplKind: [['task', 'مهمة'], ['lead', 'عميل محتمل'], ['activity', 'تسجيل تواصل'], ['visit', 'زيارة ميدانية']],
+  role: [['', 'منشئ المهمة'], ['manager', 'مدير الخدمات التسويقية'], ['sales', 'مبيعات / مندوب'], ['account', 'إدارة الحسابات والسوشيال'], ['designer', 'تصميم ومونتاج'], ['finance', 'المالية']],
+  qType: [['text', 'نص قصير'], ['long', 'نص طويل'], ['client', 'عميل'], ['lead', 'عميل محتمل'], ['date', 'تاريخ'], ['select', 'اختيار'], ['user', 'عضو فريق'], ['number', 'رقم'], ['phone', 'جوال'], ['link', 'رابط'], ['sector', 'قطاع'], ['location', 'موقع'], ['photo', 'صورة']],
   plan: [['single', 'دفعة واحدة'], ['monthly', 'شهرياً مقدماً'], ['60-40', 'دفعتان 60% + 40%'], ['50-30-20', '50% / 30% / 20%'], ['3q', '3 دفعات ربعية'], ['4q', '4 دفعات ربعية']],
 };
 const PILL = {
@@ -132,6 +138,7 @@ const REF = {
   projects: { label: (r) => r.name },
   contracts: { label: (r) => `${r.number || ''} ${r.title || ''}`.trim() },
   invoices: { label: (r) => `${r.number} — ${moneyTxt(r.total)}` },
+  templates: { label: (r) => `${r.emoji || ''} ${r.name}`.trim() },
 };
 async function refs(ent, force) {
   if (ent === 'users') return S.meta.users;
@@ -284,6 +291,23 @@ const ENT = {
       F('due_date', 'الاستحقاق', 'date', { list: 1 }), F('revisions', 'جولات التعديل', 'number', { list: 1 }),
       F('est_hours', 'الساعات المقدّرة', 'number'), F('spent_hours', 'الساعات الفعلية', 'number'),
       F('link', 'رابط الملف', 'url', { w: 'full' }), F('description', 'الوصف', 'textarea', { w: 'full' }),
+      F('checklist', 'خطوات القالب', 'checklist', { w: 'full' }),
+      F('template_id', 'القالب', 'ref', { ref: 'templates', ro: 1 }), F('source', 'أُنشئت من', 'text', { ro: 1 }),
+    ],
+  },
+  templates: {
+    title: 'مكتبة القوالب', one: 'قالب', icon: 'layers',
+    fields: [
+      F('name', 'اسم القالب', 'text', { list: 1, req: 1 }), F('emoji', 'رمز تعبيري', 'text', { def: '📌' }),
+      F('category', 'القسم', 'select', { o: L.tplCat, list: 1, filter: 1, req: 1, def: 'عام' }), F('kind', 'ماذا يُنشئ؟', 'select', { o: L.tplKind, list: 1, def: 'task' }),
+      F('role', 'يُسند افتراضياً إلى دور', 'select', { o: L.role }), F('default_assignee_id', 'أو إلى عضو محدد', 'ref', { ref: 'users' }),
+      F('priority', 'الأولوية', 'select', { o: L.priority, def: 'عادية' }), F('due_days', 'التسليم بعد (يوم)', 'number', { def: 2, list: 1 }),
+      F('est_hours', 'الساعات المقدّرة', 'number'), F('sort', 'الترتيب', 'number'),
+      F('title_tpl', 'صيغة عنوان المهمة', 'text', { w: 'full', hint: 'استخدم مفاتيح الأسئلة بين أقواس: تصميم {format} — {client}' }),
+      F('roles', 'مسموح لأدوار (فارغ = الجميع)', 'text', { hint: 'admin,manager,sales,account,designer,finance' }), F('active', 'مفعّل', 'bool', { def: 1 }),
+      F('description', 'وصف مختصر', 'textarea', { w: 'full', rows: 2 }),
+      F('checklist', 'الخطوات (خطوة في كل سطر)', 'lines', { w: 'full' }),
+      F('fields', 'الأسئلة', 'qs', { w: 'full' }),
     ],
   },
   content: {
@@ -314,6 +338,40 @@ const ENT = {
   },
 };
 
+const parseJ = (v, d) => { if (v == null || v === '') return d; if (typeof v !== 'string') return v; try { return JSON.parse(v) ?? d; } catch { return d; } };
+/* محرر أسئلة القالب */
+function qsRow(q = {}) {
+  return `<div class="qrow"><input class="inp" data-q="l" placeholder="السؤال" value="${esc(q.l || '')}">
+    <input class="inp" data-q="k" dir="ltr" placeholder="key" value="${esc(q.k || '')}" title="المفتاح (إنجليزي): client, due, assignee, link, priority تُربط بحقول المهمة">
+    <select class="inp" data-q="t">${L.qType.map(([k, l]) => `<option value="${k}" ${q.t === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <input class="inp" data-q="o" placeholder="الخيارات مفصولة بفاصلة (للاختيار)" value="${esc((q.o || []).join('، '))}">
+    <label class="chk small"><input type="checkbox" data-q="req" ${q.req ? 'checked' : ''}> مطلوب</label>
+    <button type="button" class="btn btn-g btn-s" data-qmv="-1" title="لأعلى">↑</button><button type="button" class="btn btn-d btn-s" data-qdel>×</button></div>`;
+}
+function qsEditor(k, qs) {
+  setTimeout(() => {
+    const box = document.querySelector(`[data-qs="${k}"]`); if (!box) return;
+    box.addEventListener('click', (e) => {
+      const r = e.target.closest('.qrow');
+      if (e.target.matches('[data-qdel]')) r.remove();
+      if (e.target.matches('[data-qmv]') && r.previousElementSibling) r.parentNode.insertBefore(r, r.previousElementSibling);
+      if (e.target.matches('[data-qadd]')) $('.qlist', box).insertAdjacentHTML('beforeend', qsRow({ t: 'text' }));
+    });
+  });
+  return `<div class="qs" data-qs="${k}"><div class="qlist">${qs.map(qsRow).join('')}</div><button type="button" class="btn btn-g btn-s" data-qadd>${I.plus} سؤال</button></div>`;
+}
+function readQs(form, k) {
+  return $$(`[data-qs="${k}"] .qrow`, form).map((r, i) => {
+    const g = (n) => $(`[data-q="${n}"]`, r);
+    const q = { k: g('k').value.trim().replace(/[^\w]/g, '') || `q${i + 1}`, l: g('l').value.trim(), t: g('t').value };
+    const o = g('o').value.split(/[,،]/).map((x) => x.trim()).filter(Boolean);
+    if (q.t === 'select') { if (!o.length) throw new Error(`أضف خيارات للسؤال «${q.l}»`); q.o = o; }
+    if (g('req').checked) q.req = 1;
+    if (!q.l) throw new Error('كل سؤال يحتاج نصاً');
+    return q;
+  });
+}
+
 /* ---------- عرض قيمة حقل ---------- */
 function cell(f, row) {
   const v = row[f.k];
@@ -331,6 +389,9 @@ function cell(f, row) {
     case 'phone': return v ? `<span class="num">${esc(v)}</span>` : '';
     case 'bool': return v ? '✓' : '—';
     case 'number': return v == null ? '' : `<span class="num">${esc(v)}</span>`;
+    case 'checklist': { const a = parseJ(v, []); if (!a.length) return ''; const d = a.filter((x) => x.d).length; return `<span class="num prog" title="${d}/${a.length}"><i style="width:${(d / a.length) * 100}%"></i></span> <span class="small num">${d}/${a.length}</span>`; }
+    case 'lines': return esc(parseJ(v, []).length + ' خطوة');
+    case 'qs': return esc(parseJ(v, []).length + ' سؤال');
     case 'url': return v ? `<a href="${esc(v)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">فتح ↗</a>` : '';
     default: { const s = String(v ?? ''); return esc(s.length > 70 ? s.slice(0, 70) + '…' : s); }
   }
@@ -340,9 +401,13 @@ function cell(f, row) {
 function input(f, val, ro) {
   const name = `name="${f.k}"`; const req = f.req ? 'required' : '';
   const v = val ?? '';
+  if ((ro || f.ro) && f.t === 'checklist') return input({ ...f, ro: 0 }, val).replace(/<input type="checkbox"/g, '<input type="checkbox" disabled');
   if (ro || f.ro) return `<div class="inp" style="background:var(--soft)">${f.t === 'money' ? money(v) : f.t === 'ref' ? esc(refLabel(f.ref, v)) : esc(v) || '—'}</div>`;
   switch (f.t) {
     case 'textarea': return `<textarea class="inp" ${name} ${req} rows="${f.rows || 4}">${esc(v)}</textarea>`;
+    case 'checklist': { const a = parseJ(v, []); return a.length ? `<div class="cklist" data-ck="${f.k}">${a.map((x, i) => `<label class="chk"><input type="checkbox" data-i="${i}" ${x.d ? 'checked' : ''}> <span>${esc(x.t)}</span></label>`).join('')}</div>` : '<div class="muted small">لا خطوات</div>'; }
+    case 'lines': return `<textarea class="inp" ${name} rows="6" placeholder="خطوة في كل سطر">${esc(parseJ(v, []).join('\n'))}</textarea>`;
+    case 'qs': return qsEditor(f.k, parseJ(v, []));
     case 'number': case 'money': return `<input class="inp num" type="number" step="any" inputmode="decimal" ${name} ${req} value="${esc(v)}">`;
     case 'date': return `<input class="inp" type="date" ${name} ${req} value="${esc(String(v).slice(0, 10))}">`;
     case 'datetime': return `<input class="inp" type="datetime-local" ${name} ${req} value="${esc(String(v).replace(' ', 'T').slice(0, 16))}">`;
@@ -370,8 +435,11 @@ function readForm(form, fields) {
   const out = {};
   for (const f of fields) {
     if (f.ro) continue;
+    if (f.t === 'checklist') { const box = form.querySelector(`[data-ck="${f.k}"]`); if (!box) continue; out[f.k] = JSON.stringify($$('input', box).map((c, i) => ({ t: $('span', box.children[i]).textContent, d: c.checked ? 1 : 0 }))); continue; }
+    if (f.t === 'qs') { out[f.k] = JSON.stringify(readQs(form, f.k)); continue; }
     const el = form.elements[f.k]; if (!el) continue;
     let v;
+    if (f.t === 'lines') { out[f.k] = JSON.stringify(el.value.split('\n').map((x) => x.trim()).filter(Boolean)); continue; }
     if (f.t === 'bool') v = el.checked ? 1 : 0;
     else if (f.t === 'ref' && f.ref !== 'users') { const m = String(el.value).match(/⟨(\d+)⟩\s*$/); v = m ? Number(m[1]) : (el.value.trim() === '' ? null : undefined); if (v === undefined) throw new Error(`اختر «${f.l}» من القائمة`); }
     else if (f.t === 'number' || f.t === 'money') v = el.value === '' ? null : Number(el.value);
@@ -411,7 +479,7 @@ async function openForm(ent, row = null, preset = {}, onSaved) {
   if (!row) for (const f of def.fields) { if (preset[f.k] !== undefined) data[f.k] = preset[f.k]; else if (f.def !== undefined) data[f.k] = typeof f.def === 'function' ? f.def() : f.def; }
   const writable = can(ent, 'w');
   const fields = def.fields.filter((f) => !(f.ro && !row));
-  const body = `<form class="fgrid" novalidate>${fields.map((f) => `<label class="f ${f.w === 'full' || f.t === 'textarea' ? 'full' : ''}"><span>${f.l}${f.req ? ' <i>*</i>' : ''}</span>${input(f, data[f.k], !writable)}</label>`).join('')}</form>`;
+  const body = `<form class="fgrid" novalidate>${fields.map((f) => `<label class="f ${f.w === 'full' || f.t === 'textarea' ? 'full' : ''}"><span>${f.l}${f.req ? ' <i>*</i>' : ''}</span>${input(f, data[f.k], !writable)}${f.hint ? `<small class="muted">${esc(f.hint)}</small>` : ''}</label>`).join('')}</form>`;
   const foot = (writable ? `<button class="btn btn-p" data-save>حفظ</button>` : '') + '<button class="btn btn-g" data-cancel>إغلاق</button><span class="sp"></span>'
     + (row && can(ent, 'd') ? '<button class="btn btn-d" data-del>حذف</button>' : '');
   const m = modal({ title: (row ? 'تعديل ' : 'إضافة ') + def.one, body, foot, wide: def.fields.length > 10 });
@@ -543,7 +611,7 @@ const NAV = [
   ['المبيعات و CRM', [['leads', 'العملاء المحتملون', 'users', 'leads', 'lead,import'], ['pipeline', 'الصفقات', 'funnel', 'deals'], ['activities', 'سجل التواصل', 'chat', 'activities'], ['visits', 'الزيارات الميدانية', 'pin', 'visits']]],
   ['العملاء والعقود', [['clients', 'العملاء', 'brief', 'clients', 'client'], ['quotes', 'عروض الأسعار', 'doc', 'quotes', 'quote'], ['contracts', 'العقود', 'sign', 'contracts', 'contract'], ['catalog', 'الكتالوج والأسعار', 'tag', 'catalog']]],
   ['المالية', [['invoices', 'الفواتير', 'bill', 'invoices', 'invoice'], ['payments', 'المدفوعات', 'cash', 'payments'], ['expenses', 'المصروفات', 'out', 'expenses']]],
-  ['التشغيل', [['tasks', 'المهام', 'check', 'tasks'], ['content', 'تقويم المحتوى', 'cal', 'content'], ['projects', 'المشاريع', 'folder', 'projects'], ['seasons', 'المواسم', 'star', 'seasons']]],
+  ['التشغيل', [['tasks', 'المهام', 'check', 'tasks'], ['templates', 'مكتبة القوالب', 'layers', 'templates'], ['content', 'تقويم المحتوى', 'cal', 'content'], ['projects', 'المشاريع', 'folder', 'projects'], ['seasons', 'المواسم', 'star', 'seasons']]],
   ['الإدارة', [['reports', 'التقارير', 'chart', '#reports'], ['kb', 'قاعدة المعرفة', 'book', 'articles'], ['team', 'الفريق', 'team', 'users'], ['settings', 'الإعدادات', 'gear', '#admin']]],
 ];
 function navAllowed(perm) {
@@ -552,14 +620,23 @@ function navAllowed(perm) {
   if (perm === '#admin') return me().role === 'admin';
   return can(perm);
 }
+// روابط مجلد التسويق في Google Drive (تُعدَّل من الإعدادات: drive_root / drive_clients)
+const DRIVE_ROOT = 'https://drive.google.com/drive/folders/1Zjbh797go1IQI7I0UuOva0MwjCWwJ9Wo';
+const DRIVE_CLIENTS = 'https://drive.google.com/drive/folders/1ZmKs-agsbE_0bT4ZZwAh-ZqhsRgAD9Zi';
+function driveNav() {
+  const s = (S.meta && S.meta.settings) || {};
+  const link = (u, l) => `<a class="nav-a" href="${esc(u)}" target="_blank" rel="noopener">${I.folder}<span>${l}</span></a>`;
+  return `<div class="nav-g"><h6>الملفات (Drive)</h6>${link(s.drive_root || DRIVE_ROOT, 'مجلد التسويق')}${link(s.drive_clients || DRIVE_CLIENTS, 'مجلدات العملاء')}</div>`;
+}
 function renderShell() {
   const u = me();
   $('#root').innerHTML = `<div class="app"><aside class="side">
     <div class="brand"><img src="../logo-white.png" alt=""><div><b>نُبل وابتكار</b><span>منصة الخدمات التسويقية</span></div></div>
     ${NAV.map(([g, items]) => { const its = items.filter((i) => navAllowed(i[3])); return its.length ? `<div class="nav-g"><h6>${g}</h6>${its.map(([r, l, ic, , alt]) =>
       `<a class="nav-a" href="#/${r}" data-r="${r}" data-alt="${alt || ''}">${I[ic]}<span>${l}</span></a>`).join('')}</div>` : ''; }).join('')}
+    ${driveNav()}
     <div class="me"><b>${esc(u.name)}</b><span class="muted">${esc(S.meta.roles[u.role] || u.role)}</span><br>
-      <button id="chpw">تغيير كلمة المرور</button> · <button id="logout">خروج</button></div></aside>
+      <button id="tglink">${u.tg_linked ? '✓ تلجرام مربوط' : 'ربط تلجرام'}</button> · <button id="chpw">تغيير كلمة المرور</button> · <button id="logout">خروج</button></div></aside>
     <div class="main"><header class="top"><button class="burger" aria-label="القائمة">${I.menu}</button><h2 id="ptitle"></h2><span class="sp"></span>
       <div class="search" id="gsearch">${I.search}<input class="inp" placeholder="بحث سريع: اسم، جوال، رقم عقد…"></div></header>
       <main class="view" id="view"></main></div></div>`;
@@ -570,6 +647,7 @@ function renderShell() {
       <label class="f"><span>الجديدة (8 أحرف على الأقل)</span><input class="inp" name="next" type="password" dir="ltr"></label></form>`, foot: '<button class="btn btn-p">حفظ</button>' });
     $('.btn-p', m.el).onclick = async () => { const f = $('form', m.el); try { await api('auth/password', { method: 'POST', body: { current: f.current.value, next: f.next.value } }); toast('تم التحديث'); m.close(); } catch (e) { toast(e.message, 1); } };
   };
+  $('#tglink').onclick = () => (typeof telegramMine === 'function' ? telegramMine() : null);
   $('#gsearch input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.value.trim()) go('#/search/' + encodeURIComponent(e.target.value.trim())); });
 }
 
