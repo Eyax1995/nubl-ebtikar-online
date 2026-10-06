@@ -4,8 +4,8 @@ import {
   json, bad, HttpError, ensureDb, currentUser, createSession, sessionCookie, hashPassword, verifyPassword,
   tempPassword, getSettings, publicSettings, tableCols, audit, nextNumber, today, addMonths, addDays, round2, randomToken,
 } from './_lib/core.js';
-import { SECRET_SETTINGS } from './_lib/schema.js';
-import { tgCall, tgToken, notifyUser } from './_lib/telegram.js';
+import { SECRET_SETTINGS, SCHEMA_VERSION } from './_lib/schema.js';
+import { tgCall, tgToken, notifyUser, notifyRoles, waBridge, h as hx } from './_lib/telegram.js';
 import { handleUpdate, dailyDigest, newLinkCode } from './_lib/bot.js';
 import { loadTemplate, templatesFor, tplAllowed, runTemplate, taskChanged } from './_lib/engine.js';
 import { ENTITIES, HIDDEN, ROLES } from './_lib/schema.js';
@@ -20,8 +20,12 @@ export async function onRequest(ctx) {
   try {
     await ensureDb(db);
     // ---------- مسارات عامة ----------
-    if (parts[0] === 'health') return json({ ok: true, time: new Date().toISOString() });
-    if (parts[0] === 'public' && parts[1] === 'lead' && method === 'POST') return await publicLead(db, request);
+    if (parts[0] === 'health') {
+      const n = await db.prepare('SELECT COUNT(*) AS n FROM users WHERE active = 1').first('n');
+      return json({ ok: true, db: 'ok', schema: SCHEMA_VERSION, active_users: n, time: new Date().toISOString() });
+    }
+    if (parts[0] === 'public' && parts[1] === 'lead' && method === 'POST') return await publicLead(db, request, env);
+    if (parts[0] === 'hook') return await hookRoute(db, env, request, parts[1]);
     if (parts[0] === 'auth' && parts[1] === 'login' && method === 'POST') return await login(db, request);
     if (parts[0] === 'telegram' && parts[1] === 'webhook' && method === 'POST') return await tgWebhook(ctx, db, env, request);
     if (parts[0] === 'telegram' && parts[1] === 'digest') return await tgDigest(db, env, request);
@@ -60,10 +64,11 @@ async function dispatch(db, env, request, user, parts) {
       case 'reports': return reports(db, request, user);
       case 'settings': return settingsRoute(db, request, user);
       case 'users': return usersRoute(db, request, user, parts[1], parts[2]);
+      case 'notifications': return notificationsRoute(db, env, request, user, parts[1]);
       case 'leads': return leadAction(db, request, user, parts[1], parts[2]);
       case 'quotes': return quoteAction(db, request, user, parts[1], parts[2]);
-      case 'contracts': return contractAction(db, request, user, parts[1], parts[2]);
-      case 'invoices': return invoiceAction(db, request, user, parts[1], parts[2]);
+      case 'contracts': return contractAction(db, request, user, parts[1], parts[2], env);
+      case 'invoices': return invoiceAction(db, request, user, parts[1], parts[2], env);
       case 'files': return filesRoute(db, request, user, parts[1]);
       case 'import': return importRoute(db, request, user, parts[1]);
       case 'export': return exportAll(db, user);
@@ -207,7 +212,7 @@ async function entityRoute(db, request, user, entity, id, env) {
     if (!keys.length) return bad('لا توجد بيانات');
     const r = await db.prepare(`INSERT INTO ${entity} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`).bind(...keys.map((k) => rec[k])).run();
     const newId = r.meta.last_row_id;
-    await afterSave(db, user, entity, newId, rec, null);
+    await afterSave(db, user, entity, newId, rec, null, env);
     await audit(db, user, 'create', entity, newId, rec.title || rec.name || rec.number);
     const row = await db.prepare(`SELECT * FROM ${entity} WHERE id = ?`).bind(newId).first();
     return json({ row: strip(user, row) }, 201);
@@ -231,7 +236,7 @@ async function entityRoute(db, request, user, entity, id, env) {
     const keys = Object.keys(rec);
     if (!keys.length) return json({ row: strip(user, before) });
     await db.prepare(`UPDATE ${entity} SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).bind(...keys.map((k) => rec[k]), id).run();
-    await afterSave(db, user, entity, Number(id), rec, before);
+    await afterSave(db, user, entity, Number(id), rec, before, env);
     await audit(db, user, 'update', entity, id, keys.join(','));
     let row = await db.prepare(`SELECT * FROM ${entity} WHERE id = ?`).bind(id).first();
     if (entity === 'tasks') await taskChanged(db, env, user, before, row);
@@ -297,7 +302,7 @@ async function beforeSave(db, entity, rec, before) {
   if (entity === 'clients' && rec.phone) rec.phone = normPhone(rec.phone);
 }
 
-async function afterSave(db, user, entity, id, rec, before) {
+async function afterSave(db, user, entity, id, rec, before, env) {
   // آخر تواصل يحدّث حالة العميل المحتمل وموعد المتابعة
   if (entity === 'activities' && rec.lead_id) {
     const lead = await db.prepare('SELECT status FROM leads WHERE id = ?').bind(rec.lead_id).first();
@@ -308,6 +313,40 @@ async function afterSave(db, user, entity, id, rec, before) {
   }
   if (entity === 'activities' && rec.deal_id) {
     await db.prepare("UPDATE deals SET updated_at = datetime('now') WHERE id = ?").bind(rec.deal_id).run();
+  }
+  try { await saveNotices(db, env, user, entity, id, rec, before); } catch (e) { console.warn('notices', e.message); }
+}
+
+// ---------- إشعارات الأحداث (إسناد، ملاحظات الإدارة، المالية) ----------
+const changedTo = (rec, before, k) => rec[k] != null && rec[k] !== '' && String(rec[k]) !== String(before?.[k] ?? '');
+async function saveNotices(db, env, user, entity, id, rec, before) {
+  const by = hx(user.name);
+  if (entity === 'leads' && changedTo(rec, before, 'owner_id') && Number(rec.owner_id) !== user.id) {
+    const l = await db.prepare('SELECT name, company, phone, next_followup FROM leads WHERE id = ?').bind(id).first();
+    await notifyUser(db, env, Number(rec.owner_id), `👤 أُسند إليك عميل محتمل من ${by}\n<b>${hx(l?.name || '')}</b>${l?.company ? ' — ' + hx(l.company) : ''}${l?.next_followup ? `\n📅 المتابعة: ${hx(l.next_followup)}` : ''}`, null, { kind: 'lead', link: `#lead/${id}` });
+  }
+  if (entity === 'deals' && changedTo(rec, before, 'owner_id') && Number(rec.owner_id) !== user.id) {
+    const d = await db.prepare('SELECT title, value FROM deals WHERE id = ?').bind(id).first();
+    await notifyUser(db, env, Number(rec.owner_id), `💼 أُسندت إليك صفقة من ${by}\n<b>${hx(d?.title || '')}</b>`, null, { kind: 'lead', link: '#pipeline' });
+  }
+  if (entity === 'clients' && changedTo(rec, before, 'account_manager_id') && Number(rec.account_manager_id) !== user.id) {
+    const c = await db.prepare('SELECT name, package FROM clients WHERE id = ?').bind(id).first();
+    await notifyUser(db, env, Number(rec.account_manager_id), `🏷️ أصبحت مدير حساب العميل\n<b>${hx(c?.name || '')}</b>${c?.package ? ' · ' + hx(c.package) : ''}`, null, { kind: 'task_assigned', link: `#client/${id}` });
+  }
+  if (entity === 'contracts' && changedTo(rec, before, 'status') && ['موقّع', 'نشط'].includes(rec.status)) {
+    const c = await db.prepare('SELECT c.number, c.total_value, cl.name AS client FROM contracts c LEFT JOIN clients cl ON cl.id = c.client_id WHERE c.id = ?').bind(id).first();
+    await notifyRoles(db, env, ['finance', 'admin'], `✍️ عقد ${hx(rec.status)}: <b>${hx(c?.number || '')}</b> — ${hx(c?.client || '')}\nالقيمة: ${Number(c?.total_value || 0).toLocaleString('en-US')} ر.س · بانتظار جدولة الفواتير`, { kind: 'finance', link: `#contract/${id}` }, user.id);
+  }
+  // ملاحظات الإدارة والمالية على السجلات تصل لصاحب السجل
+  if (entity === 'activities' && !before && ['executive', 'finance', 'admin', 'manager'].includes(user.role)) {
+    const targets = new Map();
+    if (rec.lead_id) { const l = await db.prepare('SELECT owner_id, name FROM leads WHERE id = ?').bind(rec.lead_id).first(); if (l?.owner_id) targets.set(l.owner_id, [`العميل المحتمل ${l.name}`, `#lead/${rec.lead_id}`]); }
+    if (rec.deal_id) { const d = await db.prepare('SELECT owner_id, title FROM deals WHERE id = ?').bind(rec.deal_id).first(); if (d?.owner_id) targets.set(d.owner_id, [`الصفقة ${d.title}`, '#pipeline']); }
+    if (rec.client_id) { const c = await db.prepare('SELECT account_manager_id, name FROM clients WHERE id = ?').bind(rec.client_id).first(); if (c?.account_manager_id) targets.set(c.account_manager_id, [`العميل ${c.name}`, `#client/${rec.client_id}`]); }
+    for (const [uid, [label, link]] of targets) {
+      if (uid === user.id) continue;
+      await notifyUser(db, env, uid, `💬 ملاحظة من ${by} على ${hx(label)}\n${hx(String(rec.notes || rec.subject || '').slice(0, 600))}`, null, { kind: 'note', link });
+    }
   }
 }
 
@@ -386,7 +425,7 @@ function planSplits(plan, months) {
   }
 }
 
-async function contractAction(db, request, user, id, action) {
+async function contractAction(db, request, user, id, action, env) {
   if (action === 'schedule' && request.method === 'POST') {
     need(user, 'invoices', 'w');
     const c = await db.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first();
@@ -411,6 +450,7 @@ async function contractAction(db, request, user, id, action) {
     });
     await db.batch(stmts);
     await audit(db, user, 'schedule', 'contracts', c.id, `${stmts.length} invoices`);
+    await notifyRoles(db, env, ['finance'], `🧾 جُدولت ${stmts.length} فواتير للعقد <b>${hx(c.number)}</b> بواسطة ${hx(user.name)} — راجعها وأصدرها في موعدها`, { kind: 'finance', link: '#invoices' }, user.id);
     return json({ created: stmts.length });
   }
   if (action === 'renew' && request.method === 'POST') {
@@ -441,7 +481,7 @@ async function recalcInvoice(db, invoiceId) {
   await db.prepare("UPDATE invoices SET paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?").bind(paid, status, invoiceId).run();
 }
 
-async function invoiceAction(db, request, user, id, action) {
+async function invoiceAction(db, request, user, id, action, env) {
   if (action === 'pay' && request.method === 'POST') {
     need(user, 'payments', 'w');
     const inv = await db.prepare('SELECT * FROM invoices WHERE id = ?').bind(id).first();
@@ -453,6 +493,8 @@ async function invoiceAction(db, request, user, id, action) {
       .bind(inv.id, inv.client_id, amount, d.method || 'تحويل بنكي', d.ref || null, d.paid_at || today(), d.notes || null, user.id).run();
     await recalcInvoice(db, inv.id);
     await audit(db, user, 'pay', 'invoices', inv.id, amount);
+    const cl = await db.prepare('SELECT name FROM clients WHERE id = ?').bind(inv.client_id).first('name');
+    await notifyRoles(db, env, ['finance', 'admin'], `💰 سُجّل سداد ${amount.toLocaleString('en-US')} ر.س للفاتورة <b>${hx(inv.number)}</b>${cl ? ' — ' + hx(cl) : ''}\nبواسطة ${hx(user.name)}`, { kind: 'finance', link: `#invoice/${inv.id}` }, user.id);
     return json({ ok: true });
   }
   return bad('إجراء غير معروف', 404);
@@ -721,24 +763,130 @@ async function timeline(db, user, kind, id) {
   return json({ activities: results, visits });
 }
 
-// ---------- نموذج الموقع العام ----------
-async function publicLead(db, request) {
+// ---------- نموذج الموقع العام + مساعد واتساب ----------
+async function upsertLead(db, env, d, defSource, opts = {}) {
+  const name = String(d.name || '').trim().slice(0, 120) || (opts.allowNoName ? 'عميل واتساب' : '');
+  const phone = normPhone(String(d.phone || '').slice(0, 30));
+  if (!name || phone.length < 9) throw new HttpError(400, 'الاسم ورقم الجوال مطلوبان');
+  const source = String(d.source || defSource).slice(0, 60);
+  const note = [d.message, d.service && 'الخدمة: ' + d.service, d.page && 'الصفحة: ' + d.page].filter(Boolean).join(' · ').slice(0, 1500);
+  const kind = opts.kind || 'نموذج الموقع';
+  const ex = await db.prepare('SELECT id, name, owner_id FROM leads WHERE phone = ?').bind(phone).first();
+  if (ex) {
+    if (opts.throttleHours) {
+      const last = await db.prepare(`SELECT id FROM activities WHERE lead_id = ? AND kind = ? AND at >= datetime('now', ?) LIMIT 1`).bind(ex.id, kind, `-${opts.throttleHours} hours`).first('id');
+      if (last) return { id: ex.id, existed: true, logged: false };
+    }
+    await db.prepare(`INSERT INTO activities (kind, lead_id, subject, notes, at) VALUES (?, ?, ?, ?, datetime('now'))`).bind(kind, ex.id, opts.subject || 'طلب جديد من الموقع', note || null).run();
+    await db.prepare("UPDATE leads SET next_followup = date('now'), updated_at = datetime('now') WHERE id = ?").bind(ex.id).run();
+    if (ex.owner_id) await notifyUser(db, env, ex.owner_id, `🔁 تواصل جديد من عميلك المحتمل <b>${hx(ex.name)}</b> عبر ${hx(source)}${note ? `\n${hx(note.slice(0, 400))}` : ''}`, null, { kind: 'lead', link: `#lead/${ex.id}` });
+    return { id: ex.id, existed: true, logged: true };
+  }
+  const r = await db.prepare(`INSERT INTO leads (name, company, phone, email, city, sector, source, status, next_followup, notes)
+    VALUES (?,?,?,?,?,?,?,'جديد',date('now'),?)`).bind(name, d.company || null, phone, d.email || null, d.city || null,
+    d.sector || null, source, note || null).run();
+  const id = r.meta.last_row_id;
+  const s = await getSettings(db);
+  await notifyRoles(db, env, s.lead_notify_roles || 'admin,manager,sales', `🆕 عميل محتمل جديد من ${hx(source)}\n<b>${hx(name)}</b>${d.company ? ' — ' + hx(d.company) : ''}${note ? `\n${hx(note.slice(0, 400))}` : ''}`, { kind: 'lead', link: `#lead/${id}` });
+  return { id, existed: false, logged: true };
+}
+
+async function publicLead(db, request, env) {
   const d = await body(request);
   if (d.website) return json({ ok: true }); // فخ الروبوتات
-  const name = String(d.name || '').trim().slice(0, 120);
-  const phone = normPhone(String(d.phone || '').slice(0, 30));
-  if (!name || phone.length < 9) return bad('الاسم ورقم الجوال مطلوبان');
-  const exists = await db.prepare('SELECT id FROM leads WHERE phone = ?').bind(phone).first('id');
-  const note = [d.message, d.service && 'الخدمة: ' + d.service, d.page && 'الصفحة: ' + d.page].filter(Boolean).join(' · ').slice(0, 1500);
-  if (exists) {
-    await db.prepare(`INSERT INTO activities (kind, lead_id, subject, notes, at) VALUES ('نموذج الموقع', ?, 'طلب جديد من الموقع', ?, datetime('now'))`).bind(exists, note).run();
-    await db.prepare("UPDATE leads SET next_followup = date('now'), updated_at = datetime('now') WHERE id = ?").bind(exists).run();
+  const r = await upsertLead(db, env, d, 'الموقع');
+  return json({ ok: true }, r.existed ? 200 : 201);
+}
+
+// ---------- نقاط الربط مع n8n (محمية بمفتاح hook_token) ----------
+async function hookRoute(db, env, request, action) {
+  const s = await getSettings(db);
+  const key = request.headers.get('x-nubl-token') || new URL(request.url).searchParams.get('key');
+  if (!s.hook_token || key !== s.hook_token) return bad('مرفوض', 403);
+  const method = request.method.toUpperCase();
+  if (action === 'lead' && method === 'POST') {
+    const d = await body(request);
+    const staff = await db.prepare('SELECT id FROM users WHERE phone = ?').bind(normPhone(String(d.phone || ''))).first('id');
+    if (staff) return json({ ok: true, skipped: 'staff' });
+    const r = await upsertLead(db, env, { ...d, source: d.source || 'واتساب' }, 'واتساب', { kind: 'واتساب', subject: 'رسالة عبر مساعد واتساب', throttleHours: 12, allowNoName: true });
+    return json({ ok: true, ...r });
+  }
+  if (action === 'backup' && method === 'GET') return exportAll(db, { role: 'admin' });
+  if (action === 'status' && method === 'GET') {
+    const q = (sql) => db.prepare(sql).first('n');
+    return json({
+      ok: true, schema: SCHEMA_VERSION, time: new Date().toISOString(),
+      users: await q('SELECT COUNT(*) AS n FROM users WHERE active = 1'),
+      leads_today: await q("SELECT COUNT(*) AS n FROM leads WHERE created_at >= date('now')"),
+      open_tasks: await q("SELECT COUNT(*) AS n FROM tasks WHERE status != 'منجزة'"),
+      overdue_invoices: await q("SELECT COUNT(*) AS n FROM invoices WHERE status IN ('مصدرة','مدفوعة جزئياً') AND due_date < date('now')"),
+      notifications_24h: await q("SELECT COUNT(*) AS n FROM notifications WHERE created_at >= datetime('now','-1 day')"),
+      wa_24h: await q("SELECT COUNT(*) AS n FROM notifications WHERE channels LIKE '%wa%' AND created_at >= datetime('now','-1 day')"),
+    });
+  }
+  return bad('إجراء غير معروف', 404);
+}
+
+// ---------- مركز الإشعارات والتفضيلات ----------
+async function notificationsRoute(db, env, request, user, action) {
+  const method = request.method.toUpperCase();
+  const url = new URL(request.url);
+  if (!action && method === 'GET') {
+    const unread = await db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(user.id).first('n');
+    if (url.searchParams.get('count')) return json({ unread });
+    const { results } = await db.prepare('SELECT id, kind, title, body, link, channels, read_at, created_at FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 40').bind(user.id).all();
+    return json({ unread, rows: results });
+  }
+  if (action === 'read' && method === 'POST') {
+    const d = await body(request);
+    if (d.id) await db.prepare("UPDATE notifications SET read_at = datetime('now') WHERE id = ? AND user_id = ?").bind(d.id, user.id).run();
+    else await db.prepare("UPDATE notifications SET read_at = datetime('now') WHERE user_id = ? AND read_at IS NULL").bind(user.id).run();
     return json({ ok: true });
   }
-  await db.prepare(`INSERT INTO leads (name, company, phone, email, city, sector, source, status, next_followup, notes)
-    VALUES (?,?,?,?,?,?,?,'جديد',date('now'),?)`).bind(name, d.company || null, phone, d.email || null, d.city || null,
-    d.sector || null, String(d.source || 'الموقع').slice(0, 60), note || null).run();
-  return json({ ok: true }, 201);
+  if (action === 'prefs') {
+    if (method === 'PUT') {
+      const d = await body(request);
+      const phone = d.phone ? normPhone(d.phone) : null;
+      if (phone && !/^9665\d{8}$/.test(phone) && !/^\d{10,15}$/.test(phone)) return bad('رقم الجوال غير صحيح — مثال: 05xxxxxxxx');
+      await db.prepare('UPDATE users SET phone = ?, notify_wa = ?, notify_tg = ? WHERE id = ?').bind(phone, d.notify_wa ? 1 : 0, d.notify_tg ? 1 : 0, user.id).run();
+      await audit(db, user, 'prefs', 'users', user.id, `wa=${d.notify_wa ? 1 : 0} tg=${d.notify_tg ? 1 : 0}`);
+    }
+    const u = await db.prepare('SELECT phone, notify_wa, notify_tg, tg_chat_id FROM users WHERE id = ?').bind(user.id).first();
+    const s = await getSettings(db);
+    return json({ phone: u.phone || '', notify_wa: u.notify_wa !== 0, notify_tg: u.notify_tg !== 0, tg_linked: !!u.tg_chat_id, wa_ready: !!(s.wa_bridge_url && s.wa_bridge_token) });
+  }
+  if (action === 'test' && method === 'POST') {
+    await notifyUser(db, env, user.id, `✅ إشعار تجريبي من منصة نُبل وابتكار للتسويق\nأهلاً ${hx(user.name)}، وصلتك الإشعارات بنجاح.`, null, { kind: 'general', link: '#myday' });
+    const last = await db.prepare('SELECT channels FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 1').bind(user.id).first('channels');
+    return json({ ok: true, channels: String(last || 'app').split(',') });
+  }
+  // إعداد الجسر ومفتاح الربط — للمدير فقط
+  if (action === 'bridge') {
+    if (user.role !== 'admin') return bad('للمدير فقط', 403);
+    const save = (k, v) => db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind(k, v);
+    if (method === 'POST') {
+      const d = await body(request); const st = [];
+      if (d.url !== undefined) { if (d.url && !/^https:\/\//.test(d.url)) return bad('الرابط يجب أن يبدأ بـ https://'); st.push(save('wa_bridge_url', String(d.url || '').trim())); }
+      if (d.token) st.push(save('wa_bridge_token', String(d.token).trim()));
+      let hook = null;
+      if (d.new_hook_token) { hook = randomToken(24); st.push(save('hook_token', hook)); }
+      if (st.length) await db.batch(st);
+      await audit(db, user, 'bridge', 'settings', null, Object.keys(d).join(','));
+      const s = await getSettings(db);
+      return json({ url: s.wa_bridge_url || '', token_set: !!s.wa_bridge_token, hook_set: !!s.hook_token, hook_token: hook });
+    }
+    const s = await getSettings(db);
+    return json({ url: s.wa_bridge_url || '', token_set: !!s.wa_bridge_token, hook_set: !!s.hook_token });
+  }
+  if (action === 'bridge-test' && method === 'POST') {
+    if (user.role !== 'admin') return bad('للمدير فقط', 403);
+    const d = await body(request);
+    const to = normPhone(d.phone || '');
+    if (to.length < 11) return bad('أدخل رقم جوال للاختبار');
+    const r = await waBridge(db, { to, name: user.name, kind: 'general', title: 'اختبار جسر واتساب', body: 'رسالة تجريبية من منصة التسويق', summary: 'اختبار جسر واتساب · رسالة تجريبية من منصة التسويق', link: 'https://nubl-ebtikar.online/marketing/hub/' });
+    return r.ok ? json(r) : bad('لم تصل الرسالة: ' + (r.error || r.status || ''), 502);
+  }
+  return bad('إجراء غير معروف', 404);
 }
 
 // ---------- ذكاء نُبل (Workers AI) ----------

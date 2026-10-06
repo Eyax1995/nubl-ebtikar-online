@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -67,6 +67,9 @@ export const DDL = [
     created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
   `CREATE TABLE IF NOT EXISTS tg_state (chat_id TEXT PRIMARY KEY, user_id INTEGER, state TEXT, updated_at TEXT DEFAULT (datetime('now')))`,
   `CREATE TABLE IF NOT EXISTS tg_codes (code TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, kind TEXT, title TEXT, body TEXT,
+    link TEXT, channels TEXT, read_at TEXT, created_at TEXT DEFAULT (datetime('now')))`,
+  `CREATE INDEX IF NOT EXISTS ix_notif_user ON notifications(user_id, read_at, id)`,
   `CREATE INDEX IF NOT EXISTS ix_leads_owner ON leads(owner_id)`,
   `CREATE INDEX IF NOT EXISTS ix_leads_phone ON leads(phone)`,
   `CREATE INDEX IF NOT EXISTS ix_deals_stage ON deals(stage)`,
@@ -86,10 +89,12 @@ export const MIGRATIONS = [
   'ALTER TABLE users ADD COLUMN tg_username TEXT',
   'CREATE INDEX IF NOT EXISTS ix_tasks_tpl ON tasks(template_id)',
   'CREATE INDEX IF NOT EXISTS ix_users_tg ON users(tg_chat_id)',
+  'ALTER TABLE users ADD COLUMN notify_wa INTEGER DEFAULT 1',
+  'ALTER TABLE users ADD COLUMN notify_tg INTEGER DEFAULT 1',
 ];
 
 // إعدادات سرية لا تُرسل للواجهة أبداً
-export const SECRET_SETTINGS = ['tg_token', 'tg_secret', 'tg_cron_key'];
+export const SECRET_SETTINGS = ['tg_token', 'tg_secret', 'tg_cron_key', 'wa_bridge_token', 'hook_token'];
 
 // الأدوار
 export const ROLES = {
@@ -221,4 +226,6 @@ export const DEFAULT_SETTINGS = {
   commission_close: '3',
   renewal_uplift: '10',
   stale_days: '7',
+  wa_bridge_url: '',
+  lead_notify_roles: 'admin,manager,sales',
 };
