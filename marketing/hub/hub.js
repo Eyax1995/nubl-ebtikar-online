@@ -616,7 +616,7 @@ const NAV = [
 ];
 function navAllowed(perm) {
   if (!perm) return true;
-  if (perm === '#reports') return ['admin', 'manager', 'finance'].includes(me().role);
+  if (perm === '#reports') return ['admin', 'manager', 'finance', 'executive'].includes(me().role);
   if (perm === '#admin') return me().role === 'admin';
   return can(perm);
 }
