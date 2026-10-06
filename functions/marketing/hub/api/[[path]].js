@@ -554,7 +554,7 @@ async function myDay(db, user) {
 
 // ---------- التقارير ----------
 async function reports(db, request, user) {
-  if (!isBoss(user) && user.role !== 'finance') return bad('التقارير للإدارة والمالية', 403);
+  if (!isBoss(user) && !['finance', 'executive'].includes(user.role)) return bad('التقارير للإدارة والمالية', 403);
   const url = new URL(request.url);
   const from = url.searchParams.get('from') || addDays(today(), -90);
   const to = url.searchParams.get('to') || today();
