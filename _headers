@@ -5,3 +5,25 @@
 /marketing/hub/*
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-cache
+
+# أصول موقع التسويق (غير مُجزّأة بالهاش → يوم للـCSS/JS، 30 يوماً للصور والخطوط والمجسم)
+/marketing/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/marketing/site.css
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/marketing/app.js
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/marketing/fx.bundle.js
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/marketing/model.glb
+  Cache-Control: public, max-age=2592000
+/marketing/*.webp
+  Cache-Control: public, max-age=2592000
+/marketing/*.jpg
+  Cache-Control: public, max-age=2592000
+/marketing/*.png
+  Cache-Control: public, max-age=2592000
+/marketing/pattern.svg
+  Cache-Control: public, max-age=2592000
+/designs/*
+  Cache-Control: public, max-age=2592000

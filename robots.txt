@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /marketing/hub
+
+Sitemap: https://nubl-ebtikar.online/marketing/sitemap.xml
