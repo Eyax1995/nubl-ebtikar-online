@@ -283,8 +283,9 @@ async function receiveEvent(db, env, d) {
 }
 
 // ---------------------------------------------------------------- الجسر العام (من منصة الدعاية والإعلان)
-export async function xqBridge(db, env, request) {
-  const out = (o, status = 200) => json(o, status);
+export async function xqBridge(db, env, request, ctx) {
+  // الطرف الآخر متاح الآن — فرصة لإرسال ما تعذّر من صندوقنا الصادر بعد الرد (لا يؤخر الاستجابة)
+  const out = (o, status = 200) => { if (o.ok && ctx?.waitUntil) ctx.waitUntil(xqFlush(db, 10).catch(() => 0)); return json(o, status); };
   try {
     if (request.method !== 'POST') return out({ ok: false, error: 'POST فقط' }, 405);
     const s = await getSettings(db);
