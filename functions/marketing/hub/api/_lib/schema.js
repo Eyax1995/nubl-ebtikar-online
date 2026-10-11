@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -77,6 +77,25 @@ export const DDL = [
   `CREATE INDEX IF NOT EXISTS ix_tasks_assignee ON tasks(assignee_id, status)`,
   `CREATE INDEX IF NOT EXISTS ix_content_client ON content(client_id, publish_date)`,
   `CREATE INDEX IF NOT EXISTS ix_inv_client ON invoices(client_id, status)`,
+  // طلبات عروض الأسعار بين القطاعات (مع منصة الدعاية والإعلان) — انظر _lib/xq.js
+  `CREATE TABLE IF NOT EXISTS xq_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, uid TEXT NOT NULL UNIQUE, direction TEXT NOT NULL, number TEXT NOT NULL,
+    peer_id TEXT, status TEXT NOT NULL DEFAULT 'pending', title TEXT, requester_user_id INTEGER, requester_name TEXT, requester_phone TEXT, requester_email TEXT,
+    client_id INTEGER, client_name TEXT, client_company TEXT, client_phone TEXT, client_email TEXT, needed_by TEXT, notes TEXT, links TEXT, suggested_total REAL,
+    handler_user_id INTEGER, handler_name TEXT, handler_phone TEXT, quote_number TEXT, quote_total REAL, quote_vat_included INTEGER DEFAULT 0, quote_valid_until TEXT,
+    quote_note TEXT, quoted_at TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')))`,
+  `CREATE INDEX IF NOT EXISTS ix_xq_dir ON xq_requests(direction, status, id)`,
+  `CREATE TABLE IF NOT EXISTS xq_items (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, uid TEXT NOT NULL, title TEXT NOT NULL, description TEXT,
+    qty REAL DEFAULT 1, unit TEXT, suggested_price REAL, quoted_price REAL, sort INTEGER DEFAULT 0)`,
+  `CREATE INDEX IF NOT EXISTS ix_xqi_req ON xq_items(request_id)`,
+  `CREATE TABLE IF NOT EXISTS xq_files (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, item_uid TEXT, side TEXT DEFAULT 'request',
+    origin TEXT DEFAULT 'local', file_id INTEGER, peer_file_id TEXT, name TEXT, mime TEXT, size INTEGER, created_at TEXT DEFAULT (datetime('now')))`,
+  `CREATE INDEX IF NOT EXISTS ix_xqf_req ON xq_files(request_id)`,
+  `CREATE TABLE IF NOT EXISTS xq_events (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, event_uid TEXT NOT NULL UNIQUE, event TEXT NOT NULL,
+    by_name TEXT, side TEXT DEFAULT 'local', note TEXT, created_at TEXT DEFAULT (datetime('now')))`,
+  `CREATE INDEX IF NOT EXISTS ix_xqe_req ON xq_events(request_id, id)`,
+  `CREATE TABLE IF NOT EXISTS xq_outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, op TEXT NOT NULL, payload TEXT NOT NULL, request_id INTEGER, tries INTEGER DEFAULT 0,
+    last_error TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT)`,
+  `CREATE INDEX IF NOT EXISTS ix_xqo_pending ON xq_outbox(sent_at, id)`,
 ];
 
 // ترحيلات تُطبّق مرة واحدة على قواعد قائمة (فشل أي سطر = العمود موجود مسبقاً)
@@ -94,7 +113,7 @@ export const MIGRATIONS = [
 ];
 
 // إعدادات سرية لا تُرسل للواجهة أبداً
-export const SECRET_SETTINGS = ['tg_token', 'tg_secret', 'tg_cron_key', 'wa_bridge_token', 'hook_token'];
+export const SECRET_SETTINGS = ['tg_token', 'tg_secret', 'tg_cron_key', 'wa_bridge_token', 'hook_token', 'xq_secret'];
 
 // الأدوار
 export const ROLES = {
@@ -228,4 +247,6 @@ export const DEFAULT_SETTINGS = {
   stale_days: '7',
   wa_bridge_url: '',
   lead_notify_roles: 'admin,manager,sales',
+  xq_peer_url: 'https://nubl-ebtikar.com/AJAX/xq_bridge.php',
+  xq_handler_roles: 'admin,manager',
 };

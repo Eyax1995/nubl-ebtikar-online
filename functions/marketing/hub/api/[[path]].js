@@ -10,6 +10,7 @@ import { handleUpdate, dailyDigest, newLinkCode } from './_lib/bot.js';
 import { loadTemplate, templatesFor, tplAllowed, runTemplate, taskChanged } from './_lib/engine.js';
 import { ENTITIES, HIDDEN, ROLES } from './_lib/schema.js';
 import { SECTORS } from './_lib/seed.js';
+import { xqBridge, xqRoute } from './_lib/xq.js';
 
 export async function onRequest(ctx) {
   const { request, env, params } = ctx;
@@ -26,6 +27,7 @@ export async function onRequest(ctx) {
     }
     if (parts[0] === 'public' && parts[1] === 'lead' && method === 'POST') return await publicLead(db, request, env);
     if (parts[0] === 'hook') return await hookRoute(db, env, request, parts[1]);
+    if (parts[0] === 'xq' && parts[1] === 'bridge') return await xqBridge(db, env, request); // من منصة الدعاية والإعلان — موقّع HMAC
     if (parts[0] === 'auth' && parts[1] === 'login' && method === 'POST') return await login(db, request);
     if (parts[0] === 'telegram' && parts[1] === 'webhook' && method === 'POST') return await tgWebhook(ctx, db, env, request);
     if (parts[0] === 'telegram' && parts[1] === 'digest') return await tgDigest(db, env, request);
@@ -63,6 +65,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'myday': return myDay(db, user);
       case 'reports': return reports(db, request, user);
       case 'debts': return debts(db, user);
+      case 'xq': return xqRoute(db, env, request, user, parts[1], parts[2]);
       case 'settings': return settingsRoute(db, request, user);
       case 'users': return usersRoute(db, request, user, parts[1], parts[2]);
       case 'notifications': return notificationsRoute(db, env, request, user, parts[1]);
