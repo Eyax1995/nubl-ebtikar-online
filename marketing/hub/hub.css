@@ -225,3 +225,12 @@ table.t td.n{white-space:nowrap}
 .steps{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
 .tgi{color:#229ED9;display:inline-flex;align-items:center}.tgi svg{width:16px;height:16px}
 .modal-h h3 svg,.card h3 svg{width:18px;height:18px}
+/* ===== تقرير أعمار الديون ===== */
+.dbt-ct{display:flex;flex-direction:column;gap:2px;min-width:150px}
+.dbt-ct a{color:var(--navy);text-decoration:none}.dbt-ct a:hover{text-decoration:underline}
+.t.dbt td{vertical-align:top}.t.dbt td.n{white-space:nowrap}.t.dbt td.n .btn{margin-bottom:4px}
+.dbt-sub>td{background:var(--soft);padding:10px 12px}.dbt-sub .t{background:#fff}
+.dbt-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.dbt-nm{min-width:120px}
+.t.dbt th.small{white-space:nowrap}
+.lnk{background:none;border:0;padding:0;color:var(--terra);font:inherit;cursor:pointer}
+@media print{.dbt-sub>td{background:#fff}.dbt-acts{display:none}}

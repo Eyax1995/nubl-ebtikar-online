@@ -515,7 +515,7 @@ async function reportsView() {
 async function teamView() {
   const { rows } = await api('e/users');
   const admin = me().role === 'admin';
-  V().innerHTML = `<div class="toolbar"><span class="muted">كل عضو يرى ما يخص دوره فقط — الأرقام المالية مخفية عن التصميم.</span><span class="sp"></span>${admin ? `<button class="btn btn-p" id="add">${I.plus} عضو جديد</button>` : ''}</div>
+  V().innerHTML = `<div class="toolbar"><span class="muted">كل عضو يرى ما يخص دوره فقط — الأرقام المالية مخفية عن التصميم عدا تقرير أعمار الديون المتاح للجميع.</span><span class="sp"></span>${admin ? `<button class="btn btn-p" id="add">${I.plus} عضو جديد</button>` : ''}</div>
     <div class="tbl-wrap"><table class="t"><thead><tr><th>الاسم</th><th>المسمى</th><th>الدور</th><th>البريد</th><th>الجوال</th><th>العمولة %</th><th>آخر دخول</th><th>الحالة</th>${admin ? '<th></th>' : ''}</tr></thead>
     <tbody>${rows.map((u) => `<tr data-id="${u.id}"><td><b>${esc(u.name)}</b></td><td>${esc(u.title || '')}</td><td>${esc(S.meta.roles[u.role] || u.role)}</td><td dir="ltr">${esc(u.email)}</td><td class="num">${esc(u.phone || '')}</td>
       <td class="num">${u.commission_rate || 0}</td><td>${u.last_login ? fdate(u.last_login) : '—'}</td><td>${u.active ? pill('نشط') : pill('موقوف مؤقتاً')}</td>${admin ? `<td class="n"><button class="btn btn-g btn-s" data-reset="${u.id}">كلمة مؤقتة</button></td>` : ''}</tr>`).join('')}</tbody></table></div>
@@ -523,7 +523,7 @@ async function teamView() {
       <tr><td>المدير العام</td><td>كل شيء + الفريق والإعدادات والنسخ الاحتياطي</td></tr><tr><td>مدير الخدمات التسويقية</td><td>كل الوحدات التشغيلية والمالية والتقارير</td></tr>
       <tr><td>مبيعات / مندوب</td><td>عملاؤه المحتملون وغير المسندين، صفقاته، زياراته، عروضه، المهام المسندة إليه</td></tr>
       <tr><td>إدارة الحسابات والسوشيال</td><td>العملاء، المحتوى، المهام، المشاريع، المواسم، قاعدة المعرفة (قراءة العقود)</td></tr>
-      <tr><td>تصميم ومونتاج</td><td>مهامه ومحتوى العملاء — بلا أرقام مالية</td></tr><tr><td>المالية</td><td>العقود، الفواتير، المدفوعات، المصروفات، التقارير</td></tr></tbody></table></div></div>`;
+      <tr><td>تصميم ومونتاج</td><td>مهامه ومحتوى العملاء — بلا أرقام مالية عدا تقرير أعمار الديون</td></tr><tr><td>المالية</td><td>العقود، الفواتير، المدفوعات، المصروفات، التقارير</td></tr><tr><td>جميع الأعضاء</td><td>تقرير أعمار الديون وبيانات التواصل مع العملاء المدينين — اطلاع وتسجيل تواصل</td></tr></tbody></table></div></div>`;
   const userForm = (u) => {
     const m = modal({ title: u ? 'تعديل عضو' : 'عضو جديد', body: `<form class="fgrid"><label class="f"><span>الاسم *</span><input class="inp" name="name" value="${esc(u?.name || '')}"></label>
       <label class="f"><span>البريد *</span><input class="inp" name="email" dir="ltr" type="email" value="${esc(u?.email || '')}"></label>

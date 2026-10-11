@@ -62,6 +62,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'dashboard': return dashboard(db, user);
       case 'myday': return myDay(db, user);
       case 'reports': return reports(db, request, user);
+      case 'debts': return debts(db, user);
       case 'settings': return settingsRoute(db, request, user);
       case 'users': return usersRoute(db, request, user, parts[1], parts[2]);
       case 'notifications': return notificationsRoute(db, env, request, user, parts[1]);
@@ -595,6 +596,26 @@ async function myDay(db, user) {
 }
 
 // ---------- التقارير ----------
+// تقرير أعمار الديون — متاح لكل المستخدمين المسجّلين (اطلاع ومتابعة تحصيل)
+async function debts(db, user) {
+  const t = today();
+  const OPEN = `status IN ('مصدرة','مدفوعة جزئياً','متأخرة') AND total - COALESCE(paid,0) > 0.009`;
+  const invoices = (await db.prepare(`SELECT id, number, client_id, contract_id, description, issue_date, due_date, total, COALESCE(paid,0) AS paid,
+      ROUND(total - COALESCE(paid,0), 2) AS balance, status, CAST(julianday(?1) - julianday(COALESCE(due_date, issue_date, ?1)) AS INTEGER) AS days
+      FROM invoices WHERE ${OPEN} ORDER BY due_date`).bind(t).all()).results;
+  const clients = (await db.prepare(`SELECT c.id, c.name, c.brand, c.contact_name, c.phone, c.email, c.city, c.status, c.account_manager_id,
+      u.name AS manager_name,
+      (SELECT MAX(p.paid_at) FROM payments p WHERE p.client_id = c.id) AS last_payment,
+      (SELECT p.amount FROM payments p WHERE p.client_id = c.id ORDER BY p.paid_at DESC, p.id DESC LIMIT 1) AS last_payment_amount,
+      (SELECT MAX(a.at) FROM activities a WHERE a.client_id = c.id) AS last_contact,
+      (SELECT a.kind || COALESCE(' — ' || COALESCE(a.subject, a.outcome), '') FROM activities a WHERE a.client_id = c.id ORDER BY a.at DESC, a.id DESC LIMIT 1) AS last_contact_note
+      FROM clients c LEFT JOIN users u ON u.id = c.account_manager_id
+      WHERE c.id IN (SELECT client_id FROM invoices WHERE ${OPEN})`).all()).results;
+  const pending = (await db.prepare(`SELECT i.id, i.number, i.description, i.due_date, i.total, cl.name AS client_name
+      FROM invoices i LEFT JOIN clients cl ON cl.id = i.client_id WHERE i.status = 'مسودة' AND i.due_date <= ? ORDER BY i.due_date LIMIT 50`).bind(t).all()).results;
+  return json({ today: t, invoices, clients, pending });
+}
+
 async function reports(db, request, user) {
   if (!isBoss(user) && !['finance', 'executive'].includes(user.role)) return bad('التقارير للإدارة والمالية', 403);
   const url = new URL(request.url);
