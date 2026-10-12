@@ -65,7 +65,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'myday': return myDay(db, user);
       case 'reports': return reports(db, request, user);
       case 'debts': return debts(db, user);
-      case 'xq': return xqRoute(db, env, request, user, parts[1], parts[2]);
+      case 'xq': return xqRoute(db, env, request, user, parts[1], parts[2], (m, ent, id, data) => entityCall(db, env, request, user, m, ent, id, data));
       case 'settings': return settingsRoute(db, request, user);
       case 'users': return usersRoute(db, request, user, parts[1], parts[2]);
       case 'notifications': return notificationsRoute(db, env, request, user, parts[1]);
@@ -80,6 +80,16 @@ async function dispatch(db, env, request, user, parts) {
       case 'ai': return aiRoute(env, db, request, user);
       default: return bad('مسار غير معروف', 404);
     }
+}
+
+// استدعاء مسار الكيانات العام داخلياً — بالصلاحيات والترقيم والحسابات نفسها (يستعمله xq لإنشاء العرض في «عروض الأسعار»)
+async function entityCall(db, env, request, user, method, entity, id, data) {
+  const init = { method, headers: { 'content-type': 'application/json' } };
+  if (method !== 'GET' && data !== undefined) init.body = JSON.stringify(data);
+  const res = await entityRoute(db, new Request(request.url, init), user, entity, id, env);
+  let j = {}; try { j = await res.json(); } catch { /* */ }
+  if (!res.ok) throw new HttpError(res.status, j.error || 'تعذّر الحفظ');
+  return j.row || j;
 }
 
 // ======================================================================

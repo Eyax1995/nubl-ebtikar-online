@@ -134,7 +134,8 @@ async function xreqDetail(id) {
   const by = {}; r.files.forEach((f) => { const k = f.item_uid || (f.side === 'quote' ? '_q' : '_g'); (by[k] ||= []).push(f); });
   const B = {
     confirmed: '<button class="btn btn-p" data-ev="confirmed">✅ تأكيد الاستلام والبدء في التسعير</button>',
-    quoted: `<button class="btn btn-p" data-ev="quoted" style="background:var(--terra)">💰 ${['quoted', 'declined'].includes(r.status) ? 'تعديل عرض السعر وإعادة إرساله' : 'إصدار عرض السعر وإرساله'}</button>`,
+    issue_quote: '<button class="btn btn-p" data-ev="issue_quote" style="background:var(--terra)">💰 إصدار عرض السعر في «عروض الأسعار»</button>',
+    send_quote: `<button class="btn btn-p" data-ev="send_quote" style="background:var(--terra)">📤 ${r.status === 'quoted' ? 'إعادة إرسال العرض (بعد تعديله)' : 'إرسال العرض'}</button>`,
     rejected: '<button class="btn btn-d" data-ev="rejected">⛔ اعتذار عن الطلب</button>',
     accepted: '<button class="btn btn-p" data-ev="accepted">🎉 قبول العرض</button>',
     declined: '<button class="btn btn-g" data-ev="declined">↩️ رفض العرض / طلب تعديل</button>',
@@ -154,46 +155,106 @@ async function xreqDetail(id) {
     <div class="card" style="margin-top:14px"><h3>${I.doc} البنود</h3><div class="tbl-wrap"><table class="t"><thead><tr><th>#</th><th>البند</th><th>الكمية</th><th>السعر المقترح</th>${quoted ? '<th>سعر العرض</th><th>الإجمالي</th>' : ''}</tr></thead><tbody>
       ${r.items.map((it, k) => `<tr><td class="num">${k + 1}</td><td><b>${esc(it.title)}</b>${it.description ? `<div class="small" style="white-space:pre-wrap">${esc(it.description)}</div>` : ''}${by[it.uid] ? `<div>${by[it.uid].map(xqFile).join('<br>')}</div>` : ''}</td>
         <td><span class="num">${xqNum(it.qty)}</span> ${esc(it.unit || '')}</td><td>${money(it.suggested_price)}</td>${quoted ? `<td><b>${money(it.quoted_price)}</b></td><td>${it.quoted_price != null ? money(it.quoted_price * it.qty) : '—'}</td>` : ''}</tr>`).join('')}
-      <tr><td colspan="3"><b>الإجمالي</b></td><td><b>${money(r.suggested_total)}</b></td>${quoted ? `<td colspan="2"><b>${money(r.quote_total)}</b> <span class="small muted">${r.quote_vat_included ? 'شامل الضريبة' : 'غير شامل الضريبة'}</span></td>` : ''}</tr></tbody></table></div>
+      <tr><td colspan="3"><b>الإجمالي</b></td><td><b>${money(r.suggested_total)}</b></td>${quoted ? `<td colspan="2"><b>${money(r.quote_total)}</b> ${r.quote_vat_included ? '<span class="small muted">شامل الضريبة</span>' : ''}</td>` : ''}</tr></tbody></table></div>
       ${quoted ? `<div class="notice" style="margin-top:10px"><b>💰 عرض السعر${r.quote_number ? ' ' + esc(r.quote_number) : ''}</b> — ${money(r.quote_total)}${r.quote_valid_until ? ` · صالح حتى ${fdate(r.quote_valid_until)}` : ''}
         ${r.quote_note ? `<div style="white-space:pre-wrap;margin-top:4px">${esc(r.quote_note)}</div>` : ''}${by._q ? `<div style="margin-top:4px">${by._q.map(xqFile).join('<br>')}</div>` : ''}</div>` : ''}
       ${r.notes ? `<h3 style="margin-top:12px">ملاحظات الطلب</h3><p style="white-space:pre-wrap">${esc(r.notes)}</p>` : ''}
       ${r.links ? `<h3>روابط</h3><div dir="ltr" style="text-align:left">${r.links.split(/\n+/).map((l) => (/^https?:\/\//.test(l.trim()) ? `<a href="${esc(l.trim())}" target="_blank" rel="noopener">${esc(l.trim())}</a>` : esc(l))).join('<br>')}</div>` : ''}
       ${by._g ? `<h3>المرفقات</h3><div>${by._g.map(xqFile).join('<br>')}</div>` : ''}
+      ${xreqQuoteBox(r)}
       <div class="toolbar" style="margin-top:12px">${r.can.map((c) => B[c] || '').join('')}</div></div>
     <div class="card" style="margin-top:14px"><h3>${I.clock || ''} سجل الطلب</h3>${r.events.map((e) => `<div style="padding:4px 0;border-bottom:1px dashed var(--line, #E3D9C9)${e.side === 'peer' ? ';color:var(--terra)' : ''}">
       <span class="small muted">${xqDt(e.created_at)}</span> — <b>${esc(e.by_name || '')}</b> ${esc(d.event_label[e.event] || e.event)}${e.note ? `: <span style="white-space:pre-wrap">${esc(e.note)}</span>` : ''}</div>`).join('')}</div>`;
-  $$('[data-ev]').forEach((b) => b.onclick = () => xreqAct(r, b.dataset.ev));
+  $$('[data-ev]').forEach((b) => b.onclick = () => (b.dataset.ev === 'issue_quote' ? xreqIssue(r) : b.dataset.ev === 'send_quote' ? (b.disabled = true, xreqSendQuote(r.id)) : xreqAct(r, b.dataset.ev)));
+  const qp = $('[data-qprint]'); if (qp) qp.onclick = async () => { try { const { row } = await api(`e/quotes/${r.quote.id}`); await Promise.all([refs('clients').catch(() => []), refs('leads').catch(() => [])]); printQuote(row); } catch (e) { toast(e.message, 1); } };
   $('#xq-print').onclick = () => xreqPrint(r, d);
   const rs = $('#xq-resend'); if (rs) rs.onclick = async () => { try { const x = await api(`xq/${id}/resend`, { method: 'POST', body: {} }); toast(x.message, !x.ok); xreqDetail(id); } catch (e) { toast(e.message, 1); } };
 }
 
-function xreqAct(r, ev) {
-  const T = { confirmed: 'تأكيد الاستلام', quoted: 'عرض السعر', rejected: 'الاعتذار عن الطلب', accepted: 'قبول العرض', declined: 'رفض العرض', cancelled: 'إلغاء الطلب', comment: 'تعليق' };
-  const needNote = ['rejected', 'declined', 'comment'].includes(ev);
-  let body = '';
-  if (ev === 'quoted') {
-    body = `<div class="tbl-wrap"><table class="t"><thead><tr><th>البند</th><th>الكمية</th><th>المقترح</th><th>سعر الوحدة في العرض</th></tr></thead><tbody>${r.items.map((it) => `<tr><td>${esc(it.title)}</td><td class="num">${xqNum(it.qty)}</td><td>${money(it.suggested_price)}</td>
-      <td><input class="inp" type="number" step="0.01" min="0" data-q="${it.uid}" data-qty="${it.qty}" value="${it.quoted_price ?? ''}"></td></tr>`).join('')}</tbody></table></div>
-      <form class="fgrid" id="xa"><label class="f"><span>إجمالي العرض (ر.س)</span><input class="inp" name="total" type="number" step="0.01" value="${r.quote_total ?? ''}"></label>
-      <label class="f"><span>رقم العرض في المنصة</span><input class="inp" name="number" value="${esc(r.quote_number || '')}"></label>
-      <label class="f"><span>صالح حتى</span><input class="inp" name="valid" type="date" value="${esc(r.quote_valid_until || '')}"></label>
-      <label class="f"><span>&nbsp;</span><label><input type="checkbox" name="vat" ${r.quote_vat_included ? 'checked' : ''}> الأسعار شاملة الضريبة</label></label>
-      <label class="f full"><span>ملاحظات وشروط العرض</span><textarea class="inp" name="note" rows="2">${esc(r.quote_note || '')}</textarea></label>
-      <label class="f full"><span>ملف عرض السعر (PDF) ومرفقاته</span><input class="inp" type="file" name="files" multiple></label></form>`;
-  } else {
-    body = `<form class="fgrid" id="xa"><label class="f full"><span>${needNote ? 'السبب / التعليق <i>*</i>' : 'ملاحظة (اختياري)'}</span><textarea class="inp" name="note" rows="3"></textarea></label>
-      ${ev === 'comment' ? '<label class="f full"><span>مرفقات</span><input class="inp" type="file" name="files" multiple></label>' : ''}</form>`;
-  }
-  const m = modal({ title: T[ev], body, wide: ev === 'quoted', foot: `<button class="btn btn-p" data-ok>${ev === 'quoted' ? 'إرسال العرض' : 'تنفيذ'}</button><button class="btn btn-g" data-x>إلغاء</button>` });
-  const f = $('#xa', m.el);
-  if (ev === 'quoted') $$('[data-q]', m.el).forEach((i) => i.oninput = () => { let s = 0, any = false; $$('[data-q]', m.el).forEach((x) => { if (x.value !== '') { s += +x.value * +x.dataset.qty; any = true; } }); if (any) f.total.value = s.toFixed(2); });
+// العرض المرتبط بالطلب الوارد — هو نفسه عرض في «عروض الأسعار» (ترقيمها وقالب طباعتها)
+function xreqQuoteBox(r) {
+  const q = r.quote; if (!q) return '';
+  return `<div class="notice" style="margin-top:10px"><b>🧾 عرض السعر في «عروض الأسعار»: <span class="num">${esc(q.number)}</span></b> ${pill(q.status)} — ${money(q.total)}${q.valid_until ? ` · صالح حتى ${fdate(q.valid_until)}` : ''}
+    <div style="margin-top:6px"><a class="btn btn-g btn-s" href="#/quote/${q.id}">فتح / تعديل العرض</a> <button class="btn btn-g btn-s" data-qprint>${I.print} طباعة العرض</button>
+    ${r.status !== 'quoted' ? '<span class="small muted">راجع العرض ثم اضغط «إرسال العرض» ليصل للقطاع الآخر بملفه</span>' : '<span class="small muted">إن عدّلت العرض أعد إرساله ليصل التعديل</span>'}</div></div>`;
+}
+
+// إصدار العرض: يُنشأ في «عروض الأسعار» عبر مسارها نفسه (ترقيم Q-سنة-رقم، المجاميع والضريبة)
+async function xreqIssue(r) {
+  const [clients, leads] = await Promise.all([refs('clients').catch(() => []), refs('leads').catch(() => [])]);
+  const s = S.meta.settings;
+  const valid = addDays(todayStr(), Number(s.quote_validity_days || 15));
+  const row = (it) => `<tr data-row><td><input class="inp" data-k="name" value="${esc(it.name)}"><textarea class="inp" data-k="desc" rows="2" style="margin-top:4px">${esc(it.desc)}</textarea></td>
+    <td style="width:90px"><input class="inp" type="number" step="0.01" min="0" data-k="qty" value="${esc(it.qty)}"></td><td style="width:130px"><input class="inp" type="number" step="0.01" min="0" data-k="price" value="${esc(it.price)}"></td>
+    <td><button type="button" class="lnk" data-rm>×</button></td></tr>`;
+  const m = modal({ title: `💰 إصدار عرض السعر — ${esc(r.number)}`, wide: true,
+    body: `<div class="notice">يُنشأ العرض في «عروض الأسعار» برقمه التسلسلي وقالب الطباعة المعتاد، ثم تراجعه وترسله ليصل للقطاع الآخر بملفه.</div>
+      <form class="fgrid" id="xi">
+        <label class="f full"><span>الطرف المقدَّم له العرض</span><input class="inp" name="party" list="xi-p" value="" placeholder="ابحث في العملاء والعملاء المحتملين — أو اتركه فارغاً لإضافته عميلاً محتملاً من بيانات الطلب">
+          <datalist id="xi-p">${clients.map((c) => `<option value="عميل: ${esc(c.name)}">`).join('')}${leads.map((l) => `<option value="محتمل: ${esc(l.name)}${l.company ? ' — ' + esc(l.company) : ''}">`).join('')}</datalist></label>
+        <div class="f full small muted" id="xi-ph">سيُضاف «${esc(r.client_name || '')}» عميلاً محتملاً (المصدر: ${esc(S.xq?.sectors?.ads || 'قطاع الدعاية والإعلان')})</div>
+        <label class="f full"><span>عنوان العرض</span><input class="inp" name="title" value="${esc(r.title || '')}"></label>
+        <label class="f"><span>صالح حتى</span><input class="inp" type="date" name="valid" value="${valid}"></label><label class="f"><span>الخصم (ر.س)</span><input class="inp" type="number" step="0.01" min="0" name="discount" value="0"></label>
+        <div class="f full"><div class="tbl-wrap"><table class="t"><thead><tr><th>البند والوصف</th><th>الكمية</th><th>السعر</th><th></th></tr></thead><tbody id="xi-rows">
+          ${r.items.map((it) => row({ name: it.title, desc: it.description || '', qty: it.qty, price: it.suggested_price ?? '' })).join('')}</tbody></table></div>
+          <button type="button" class="btn btn-g btn-s" id="xi-add">＋ بند</button> <span class="small">المجموع قبل الضريبة: <b class="num" id="xi-sum">0</b> ر.س — الضريبة ${esc(s.vat_rate)}% تُحسب كما في كل العروض</span></div>
+        <label class="f full"><span>ملاحظات العرض</span><textarea class="inp" name="notes" rows="2"></textarea></label></form>`,
+    foot: '<button class="btn btn-p" data-ok>إنشاء العرض</button><button class="btn btn-g" data-x>إلغاء</button>' });
+  const f = $('#xi', m.el);
+  const sum = () => { let t = 0; $$('[data-row]', m.el).forEach((tr) => { t += (+$('[data-k=qty]', tr).value || 0) * (+$('[data-k=price]', tr).value || 0); }); $('#xi-sum', m.el).textContent = moneyTxt(t); };
+  $('#xi-rows', m.el).addEventListener('input', sum);
+  $('#xi-rows', m.el).addEventListener('click', (e) => { if (e.target.closest('[data-rm]') && $$('[data-row]', m.el).length > 1) { e.target.closest('tr').remove(); sum(); } });
+  $('#xi-add', m.el).onclick = () => $('#xi-rows', m.el).insertAdjacentHTML('beforeend', row({ name: '', desc: '', qty: 1, price: '' }));
+  const pick = () => {
+    const v = f.party.value.trim();
+    const c = v.startsWith('عميل: ') && clients.find((x) => `عميل: ${x.name}` === v);
+    const l = v.startsWith('محتمل: ') && leads.find((x) => `محتمل: ${x.name}${x.company ? ' — ' + x.company : ''}` === v);
+    $('#xi-ph', m.el).textContent = c ? 'عميل مسجّل ✓' : l ? 'عميل محتمل مسجّل ✓' : `سيُضاف «${r.client_name || ''}» عميلاً محتملاً من بيانات الطلب`;
+    return { client_id: c ? c.id : null, lead_id: l ? l.id : null };
+  };
+  f.party.oninput = pick; sum();
   $('[data-x]', m.el).onclick = m.close;
   $('[data-ok]', m.el).onclick = async (e) => {
-    const btn = e.target; const body2 = { event: ev };
+    const items = $$('[data-row]', m.el).map((tr) => ({ name: $('[data-k=name]', tr).value.trim(), desc: $('[data-k=desc]', tr).value, qty: $('[data-k=qty]', tr).value, price: $('[data-k=price]', tr).value })).filter((x) => x.name);
+    if (!items.length) return toast('أضف بنداً واحداً على الأقل', 1);
+    e.target.disabled = true;
+    try {
+      const x = await api(`xq/${r.id}/quote`, { method: 'POST', body: { ...pick(), title: f.title.value, valid_until: f.valid.value, discount: f.discount.value, notes: f.notes.value, items } });
+      m.close(); invalidate('quotes'); invalidate('leads');
+      const go2 = await confirmBox(`أُنشئ العرض <b>${esc(x.quote.number)}</b> في «عروض الأسعار» بإجمالي ${money(x.quote.total)} شامل الضريبة.<br>إرساله الآن للقطاع الآخر؟ (يمكنك مراجعته وتعديله أولاً ثم الإرسال من نافذة الطلب)`);
+      if (go2) await xreqSendQuote(r.id); else xreqDetail(r.id);
+    } catch (err) { toast(err.message, 1); e.target.disabled = false; }
+  };
+}
+
+// إرسال العرض: ملفه هو مستند الطباعة نفسه (quoteDocHtml في views.js) من بيانات العرض المحفوظة
+async function xreqSendQuote(id) {
+  try {
+    const d = await api(`xq/${id}`); const q0 = d.request.quote;
+    if (!q0) return toast('لا يوجد عرض مرتبط', 1);
+    const { row: q } = await api(`e/quotes/${q0.id}`);
+    await Promise.all([refs('clients', true).catch(() => []), refs('leads', true).catch(() => [])]); // اسم الطرف في القالب
+    const bytes = new TextEncoder().encode(quoteDocHtml(q)); let bin = ''; bytes.forEach((b) => { bin += String.fromCharCode(b); });
+    const name = `عرض سعر ${q.number}.html`;
+    const up = await api('files', { method: 'POST', body: { name, mime: 'text/html', data: btoa(bin) } });
+    const x = await api(`xq/${id}/act`, { method: 'POST', body: { event: 'quoted', quote_id: q.id, files: [{ id: up.id, name, mime: 'text/html' }] } });
+    toast(x.pending ? `أُرسل العرض ${q.number} — سيصل عند توفر الاتصال` : `أُرسل العرض ${q.number} إلى القطاع الآخر ✓`);
+  } catch (err) { toast(err.message, 1); }
+  xreqDetail(id);
+}
+
+function xreqAct(r, ev) {
+  const T = { confirmed: 'تأكيد الاستلام', rejected: 'الاعتذار عن الطلب', accepted: 'قبول العرض', declined: 'رفض العرض', cancelled: 'إلغاء الطلب', comment: 'تعليق' };
+  const needNote = ['rejected', 'declined', 'comment'].includes(ev);
+  const body = `<form class="fgrid" id="xa"><label class="f full"><span>${needNote ? 'السبب / التعليق <i>*</i>' : 'ملاحظة (اختياري)'}</span><textarea class="inp" name="note" rows="3"></textarea></label>
+      ${ev === 'comment' ? '<label class="f full"><span>مرفقات</span><input class="inp" type="file" name="files" multiple></label>' : ''}</form>`;
+  const m = modal({ title: T[ev], body, foot: '<button class="btn btn-p" data-ok>تنفيذ</button><button class="btn btn-g" data-x>إلغاء</button>' });
+  const f = $('#xa', m.el);
+  $('[data-x]', m.el).onclick = m.close;
+  $('[data-ok]', m.el).onclick = async (e) => {
+    const btn = e.target; const body2 = { event: ev, note: f.note.value };
     const fl = f.files ? [...f.files.files] : [];
-    if (ev === 'quoted') body2.quote = { total: f.total.value, number: f.number.value, valid_until: f.valid.value, vat_included: f.vat.checked, note: f.note.value, items: $$('[data-q]', m.el).map((i) => ({ uid: i.dataset.q, quoted_price: i.value })) };
-    else { body2.note = f.note.value; if (needNote && !body2.note.trim() && !fl.length) return toast('اكتب السبب أو التعليق', 1); }
+    if (needNote && !body2.note.trim() && !fl.length) return toast('اكتب السبب أو التعليق', 1);
     btn.disabled = true;
     try {
       body2.files = []; for (const x of fl) body2.files.push(await xqUpload(x));

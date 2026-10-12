@@ -32,6 +32,7 @@ const EVENTS = {
 export const XQ_EVENT_LABEL = {
   created: 'أنشأ الطلب', delivered: 'وصل الطلب إلى القطاع الآخر', confirmed: 'أكّد الاستلام وبدأ التسعير', rejected: 'اعتذر عن الطلب',
   quoted: 'أرسل عرض السعر', cancelled: 'ألغى الطلب', accepted: 'قبل عرض السعر', declined: 'رفض عرض السعر', comment: 'علّق',
+  quote_created: 'أنشأ عرض السعر في «عروض الأسعار»', // داخلي لا يُرسل
 };
 
 const enc = new TextEncoder();
@@ -115,12 +116,14 @@ export async function xqGet(db, id) {
   r.events = (await db.prepare('SELECT event, by_name, side, note, created_at FROM xq_events WHERE request_id = ? ORDER BY id').bind(id).all()).results;
   r.outbox = await outboxState(db, id);
   r.peer_link = r.peer_id ? PEER_UI + r.peer_id : null;
+  r.quote = r.quote_id ? await db.prepare('SELECT id, number, status, title, total, valid_until, client_id, lead_id FROM quotes WHERE id = ?').bind(r.quote_id).first() : null;
   return r;
 }
 function canList(r, user, roles) {
   const can = ['comment'];
   for (const [ev, [owner, from]] of Object.entries(EVENTS)) {
     if (ev === 'comment' || owner !== r.direction || !from.includes(r.status)) continue;
+    if (ev === 'quoted') { if (roles.includes(user.role)) can.push(r.quote_id ? 'send_quote' : 'issue_quote'); continue; } // العرض من «عروض الأسعار» نفسها
     if (owner === 'in' && roles.includes(user.role)) can.push(ev);
     if (owner === 'out' && (isBoss(user) || r.requester_user_id === user.id)) can.push(ev);
   }
@@ -210,7 +213,7 @@ export async function xqAct(db, env, user, id, d) {
   const r = await xqGet(db, id);
   if (!r) throw new HttpError(404, 'الطلب غير موجود');
   const event = String(d.event || '');
-  if (!canList(r, user, await handlerRoles(db)).includes(event)) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء على الطلب بحالته الحالية');
+  if (!canList(r, user, await handlerRoles(db)).includes(event === 'quoted' ? 'send_quote' : event)) throw new HttpError(403, 'لا تملك صلاحية هذا الإجراء على الطلب بحالته الحالية');
   const note = str(d.note, 4000);
   const hasFiles = Array.isArray(d.files) && d.files.length > 0;
   if (['rejected', 'declined', 'comment'].includes(event) && !note && !hasFiles) throw new HttpError(400, 'اكتب السبب أو التعليق');
@@ -218,12 +221,14 @@ export async function xqAct(db, env, user, id, d) {
   const payload = { event, note };
   if (r.direction === 'in' && ['confirmed', 'quoted', 'rejected'].includes(event)) payload.handler = { name: me.name, phone: me.phone || null };
   if (event === 'quoted') {
-    const q = d.quote || {}; const byUid = Object.fromEntries(r.items.map((i) => [i.uid, i]));
-    const items = (Array.isArray(q.items) ? q.items : []).filter((it) => byUid[it.uid]).map((it) => ({ uid: it.uid, quoted_price: num(it.quoted_price) }));
-    const sum = items.reduce((a, it) => a + (it.quoted_price != null ? it.quoted_price * byUid[it.uid].qty : 0), 0);
-    const total = num(q.total) ?? (sum > 0 ? Math.round(sum * 100) / 100 : null);
-    if (total == null && !hasFiles) throw new HttpError(400, 'أدخل أسعار البنود أو الإجمالي، أو أرفق ملف عرض السعر');
-    payload.quote = { number: str(q.number, 40), total, vat_included: !!q.vat_included, valid_until: date(q.valid_until), note: str(q.note, 8000), items };
+    // العرض هو نفسه عرض «عروض الأسعار» المرتبط بالطلب: رقمه وإجماليه (شامل الضريبة) وصلاحيته، وملفه بقالب الطباعة المعتاد
+    if (!r.quote_id || +d.quote_id !== r.quote_id) throw new HttpError(400, 'أصدر العرض من «عروض الأسعار» أولاً');
+    if (!hasFiles) throw new HttpError(400, 'ملف العرض مطلوب');
+    const q = await db.prepare('SELECT * FROM quotes WHERE id = ?').bind(r.quote_id).first();
+    let qi = []; try { qi = JSON.parse(q.items || '[]'); } catch { /* */ }
+    const items = qi.length === r.items.length ? r.items.map((it, k) => ({ uid: it.uid, quoted_price: num(qi[k].price) })) : [];
+    payload.quote = { number: q.number, total: num(q.total), vat_included: true, valid_until: date(q.valid_until), note: str(q.notes, 8000), items };
+    if (q.status === 'مسودة') await db.prepare("UPDATE quotes SET status = 'مرسل', updated_at = datetime('now') WHERE id = ?").bind(q.id).run();
   }
   const side = event === 'quoted' ? 'quote' : 'request';
   const newIds = await attachUploads(db, user, id, d.files, side);
@@ -349,7 +354,7 @@ function waUrl(phone, text) {
 }
 
 // ---------------------------------------------------------------- مسارات الواجهة (بجلسة)
-export async function xqRoute(db, env, request, user, a, b) {
+export async function xqRoute(db, env, request, user, a, b, entity) {
   const method = request.method.toUpperCase();
   const url = new URL(request.url);
   const body = async () => { try { return await request.json(); } catch { throw new HttpError(400, 'بيانات غير صالحة'); } };
@@ -375,14 +380,16 @@ export async function xqRoute(db, env, request, user, a, b) {
   if (a === 'file' && b && method === 'GET') {
     const f = await db.prepare('SELECT x.*, fl.data FROM xq_files x LEFT JOIN files fl ON fl.id = x.file_id WHERE x.id = ?').bind(+b).first();
     if (!f) return json({ error: 'الملف غير موجود' }, 404);
-    const disp = `${/^(image\/|application\/pdf)/.test(f.mime || '') ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(f.name || 'file')}`;
+    const disp = `${/^(image\/|application\/pdf|text\/html)/.test(f.mime || '') ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(f.name || 'file')}`;
+    // مستند HTML (عرض سعر بقالب الطباعة) يُعرض معزولاً عن جلسة المنصة
+    const iso = /^text\/html/i.test(f.mime || '') ? { 'content-security-policy': 'sandbox allow-scripts allow-modals allow-popups' } : {};
     if (f.origin === 'local') {
       const bin = Uint8Array.from(atob(f.data || ''), (c) => c.charCodeAt(0));
-      return new Response(bin, { headers: { 'content-type': f.mime || 'application/octet-stream', 'content-disposition': disp, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } });
+      return new Response(bin, { headers: { 'content-type': f.mime || 'application/octet-stream', 'content-disposition': disp, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', ...iso } });
     }
     const r = await xqCall(db, 'file.get', { id: f.peer_file_id }, true);
     if (!r.ok) return json({ error: 'تعذّر جلب الملف من ' + XQ_SECTORS[XQ_PEER] + ': ' + (r.error || '') }, 502);
-    return new Response(r.res.body, { headers: { 'content-type': f.mime || r.res.headers.get('content-type') || 'application/octet-stream', 'content-disposition': disp, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } });
+    return new Response(r.res.body, { headers: { 'content-type': f.mime || r.res.headers.get('content-type') || 'application/octet-stream', 'content-disposition': disp, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', ...iso } });
   }
   if (a === 'config') {
     if (user.role !== 'admin') return json({ error: 'للمدير فقط' }, 403);
@@ -415,6 +422,28 @@ export async function xqRoute(db, env, request, user, a, b) {
   if (b === 'act' && method === 'POST') {
     const r = await xqAct(db, env, user, id, await body());
     return json({ ok: true, status: r.status, pending: !!r.outbox, message: XQ_EVENT_LABEL[r.events[r.events.length - 1]?.event] || 'تم' });
+  }
+  if (b === 'quote' && method === 'POST') {
+    // إصدار العرض في «عروض الأسعار»: مسار الكيانات نفسه (ترقيم Q-سنة-رقم، المجاميع والضريبة، الصلاحيات، سجل التدقيق)
+    const r = await xqGet(db, id);
+    if (!r) return json({ error: 'الطلب غير موجود' }, 404);
+    if (!canList(r, user, roles).includes('issue_quote')) return json({ error: 'لا يمكن إصدار عرض لهذا الطلب الآن' }, 403);
+    const d = await body();
+    const items = (Array.isArray(d.items) ? d.items : []).map((it) => ({ name: str(it.name, 255), desc: str(it.desc, 4000) || '', qty: num(it.qty) || 1, price: num(it.price) || 0 })).filter((it) => it.name);
+    if (!items.length) return json({ error: 'أضف بنداً واحداً على الأقل' }, 400);
+    let clientId = +d.client_id || null; let leadId = +d.lead_id || null;
+    if (!clientId && !leadId) {
+      const lead = await entity('POST', 'leads', null, { name: r.client_name, company: r.client_company, phone: r.client_phone, email: r.client_email,
+        source: XQ_SECTORS[XQ_PEER], notes: `من طلب عرض سعر ${r.number} — ${r.requester_name || ''}` });
+      leadId = lead.id;
+    }
+    const q = await entity('POST', 'quotes', null, { client_id: clientId, lead_id: clientId ? null : leadId, title: str(d.title, 200) || r.title || `عرض سعر — ${r.client_name || ''}`,
+      items, discount: num(d.discount) || 0, valid_until: date(d.valid_until), notes: str(d.notes, 8000) });
+    const me = await db.prepare('SELECT name, phone FROM users WHERE id = ?').bind(user.id).first();
+    await db.prepare("UPDATE xq_requests SET quote_id = ?, handler_user_id = ?, handler_name = ?, handler_phone = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind(q.id, user.id, me.name, me.phone || null, id).run();
+    await log(db, id, 'quote_created', me.name, 'local', `${q.number} — ${q.total} ر.س`);
+    return json({ quote: q });
   }
   if (b === 'resend' && method === 'POST') {
     const n = await xqFlush(db, 20); const st = await outboxState(db, id);

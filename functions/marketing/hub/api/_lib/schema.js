@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -110,6 +110,8 @@ export const MIGRATIONS = [
   'CREATE INDEX IF NOT EXISTS ix_users_tg ON users(tg_chat_id)',
   'ALTER TABLE users ADD COLUMN notify_wa INTEGER DEFAULT 1',
   'ALTER TABLE users ADD COLUMN notify_tg INTEGER DEFAULT 1',
+  // v5: طلب القطاع الآخر مرتبط بعرض السعر في «عروض الأسعار» (ترقيمها وقالبها)
+  'ALTER TABLE xq_requests ADD COLUMN quote_id INTEGER',
 ];
 
 // إعدادات سرية لا تُرسل للواجهة أبداً

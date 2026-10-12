@@ -393,10 +393,12 @@ function docShell(title, inner) {
 }
 function openDoc(html) { const w = window.open('', '_blank'); if (!w) return toast('اسمح بالنوافذ المنبثقة للطباعة', 1); w.document.open(); w.document.write(html); w.document.close(); }
 function partyName(q) { return q.client_id ? refLabel('clients', q.client_id) : q.lead_id ? refLabel('leads', q.lead_id) : ''; }
-function printQuote(q) {
+// قالب عرض السعر — مصدر واحد للطباعة ولملف العرض المرسل للقطاع الآخر (xreq.js)
+function printQuote(q) { openDoc(quoteDocHtml(q)); }
+function quoteDocHtml(q) {
   const s = S.meta.settings; let items = []; try { items = JSON.parse(q.items || '[]'); } catch { /* */ }
   const sub = items.reduce((a, it) => a + it.qty * it.price, 0); const disc = +q.discount || 0; const vat = (sub - disc) * (Number(s.vat_rate || 15) / 100);
-  openDoc(docShell(`عرض سعر ${q.number}`, `<div class="ttl"><h1>عرض سعر</h1><div class="n">${esc(q.number || '')}</div></div>
+  return (docShell(`عرض سعر ${q.number}`, `<div class="ttl"><h1>عرض سعر</h1><div class="n">${esc(q.number || '')}</div></div>
   <div class="meta"><div>مقدّم إلى: <b>${esc(partyName(q))}</b></div><div>التاريخ: <span class="n">${todayStr()}</span></div><div>الموضوع: ${esc(q.title || '')}</div><div>صالح حتى: <span class="n">${esc(q.valid_until || '')}</span></div></div>
   <table><thead><tr><th>#</th><th>البند</th><th>الكمية</th><th>السعر</th><th>المجموع</th></tr></thead><tbody>${items.map((it, i) => `<tr><td class="n">${i + 1}</td><td><b>${esc(it.name)}</b>${it.desc ? `<br><small>${esc(it.desc)}</small>` : ''}</td><td class="n">${it.qty}</td><td class="n">${moneyTxt(it.price)}</td><td class="n">${moneyTxt(it.qty * it.price)}</td></tr>`).join('')}</tbody></table>
   <div class="tot"><div><span>المجموع</span><span class="n">${moneyTxt(sub)}</span></div>${disc ? `<div><span>الخصم</span><span class="n">${moneyTxt(disc)}</span></div>` : ''}<div><span>ضريبة القيمة المضافة ${s.vat_rate}%</span><span class="n">${moneyTxt(vat)}</span></div><div class="g"><span>الإجمالي (ر.س)</span><span class="n">${moneyTxt(sub - disc + vat)}</span></div></div>
