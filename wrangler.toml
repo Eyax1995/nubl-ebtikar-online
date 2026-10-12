@@ -13,3 +13,9 @@ binding = "AI"
 binding = "DB"
 database_name = "nubl-marketing-hub"
 database_id = "8c8d114b-f0dd-43cf-8845-208e1d589657"
+
+# مساعد واتساب نُبل وابتكار (/wa/*) — قاعدة مستقلة عن منصة hub وعن أي نظام آخر (مروج الحجاز له قاعدته الخاصة)
+[[d1_databases]]
+binding = "WA_DB"
+database_name = "nubl-wa-assistant"
+database_id = "d7cc5a7a-6fc1-4fe5-85f7-6a3b6dec5bc7"
