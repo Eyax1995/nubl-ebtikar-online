@@ -11,11 +11,9 @@ import { MARKETING_EXTRA } from './marketing.js';
 import { notifyRoles, h as hx } from '../../marketing/hub/api/_lib/telegram.js';
 import { getSettings } from '../../marketing/hub/api/_lib/core.js';
 
-// ربط كل رقم بالقسم والاسم التجاري — هذا النظام لنُبل وابتكار فقط (لا أرقام مروج الحجاز هنا)
+// الأرقام المخدومة — رقم «نُبل وابتكار للتسويق» فقط (قرار إياد 12 أكتوبر 2026).
+// أرقام الدعاية والإعلان ومروج الحجاز مستبعدة تماماً: رسائلها تُتجاهل فلا تُخزَّن ولا يُرد عليها ولا تصل لمنصة التسويق.
 export const NUMBERS = {
-  '966559196364': { dept: 'advertising', brand: 'نبل وابتكار — فرع الرحاب' },
-  '966556300757': { dept: 'advertising', brand: 'مطبعة نبل وابتكار للطباعة والدعاية والإعلان' },
-  '966535356479': { dept: 'advertising', brand: 'نبل وابتكار للدعاية والإعلان' },
   '966563413040': { dept: 'marketing', brand: 'نبل وابتكار للتسويق' },
 };
 
