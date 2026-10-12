@@ -148,30 +148,52 @@ function buildPrompt(ev, session, history) {
   return { system, user: 'المحادثة حتى الآن (الأقدم أولاً):\n' + transcript + '\n\nاكتب ردك على آخر رسالة من العميل.' };
 }
 
+// Gemini أولاً (أعلى جودة)، وعند نفاد الحصة أو أي عطل ننتقل إلى Workers AI داخل Cloudflare (بلا فوترة خارجية)
 async function gemini(env, system, user) {
   const model = env.GEMINI_MODEL || 'gemini-3.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   let lastErr = '';
-  for (let i = 0; i < 3; i++) {
-    try {
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: 'user', parts: [{ text: user }] }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 4096 },
-        }),
-      });
-      const d = await r.json().catch(() => ({}));
-      const parts = (((d.candidates || [])[0] || {}).content || {}).parts || [];
-      const text = parts.filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
-      if (r.ok && text) return { ok: true, text };
-      lastErr = (d.error && d.error.message) || `HTTP ${r.status}`;
-    } catch (e) { lastErr = e.message; }
-    if (i < 2) await new Promise((res) => setTimeout(res, 4000));
+  if (env.GEMINI_API_KEY) {
+    for (let i = 0; i < 2; i++) {
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents: [{ role: 'user', parts: [{ text: user }] }],
+            generationConfig: { temperature: 0.5, maxOutputTokens: 4096 },
+          }),
+        });
+        const d = await r.json().catch(() => ({}));
+        const parts = (((d.candidates || [])[0] || {}).content || {}).parts || [];
+        const text = parts.filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
+        if (r.ok && text) return { ok: true, text, engine: 'gemini' };
+        lastErr = (d.error && d.error.message) || `HTTP ${r.status}`;
+        if (r.status === 429) break; // نفاد الحصة: لا فائدة من الإعادة
+      } catch (e) { lastErr = e.message; }
+      if (i < 1) await new Promise((res) => setTimeout(res, 3000));
+    }
   }
-  return { ok: false, error: lastErr };
+  const fb = await workersAI(env, system, user);
+  if (fb.ok) return fb;
+  return { ok: false, error: (lastErr ? 'gemini: ' + lastErr.slice(0, 300) + ' | ' : '') + 'workers-ai: ' + fb.error };
+}
+
+async function workersAI(env, system, user) {
+  if (!env.AI) return { ok: false, error: 'no AI binding' };
+  const model = env.WA_FALLBACK_MODEL || '@cf/google/gemma-4-26b-a4b-it';
+  try {
+    const r = await env.AI.run(model, {
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      max_tokens: 1200, temperature: 0.5,
+    });
+    let text = (r && (r.response || (r.choices && r.choices[0] && r.choices[0].message && r.choices[0].message.content))) || '';
+    if (typeof text !== 'string') text = String(text || '');
+    text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    if (text) return { ok: true, text, engine: 'workers-ai' };
+    return { ok: false, error: 'empty response' };
+  } catch (e) { return { ok: false, error: String(e.message || e).slice(0, 300) }; }
 }
 
 // معالجة حدث واحد (رسالة أو صدى رد موظف)
