@@ -11,6 +11,7 @@ import { loadTemplate, templatesFor, tplAllowed, runTemplate, taskChanged } from
 import { ENTITIES, HIDDEN, ROLES } from './_lib/schema.js';
 import { SECTORS } from './_lib/seed.js';
 import { xqBridge, xqRoute } from './_lib/xq.js';
+import { waInboxRoute } from './_lib/wainbox.js';
 
 export async function onRequest(ctx) {
   const { request, env, params } = ctx;
@@ -78,6 +79,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'export': return exportAll(db, user);
       case 'timeline': return timeline(db, user, parts[1], parts[2]);
       case 'ai': return aiRoute(env, db, request, user);
+      case 'wa': return waInboxRoute(env, request, user, parts[1], parts[2]);
       default: return bad('مسار غير معروف', 404);
     }
 }
