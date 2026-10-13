@@ -1,6 +1,6 @@
 // حالة النظام: توثيق محفظة Meta + جاهزية الإعدادات — https://nubl-ebtikar.online/wa/status
-const BUSINESS_ID = '1583814403329274';
-const PHONE_ID = '1306709292528189';
+const BUSINESS_ID = '907479692454066'; // المحفظة الموثّقة
+const PHONE_ID = '1368158866379375'; // رقم التسويق 0563413040
 
 export async function onRequestGet({ env }) {
   const out = {
