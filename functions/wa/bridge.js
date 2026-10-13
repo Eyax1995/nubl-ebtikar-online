@@ -3,7 +3,7 @@
 import { getSettings } from '../marketing/hub/api/_lib/core.js';
 import { sendText } from './_lib/engine.js';
 
-const FROM_PHONE_ID = '1306709292528189'; // رقم التسويق
+const FROM_PHONE_ID = '1368158866379375'; // رقم التسويق 0563413040 (الحساب الموثّق)
 
 export async function onRequestPost({ request, env }) {
   if (!env.DB || !env.WA_TOKEN) return Response.json({ delivered: false, error: 'not configured' }, { status: 503 });
