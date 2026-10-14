@@ -170,11 +170,11 @@ function buildPrompt(ev, session, history) {
 }
 
 // ترتيب المحركات: Claude (إن ضُبط ANTHROPIC_API_KEY) ← Gemini ← Workers AI داخل Cloudflare — أي عطل ينتقل للتالي تلقائياً
-async function claude(env, system, user) {
+async function claude(env, system, user, fast) {
   if (!env.ANTHROPIC_API_KEY) return { ok: false, error: 'no key', skip: true };
   const model = env.CLAUDE_MODEL || 'claude-sonnet-4-5';
   let lastErr = '';
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < (fast ? 1 : 2); i++) {
     try {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -192,21 +192,21 @@ async function claude(env, system, user) {
   return { ok: false, error: 'claude: ' + lastErr.slice(0, 300) };
 }
 
-export async function askAI(env, system, user) {
-  const c = await claude(env, system, user);
+export async function askAI(env, system, user, fast = false) {
+  const c = await claude(env, system, user, fast);
   if (c.ok) return c;
-  const g = await gemini(env, system, user);
+  const g = await gemini(env, system, user, fast);
   if (g.ok) return g;
   return { ok: false, error: (c.skip ? '' : c.error + ' | ') + g.error };
 }
 
 // Gemini (احتياطي)، وعند نفاد الحصة أو أي عطل ننتقل إلى Workers AI داخل Cloudflare (بلا فوترة خارجية)
-async function gemini(env, system, user) {
+async function gemini(env, system, user, fast) {
   const model = env.GEMINI_MODEL || 'gemini-3.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   let lastErr = '';
   if (env.GEMINI_API_KEY) {
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < (fast ? 1 : 2); i++) {
       try {
         const r = await fetch(url, {
           method: 'POST',

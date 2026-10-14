@@ -371,7 +371,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
 - لا تخترع سعراً أو موعداً أو خدمة غير مكتوبة في المعرفة أعلاه.
 - اكتب النص النهائي فقط بلا مقدمات ولا علامات اقتباس ولا شرح${mode === 'summary' ? '' : '، بصيغة رسالة واتساب جاهزة للإرسال'}.`;
     const userMsg = `اسم العميل: ${(s && s.customer_name) || 'غير معروف'}\n\nالمحادثة (الأقدم أولاً):\n${transcript}\n\n${draft ? `مسودة الموظف:\n${draft}\n\n` : ''}${hint ? `توجيه الموظف: ${hint}\n\n` : ''}المطلوب: ${TASK}`;
-    const r = await askAI(env, system, userMsg);
+    const r = await askAI(env, system, userMsg, true);
     if (!r.ok) return bad('تعذّر التوليد الآن: ' + String(r.error || '').slice(0, 200), 502);
     return json({ text: r.text.replace(/^["«]|["»]$/g, '').trim(), engine: r.engine });
   }

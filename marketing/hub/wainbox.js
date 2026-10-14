@@ -365,7 +365,7 @@ async function waAI(id, mode, draft, hint) {
   const p = $('#wa-aip'); if (!p) return;
   const label = (WA_AI_MODES.find((x) => x[0] === mode) || [])[1] || '';
   p.hidden = false;
-  p.innerHTML = `<div class="wa-aih">${I.ai}<b>ذكاء نُبل — ${esc(label)}</b><span class="sp"></span><button type="button" data-x>✕</button></div><div class="wa-ait shimmer">يكتب…</div>`;
+  p.innerHTML = `<div class="wa-aih">${I.ai}<b>ذكاء نُبل — ${esc(label)}</b><span class="sp"></span><button type="button" data-x>✕</button></div><div class="wa-ait shimmer">ذكاء نُبل يكتب… (قد يستغرق حتى نصف دقيقة)</div>`;
   $('[data-x]', p).onclick = () => { p.hidden = true; };
   try {
     const r = await api('wa/ai/' + encodeURIComponent(id), { method: 'POST', body: { mode, draft, hint } });
