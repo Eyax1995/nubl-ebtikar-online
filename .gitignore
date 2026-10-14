@@ -1,3 +1,4 @@
 .wrangler/
 node_modules/
 .d1/
+publish-log.txt
