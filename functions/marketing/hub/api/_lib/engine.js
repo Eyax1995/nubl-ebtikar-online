@@ -10,7 +10,9 @@ export const canDo = (user, entity, op) => (ENTITIES[entity]?.perms[user.role] |
 export function parseTpl(row) {
   if (!row) return null;
   const j = (v, d) => { try { return JSON.parse(v || '') || d; } catch { return d; } };
-  return { ...row, fields: j(row.fields, []), checklist: j(row.checklist, []) };
+  // خانة العميل لا تكون إلزامية في أي قالب (قرار إياد — أكتوبر 2026)
+  const fields = j(row.fields, []).map((f) => (f && f.t === 'client' ? { ...f, req: 0 } : f));
+  return { ...row, fields, checklist: j(row.checklist, []) };
 }
 export async function loadTemplate(db, id) {
   const row = await db.prepare('SELECT * FROM templates WHERE id = ?').bind(id).first();
@@ -40,7 +42,11 @@ const normPhone = (p) => {
 // تسمية قيمة إجابة للعرض
 export async function answerLabel(db, f, v) {
   if (v == null || v === '') return '';
-  if (f.t === 'client') { const r = await db.prepare('SELECT name FROM clients WHERE id = ?').bind(v).first(); return r ? r.name : ''; }
+  if (f.t === 'client') {
+    // العميل اختياري: رقم = سجل موجود، ونص = اسم عميل جديد غير مسجّل بعد
+    if (!/^\d+$/.test(String(v))) return String(v).trim().slice(0, 120);
+    const r = await db.prepare('SELECT name FROM clients WHERE id = ?').bind(v).first(); return r ? r.name : '';
+  }
   if (f.t === 'lead') { const r = await db.prepare('SELECT name, company FROM leads WHERE id = ?').bind(v).first(); return r ? [r.company, r.name].filter(Boolean).join(' — ') : ''; }
   if (f.t === 'user') { const r = await db.prepare('SELECT name FROM users WHERE id = ?').bind(v).first(); return r ? r.name : ''; }
   if (f.t === 'sector') return SECTORS.find((s) => s.id === v)?.name || v;
@@ -67,7 +73,7 @@ const RESERVED_TASK = ['client', 'due', 'assignee', 'link', 'priority'];
 
 // التحقق من الإجابات المطلوبة
 export function missingRequired(tpl, answers) {
-  return tpl.fields.filter((f) => f.req && (answers[f.k] == null || answers[f.k] === '')).map((f) => f.l);
+  return tpl.fields.filter((f) => f.req && f.t !== 'client' && (answers[f.k] == null || answers[f.k] === '')).map((f) => f.l);
 }
 
 export async function runTemplate(db, env, user, tpl, answers, source = 'المنصة') {
@@ -101,7 +107,7 @@ async function runTask(db, env, user, tpl, a, source) {
   const checklist = JSON.stringify((tpl.checklist || []).map((t) => ({ t, d: 0 })));
   const r = await db.prepare(`INSERT INTO tasks (title, client_id, assignee_id, status, priority, due_date, est_hours, description, link,
       template_id, checklist, data, source, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(title, a.client ? Number(a.client) : null, assignee, 'جديدة', a.priority || tpl.priority || 'عادية', due, tpl.est_hours || null,
+    .bind(title, a.client && /^\d+$/.test(String(a.client)) ? Number(a.client) : null, assignee, 'جديدة', a.priority || tpl.priority || 'عادية', due, tpl.est_hours || null,
       desc || null, a.link || null, tpl.id, checklist, JSON.stringify(a), source, user.id).run();
   const id = r.meta.last_row_id;
   const task = { id, title, due_date: due, priority: a.priority || tpl.priority };

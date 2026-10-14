@@ -25,7 +25,7 @@ async function dashboardView() {
   if (d.leads) k.push(kpi('عملاء محتملون', n0(d.leads.total), `${n0(d.leads.month)} جديد هذا الشهر`), kpi('متابعات مستحقة', n0(d.leads.due), 'اليوم وما قبله', d.leads.due ? 'warn' : ''));
   if (d.deals) k.push(kpi('قيمة خط المبيعات', n0(d.deals.open_value) + '<small>ر.س</small>', `المرجّح ${moneyTxt(d.deals.weighted)} ر.س`), kpi('مكسوب هذا الشهر', n0(d.deals.won_month_value) + '<small>ر.س</small>', `${d.deals.won_month} صفقة · نسبة الفوز (90 يوماً) ${winRate}`, 'good'));
   if (d.contracts) k.push(kpi('الإيراد الشهري المتكرر', n0(d.contracts.mrr) + '<small>ر.س</small>', `${d.contracts.active} عقد نشط`));
-  if (d.money) k.push(kpi('المستحقات', n0(d.money.receivable) + '<small>ر.س</small>', `متأخر ${moneyTxt(d.money.overdue)} ر.س (${d.money.overdue_n})`, d.money.overdue ? 'warn' : ''),
+  if (d.money) k.push(kpi('المستحقات', n0(d.money.receivable) + '<small>ر.س</small>', `متأخر ${moneyTxt(d.money.overdue)} ر.س (${d.money.overdue_n || 0})`, d.money.overdue ? 'warn' : ''),
     kpi('المحصّل هذا الشهر', n0(d.collected.s) + '<small>ر.س</small>', `مصروفات ${moneyTxt(d.expensesMonth.s)} ر.س`, 'good'));
   if (d.tasks) k.push(kpi('مهام مفتوحة', n0(d.tasks.open), `${d.tasks.overdue || 0} متأخرة · ${d.tasks.week || 0} هذا الأسبوع`, d.tasks.overdue ? 'warn' : ''));
   if (d.content) k.push(kpi('محتوى هذا الأسبوع', n0(d.content.week), `${d.content.approval || 0} بانتظار اعتماد · ${d.content.late || 0} متأخر`, d.content.late ? 'warn' : ''));
