@@ -97,7 +97,7 @@ async function runTask(db, env, user, tpl, a, source) {
   for (const f of tpl.fields) labels[f.k] = await answerLabel(db, f, a[f.k]);
   let title = String(tpl.title_tpl || '').replace(/\{(\w+)\}/g, (_, k) => labels[k] || '').replace(/\s*[—\-:]\s*$/, '').replace(/^\s*[—\-:]\s*/, '').replace(/\s{2,}/g, ' ').trim();
   if (!title || /^(تصميم|مونتاج|متابعة|تحصيل|تعديلات|تصوير|خطة محتوى|خطة موسم|ملف طباعة|التقرير الشهري|طلب عميل|جدولة محتوى|عرض سعر|جلسة تشخيص|إعلان ممول|تهيئة العميل)$/.test(title)) {
-    title = [title || tpl.name, labels.client].filter(Boolean).join(' — ');
+    title = labels.client ? [title || tpl.name, labels.client].join(' — ') : (tpl.name || title);
   }
   title = title.slice(0, 200);
   const desc = tpl.fields.filter((f) => !RESERVED_TASK.includes(f.k) && labels[f.k])

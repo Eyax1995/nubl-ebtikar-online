@@ -12,6 +12,7 @@ import { ENTITIES, HIDDEN, ROLES } from './_lib/schema.js';
 import { SECTORS } from './_lib/seed.js';
 import { xqBridge, xqRoute } from './_lib/xq.js';
 import { waInboxRoute } from './_lib/wainbox.js';
+import { opsRoute } from './_lib/ops.js';
 import { bearerOf, tokenUser, tokenBlocked, tokensRoute, mcpHandle } from './_lib/agent.js';
 
 export async function onRequest(ctx) {
@@ -107,6 +108,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'timeline': return timeline(db, user, parts[1], parts[2]);
       case 'ai': return aiRoute(env, db, request, user);
       case 'wa': return waInboxRoute(env, request, user, parts[1], parts[2]);
+      case 'people': case 'reminders': case 'agenda': return opsRoute(db, env, request, user, parts[0], parts[1]);
       default: return bad('مسار غير معروف', 404);
     }
 }
@@ -180,6 +182,7 @@ function scopeSql(user, entity) {
   const field = def.own?.[user.role];
   if (!field) return { sql: '', args: [] };
   if (def.ownOrNull) return { sql: `(${field} = ? OR ${field} IS NULL)`, args: [user.id] };
+  if (entity === 'tasks') return { sql: `(${field} = ? OR created_by = ? OR id IN (SELECT task_id FROM task_people WHERE user_id = ?))`, args: [user.id, user.id, user.id] };
   if (def.ownAlsoCreator) return { sql: `(${field} = ? OR created_by = ?)`, args: [user.id, user.id] };
   return { sql: `${field} = ?`, args: [user.id] };
 }

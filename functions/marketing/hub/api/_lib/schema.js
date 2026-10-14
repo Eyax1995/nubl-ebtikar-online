@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -100,6 +100,16 @@ export const DDL = [
   `CREATE TABLE IF NOT EXISTS xq_outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, op TEXT NOT NULL, payload TEXT NOT NULL, request_id INTEGER, tries INTEGER DEFAULT 0,
     last_error TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT)`,
   `CREATE INDEX IF NOT EXISTS ix_xqo_pending ON xq_outbox(sent_at, id)`,
+  // v7: أطراف المهمة (تعدد المكلّفين + أطراف خارجية) والتذكيرات
+  `CREATE TABLE IF NOT EXISTS task_people (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, user_id INTEGER, ext_name TEXT, ext_phone TEXT,
+    ext_kind TEXT, role TEXT DEFAULT 'مكلّف', added_by INTEGER, created_at TEXT DEFAULT (datetime('now')))`,
+  `CREATE INDEX IF NOT EXISTS ix_tp_task ON task_people(task_id)`,
+  `CREATE INDEX IF NOT EXISTS ix_tp_user ON task_people(user_id)`,
+  `CREATE TABLE IF NOT EXISTS reminders (id INTEGER PRIMARY KEY AUTOINCREMENT, entity TEXT NOT NULL, entity_id INTEGER NOT NULL, title TEXT,
+    remind_at TEXT NOT NULL, user_ids TEXT, channels TEXT DEFAULT 'app,wa,tg', note TEXT, status TEXT DEFAULT 'pending', sent_at TEXT,
+    created_by INTEGER, created_at TEXT DEFAULT (datetime('now')))`,
+  `CREATE INDEX IF NOT EXISTS ix_rem_due ON reminders(status, remind_at)`,
+  `CREATE INDEX IF NOT EXISTS ix_rem_ent ON reminders(entity, entity_id)`,
 ];
 
 // ترحيلات تُطبّق مرة واحدة على قواعد قائمة (فشل أي سطر = العمود موجود مسبقاً)

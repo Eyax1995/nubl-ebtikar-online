@@ -1,7 +1,8 @@
 // فحص صحة منظومة واتساب والمنصة — https://nubl-ebtikar.online/wa/health?key=<tg_cron_key>
 // يستدعيه عامل الجدولة nubl-scheduler كل 10 دقائق. عند وجود خلل يُنبَّه مدير النظام (واتساب ثم تلجرام ومركز الإشعارات)،
 // مرة واحدة لكل خلل جديد، وتذكير كل 3 ساعات إن استمر، وإشعار عند عودة الوضع لطبيعته.
-import { getSettings } from '../marketing/hub/api/_lib/core.js';
+import { getSettings, ensureDb } from '../marketing/hub/api/_lib/core.js';
+import { processReminders } from '../marketing/hub/api/_lib/ops.js';
 import { notifyRoles } from '../marketing/hub/api/_lib/telegram.js';
 
 const PHONE_ID = '1368158866379375';
@@ -16,6 +17,10 @@ export async function onRequestGet({ request, env }) {
   const s = await getSettings(env.DB);
   const key = new URL(request.url).searchParams.get('key') || request.headers.get('x-cron-key');
   if (!s.tg_cron_key || key !== s.tg_cron_key) return Response.json({ ok: false }, { status: 403 });
+
+  // التذكيرات المستحقة (المرحلة 2) — تُرسل في كل دورة قبل فحص الصحة
+  let reminders = null;
+  try { await ensureDb(env.DB); reminders = await processReminders(env.DB, env); } catch (e) { reminders = { error: e.message }; }
 
   const issues = [];
   // 1) رقم واتساب على Meta
@@ -58,5 +63,5 @@ export async function onRequestGet({ request, env }) {
   if (alerted || sig !== (prev.sig || '')) {
     await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('health_alert', JSON.stringify(sig ? { sig, at: alerted ? now : prev.at || now } : {})).run();
   }
-  return Response.json({ ok: !sig, issues, alerted, time: new Date().toISOString() }, { headers: { 'cache-control': 'no-store' } });
+  return Response.json({ ok: !sig, issues, alerted, reminders, time: new Date().toISOString() }, { headers: { 'cache-control': 'no-store' } });
 }
