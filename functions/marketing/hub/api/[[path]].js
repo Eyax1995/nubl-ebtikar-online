@@ -35,6 +35,7 @@ export async function onRequest(ctx) {
     if (parts[0] === 'telegram' && parts[1] === 'digest') return await tgDigest(db, env, request);
 
     // ---------- وكلاء الذكاء الاصطناعي: مفتاح API (Bearer) أو رابط MCP يحمل المفتاح ----------
+    if (parts.includes('.well-known')) return json({ error: 'not_found' }, 404); // لا OAuth — المصادقة بالمفتاح
     const urlKey = parts[0] === 'mcp' && parts[1] ? parts[1] : null;
     const rawKey = bearerOf(request) || urlKey;
     if (rawKey || parts[0] === 'mcp') {
@@ -1016,7 +1017,30 @@ async function tgDigest(db, env, request) {
   const s = await getSettings(db);
   const key = new URL(request.url).searchParams.get('key') || request.headers.get('x-cron-key');
   if (!s.tg_cron_key || key !== s.tg_cron_key) return bad('مرفوض', 403);
-  return json(await dailyDigest(db, env));
+  const digest = await dailyDigest(db, env);
+  let backup = null;
+  try { backup = await sendBackup(db, env); } catch (e) { backup = { ok: false, error: e.message }; }
+  return json({ ...digest, backup });
+}
+
+// النسخة الاحتياطية اليومية (بديل n8n): ملف JSON يُرسل لتلجرام كل مدير عام مربوط — مع ملخص الصباح
+async function sendBackup(db, env) {
+  const token = await tgToken(db, env); if (!token) return { ok: false, error: 'no bot token' };
+  const { results: admins } = await db.prepare("SELECT tg_chat_id FROM users WHERE role = 'admin' AND active = 1 AND tg_chat_id IS NOT NULL").all();
+  if (!admins.length) return { ok: false, error: 'no linked admin' };
+  const res = await exportAll(db, { role: 'admin' });
+  const text = await res.text();
+  const base = (env && env.TG_API) || 'https://api.telegram.org';
+  let sent = 0;
+  for (const a of admins) {
+    const fd = new FormData();
+    fd.append('chat_id', a.tg_chat_id);
+    fd.append('caption', `🗄️ النسخة الاحتياطية اليومية — منصة التسويق · ${today()}\nاحفظها في مكان آمن؛ تحتوي بيانات العملاء.`);
+    fd.append('document', new Blob([text], { type: 'application/json' }), `nubl-hub-backup-${today()}.json`);
+    const r = await fetch(`${base}/bot${token}/sendDocument`, { method: 'POST', body: fd });
+    if (r.ok) sent++;
+  }
+  return { ok: sent > 0, sent, bytes: text.length };
 }
 
 const BOT_COMMANDS = [

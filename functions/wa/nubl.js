@@ -12,7 +12,7 @@ export async function onRequestGet({ request, env }) {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  if (!env.WA_DB || !env.WA_TOKEN || !env.GEMINI_API_KEY) return new Response('not configured', { status: 503 });
+  if (!env.WA_DB || !env.WA_TOKEN || !(env.ANTHROPIC_API_KEY || env.GEMINI_API_KEY || env.AI)) return new Response('not configured', { status: 503 });
   const raw = await request.text();
   // اختبار داخلي: ترويسة x-nubl-sim تساوي رمز التحقق تتجاوز فحص التوقيع
   const sim = env.WA_VERIFY_TOKEN && request.headers.get('x-nubl-sim') === env.WA_VERIFY_TOKEN;

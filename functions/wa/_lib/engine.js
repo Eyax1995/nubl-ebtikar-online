@@ -1,7 +1,9 @@
 // محرك مساعد واتساب نُبل وابتكار (بديل n8n) — Cloudflare Pages Functions + D1
 // الأسرار تُضبط في لوحة Cloudflare Pages ← Settings ← Variables and Secrets:
 //   WA_TOKEN         توكن System User لواتساب (إرسال الرسائل)
-//   GEMINI_API_KEY   مفتاح Gemini
+//   ANTHROPIC_API_KEY مفتاح Claude (المحرك الأساسي للرد الآلي عند ضبطه)
+//   CLAUDE_MODEL     (اختياري) الافتراضي claude-sonnet-4-5
+//   GEMINI_API_KEY   مفتاح Gemini (احتياطي)
 //   WA_VERIFY_TOKEN  رمز التحقق الذي يُكتب في إعداد Webhook لدى Meta
 //   META_APP_SECRET  (اختياري) سرّ التطبيق للتحقق من توقيع Meta
 //   GEMINI_MODEL     (اختياري) الافتراضي gemini-3.5-flash
@@ -148,7 +150,38 @@ function buildPrompt(ev, session, history) {
   return { system, user: 'المحادثة حتى الآن (الأقدم أولاً):\n' + transcript + '\n\nاكتب ردك على آخر رسالة من العميل.' };
 }
 
-// Gemini أولاً (أعلى جودة)، وعند نفاد الحصة أو أي عطل ننتقل إلى Workers AI داخل Cloudflare (بلا فوترة خارجية)
+// ترتيب المحركات: Claude (إن ضُبط ANTHROPIC_API_KEY) ← Gemini ← Workers AI داخل Cloudflare — أي عطل ينتقل للتالي تلقائياً
+async function claude(env, system, user) {
+  if (!env.ANTHROPIC_API_KEY) return { ok: false, error: 'no key', skip: true };
+  const model = env.CLAUDE_MODEL || 'claude-sonnet-4-5';
+  let lastErr = '';
+  for (let i = 0; i < 2; i++) {
+    try {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model, max_tokens: 1500, temperature: 0.5, system, messages: [{ role: 'user', content: user }] }),
+      });
+      const d = await r.json().catch(() => ({}));
+      const text = (d.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();
+      if (r.ok && text) return { ok: true, text, engine: 'claude:' + model };
+      lastErr = (d.error && d.error.message) || `HTTP ${r.status}`;
+      if (r.status === 400 || r.status === 401 || r.status === 403 || r.status === 404) break; // خطأ إعداد: لا فائدة من الإعادة
+    } catch (e) { lastErr = e.message; }
+    if (i < 1) await new Promise((res) => setTimeout(res, 2000));
+  }
+  return { ok: false, error: 'claude: ' + lastErr.slice(0, 300) };
+}
+
+async function askAI(env, system, user) {
+  const c = await claude(env, system, user);
+  if (c.ok) return c;
+  const g = await gemini(env, system, user);
+  if (g.ok) return g;
+  return { ok: false, error: (c.skip ? '' : c.error + ' | ') + g.error };
+}
+
+// Gemini (احتياطي)، وعند نفاد الحصة أو أي عطل ننتقل إلى Workers AI داخل Cloudflare (بلا فوترة خارجية)
 async function gemini(env, system, user) {
   const model = env.GEMINI_MODEL || 'gemini-3.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -234,7 +267,7 @@ async function handleLive(env, origin, ev) {
   graph(env, `${ev.phone_number_id}/messages`, { messaging_product: 'whatsapp', status: 'read', message_id: ev.msg_id, typing_indicator: { type: 'text' } }).catch(() => {});
 
   const p = buildPrompt(ev, s, history);
-  const ai = await gemini(env, p.system, p.user);
+  const ai = await askAI(env, p.system, p.user);
   let reply = ai.ok ? ai.text : '';
   let handoff = false;
   if (/\[\s*تحويل\s*\]/.test(reply)) { handoff = true; reply = reply.replace(/\[\s*تحويل\s*\]/g, '').trim(); }
@@ -252,7 +285,7 @@ async function handleLive(env, origin, ev) {
   await saveSession(env, s);
   await logEvent(env, {
     dept: ev.dept, wa_id: ev.wa_id, kind: 'reply', reply, status: sent.ok ? 'sent' : 'send_failed',
-    detail: JSON.stringify({ ai_error: ai.ok ? null : ai.error, handoff, wamid: sent.data?.messages?.[0]?.id || null, send_error: sent.data?.error?.message || null }).slice(0, 1500),
+    detail: JSON.stringify({ engine: ai.engine || null, ai_error: ai.ok ? null : ai.error, handoff, wamid: sent.data?.messages?.[0]?.id || null, send_error: sent.data?.error?.message || null }).slice(0, 1500),
   });
   if (handoff) {
     await alertStaff(env, `🙋 تحويل محادثة واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'} لموظف\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\nآخر رسالة: ${hx(ev.text.slice(0, 300))}${ai.ok ? '' : '\n⚠️ عطل مؤقت في الذكاء الاصطناعي'}`);
