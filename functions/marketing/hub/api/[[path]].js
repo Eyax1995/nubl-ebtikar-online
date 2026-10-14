@@ -12,6 +12,7 @@ import { ENTITIES, HIDDEN, ROLES } from './_lib/schema.js';
 import { SECTORS } from './_lib/seed.js';
 import { xqBridge, xqRoute } from './_lib/xq.js';
 import { waInboxRoute } from './_lib/wainbox.js';
+import { bearerOf, tokenUser, tokenBlocked, tokensRoute, mcpHandle } from './_lib/agent.js';
 
 export async function onRequest(ctx) {
   const { request, env, params } = ctx;
@@ -32,6 +33,30 @@ export async function onRequest(ctx) {
     if (parts[0] === 'auth' && parts[1] === 'login' && method === 'POST') return await login(db, request);
     if (parts[0] === 'telegram' && parts[1] === 'webhook' && method === 'POST') return await tgWebhook(ctx, db, env, request);
     if (parts[0] === 'telegram' && parts[1] === 'digest') return await tgDigest(db, env, request);
+
+    // ---------- وكلاء الذكاء الاصطناعي: مفتاح API (Bearer) أو رابط MCP يحمل المفتاح ----------
+    const urlKey = parts[0] === 'mcp' && parts[1] ? parts[1] : null;
+    const rawKey = bearerOf(request) || urlKey;
+    if (rawKey || parts[0] === 'mcp') {
+      const tu = await tokenUser(db, rawKey);
+      if (!tu) return json({ error: 'مفتاح API غير صالح أو منتهٍ' }, 401, { 'www-authenticate': 'Bearer realm="nubl-hub"' });
+      const call = async (m, path, data) => {
+        const init = { method: m, headers: { 'content-type': 'application/json' } };
+        if (m !== 'GET' && data !== undefined) init.body = JSON.stringify(data);
+        const sub = path.split('?')[0].split('/').filter(Boolean);
+        const blocked = tokenBlocked(tu, sub, m);
+        if (blocked) return { status: 403, data: { error: blocked } };
+        try {
+          const res = await dispatch(db, env, new Request(new URL('/marketing/hub/api/' + path, request.url), init), tu, sub);
+          let d = {}; try { d = await res.json(); } catch { /* */ }
+          return { status: res.status, data: d };
+        } catch (e) { return { status: e.status || 500, data: { error: e.message } }; }
+      };
+      if (parts[0] === 'mcp') return await mcpHandle(db, env, request, tu, call);
+      const blocked = tokenBlocked(tu, parts, method);
+      if (blocked) return bad(blocked, 403);
+      return await dispatch(db, env, request, tu, parts);
+    }
 
     // ---------- كل ما بعده يتطلب تسجيل دخول ----------
     const user = await currentUser(db, request);
@@ -70,6 +95,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'settings': return settingsRoute(db, request, user);
       case 'users': return usersRoute(db, request, user, parts[1], parts[2]);
       case 'notifications': return notificationsRoute(db, env, request, user, parts[1]);
+      case 'tokens': return tokensRoute(db, request, user, parts[1]);
       case 'leads': return leadAction(db, request, user, parts[1], parts[2]);
       case 'quotes': return quoteAction(db, request, user, parts[1], parts[2]);
       case 'contracts': return contractAction(db, request, user, parts[1], parts[2], env);

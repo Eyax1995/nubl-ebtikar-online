@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -70,6 +70,10 @@ export const DDL = [
   `CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, kind TEXT, title TEXT, body TEXT,
     link TEXT, channels TEXT, read_at TEXT, created_at TEXT DEFAULT (datetime('now')))`,
   `CREATE INDEX IF NOT EXISTS ix_notif_user ON notifications(user_id, read_at, id)`,
+  `CREATE TABLE IF NOT EXISTS api_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, name TEXT, prefix TEXT,
+    token_hash TEXT NOT NULL UNIQUE, scope TEXT DEFAULT 'read', expires_at TEXT, last_used_at TEXT, uses INTEGER DEFAULT 0, revoked_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')))`,
+  `CREATE INDEX IF NOT EXISTS ix_tokens_user ON api_tokens(user_id)`,
   `CREATE INDEX IF NOT EXISTS ix_leads_owner ON leads(owner_id)`,
   `CREATE INDEX IF NOT EXISTS ix_leads_phone ON leads(phone)`,
   `CREATE INDEX IF NOT EXISTS ix_deals_stage ON deals(stage)`,
