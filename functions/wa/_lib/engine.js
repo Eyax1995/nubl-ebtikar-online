@@ -24,7 +24,7 @@ const HANDOFF_HOURS = 12;      // صمت بعد رد موظف من التطبي�
 const ERROR_PAUSE_MIN = 10;    // صمت قصير عند عطل مؤقت في الذكاء الاصطناعي
 const MAX_TURNS = 20;          // ذاكرة المحادثة
 const STALE_SEC = 3600;        // تجاهل الرسائل الأقدم من ساعة (إعادة إرسال Meta)
-const WAIT_ALERT_MIN = 60;     // أقل فاصل بين تنبيهين «عميل ينتظر» لنفس المحادثة
+const WAIT_ALERT_MIN = 15;     // أقل فاصل بين تنبيهين «عميل ينتظر» لنفس المحادثة
 const H = 3600 * 1000;
 
 const MEDIA = { image: 'صورة', document: 'ملف', audio: 'رسالة صوتية', video: 'فيديو', sticker: 'ملصق', location: 'موقع', contacts: 'جهة اتصال' };
@@ -111,8 +111,8 @@ async function saveSession(env, s) {
 }
 
 // تنبيه الإدارة (واتساب ثم تلجرام عبر منصة hub) — لا يُفشل الرد أبداً
-async function alertStaff(env, text) {
-  try { if (env.DB) await notifyRoles(env.DB, env, 'admin', text, { kind: 'lead', link: '#leads' }); } catch (e) { console.warn('alert', e.message); }
+async function alertStaff(env, text, link = '#wa') {
+  try { if (env.DB) await notifyRoles(env.DB, env, 'admin', text, { kind: 'lead', link }); } catch (e) { console.warn('alert', e.message); }
 }
 
 // تسجيل عميل التسويق كعميل محتمل في hub (مكرر الرقم يُدمج، ومرة كل 12 ساعة)
@@ -257,7 +257,7 @@ async function handleLive(env, origin, ev) {
     const lastAlert = s.waiting_alert_at ? Date.parse(s.waiting_alert_at) : 0;
     if (now - lastAlert > WAIT_ALERT_MIN * 60 * 1000) {
       s.waiting_alert_at = new Date(now).toISOString();
-      await alertStaff(env, `⏳ عميل ينتظر رداً على واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'}\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\n${hx(ev.text.slice(0, 300))}`);
+      await alertStaff(env, `⏳ عميل ينتظر رداً على واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'}\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\n${hx(ev.text.slice(0, 300))}\n↩️ ردّ من صندوق واتساب في المنصة`, `#/wa/${ev.wa_id}`);
     }
     await saveSession(env, s);
     return;
@@ -288,7 +288,10 @@ async function handleLive(env, origin, ev) {
     detail: JSON.stringify({ engine: ai.engine || null, ai_error: ai.ok ? null : ai.error, handoff, wamid: sent.data?.messages?.[0]?.id || null, send_error: sent.data?.error?.message || null }).slice(0, 1500),
   });
   if (handoff) {
-    await alertStaff(env, `🙋 تحويل محادثة واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'} لموظف\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\nآخر رسالة: ${hx(ev.text.slice(0, 300))}${ai.ok ? '' : '\n⚠️ عطل مؤقت في الذكاء الاصطناعي'}`);
+    await alertStaff(env, `🙋 تحويل محادثة واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'} لموظف\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\nآخر رسالة: ${hx(ev.text.slice(0, 300))}${ai.ok ? '' : '\n⚠️ عطل مؤقت في الذكاء الاصطناعي'}`, `#/wa/${ev.wa_id}`);
+  } else if (!row.session_key) {
+    // أول رسالة من رقم جديد: تنبيه فوري حتى لو تولّى الرد الآلي المحادثة
+    await alertStaff(env, `💬 محادثة جديدة على واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'}\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\n${hx(ev.text.slice(0, 300))}\n🤖 ${sent.ok ? 'ردّ الرد الآلي، ويمكنك المتابعة من صندوق واتساب في المنصة' : 'تعذّر إرسال الرد الآلي — ردّ بنفسك من المنصة'}`, `#/wa/${ev.wa_id}`);
   }
 }
 
