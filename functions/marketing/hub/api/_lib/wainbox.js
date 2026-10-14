@@ -2,7 +2,12 @@
 // يقرأ المحادثات من قاعدة المساعد (WA_DB) ويرسل ردود الموظفين من رقم التسويق عبر Cloud API.
 // المسارات: GET wa/threads · GET wa/thread/<wa_id> · POST wa/send/<wa_id> {text} · POST wa/bot/<wa_id> {on}
 // GET wa/templates · POST wa/start {to,name,template,lang,params} · GET|POST wa/profile · POST wa/photo {data,type}
+// POST wa/upload (multipart file) · GET wa/media/<media_id> · POST wa/ai/<wa_id> {mode,draft,hint}
+// wa/send يقبل: نص · وسائط (صورة/فيديو/صوت/ملف) · موقع · جهات اتصال · أزرار رد سريع · تفاعل (إيموجي) · رد على رسالة محددة
 import { json, bad } from './core.js';
+import { askAI } from '../../../../wa/_lib/engine.js';
+import { COMMON, KB } from '../../../../wa/_lib/kb.js';
+import { MARKETING_EXTRA } from '../../../../wa/_lib/marketing.js';
 
 const DEPT = 'marketing';
 const DEFAULT_PHONE_ID = '1368158866379375'; // رقم التسويق 0563413040 على الحساب الموثّق
@@ -135,23 +140,74 @@ export async function waInboxRoute(env, request, user, sub, id) {
     }
   }
 
+
+  // ---------- رفع ملف إلى Meta لإرساله (يُحفظ نسخة في R2 إن كان مربوطاً) ----------
+  if (sub === 'upload' && method === 'POST') {
+    if (!env.WA_TOKEN) return bad('توكن واتساب غير مضبوط', 503);
+    let form; try { form = await request.formData(); } catch { return bad('ملف غير صالح', 400); }
+    const file = form.get('file');
+    if (!file || typeof file === 'string') return bad('أرفق ملفاً', 400);
+    const mime = (file.type || 'application/octet-stream').toLowerCase();
+    const kind = waKind(mime);
+    const lim = { image: 5, video: 16, audio: 16, sticker: 0.5, document: 100 }[kind] * 1024 * 1024;
+    if (file.size > lim) return bad(`الحد الأقصى لهذا النوع في واتساب ${Math.round(lim / 1048576)} ميجابايت`, 413);
+    const fd = new FormData();
+    fd.append('messaging_product', 'whatsapp'); fd.append('type', mime);
+    fd.append('file', file, file.name || 'file');
+    const r = await fetch(`${GRAPH}/${env.WA_PHONE_ID || DEFAULT_PHONE_ID}/media`, { method: 'POST', headers: { authorization: 'Bearer ' + env.WA_TOKEN }, body: fd });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.id) return bad('تعذّر رفع الملف إلى واتساب: ' + ((d.error && (d.error.error_user_msg || d.error.message)) || r.status), 502);
+    if (env.FILES) { try { await env.FILES.put('wa/' + d.id, file.stream ? file.stream() : await file.arrayBuffer(), { httpMetadata: { contentType: mime }, customMetadata: { name: file.name || '' } }); } catch { /* */ } }
+    return json({ id: d.id, kind, mime, name: file.name || '', size: file.size });
+  }
+
+  // ---------- عرض وسائط المحادثة (من R2 إن وُجدت، وإلا من Meta ثم تُحفظ) ----------
+  if (sub === 'media' && method === 'GET') {
+    const mid = String(id || '').replace(/[^\w.-]/g, '').slice(0, 64);
+    if (!mid) return bad('معرّف غير صالح', 400);
+    const dl = new URL(request.url).searchParams.get('dl');
+    const hdrs = (type, name) => {
+      const h = { 'content-type': type || 'application/octet-stream', 'cache-control': 'private, max-age=86400' };
+      if (dl) h['content-disposition'] = `attachment; filename*=UTF-8''${encodeURIComponent(name || mid)}`;
+      return h;
+    };
+    if (env.FILES) {
+      const o = await env.FILES.get('wa/' + mid);
+      if (o) return new Response(o.body, { headers: hdrs(o.httpMetadata && o.httpMetadata.contentType, o.customMetadata && o.customMetadata.name) });
+    }
+    if (!env.WA_TOKEN) return bad('توكن واتساب غير مضبوط', 503);
+    const meta = await graph(env, mid);
+    if (!meta.ok || !meta.data.url) return bad('الوسائط غير متاحة (تنتهي صلاحيتها لدى واتساب بعد 30 يوماً)', 404);
+    const f = await fetch(meta.data.url, { headers: { authorization: 'Bearer ' + env.WA_TOKEN } });
+    if (!f.ok) return bad('تعذّر تنزيل الوسائط', 502);
+    const buf = await f.arrayBuffer();
+    if (env.FILES) { try { await env.FILES.put('wa/' + mid, buf, { httpMetadata: { contentType: meta.data.mime_type || '' } }); } catch { /* */ } }
+    return new Response(buf, { headers: hdrs(meta.data.mime_type) });
+  }
+
   const waId = cleanId(id);
   if (!waId) return bad('رقم غير صالح', 400);
   const key = DEPT + ':' + waId;
 
   if (sub === 'thread' && method === 'GET') {
     const ev = (await db.prepare(
-      `SELECT id, at, kind, text, reply, status, detail FROM wa_events WHERE dept = ? AND wa_id = ? ORDER BY id DESC LIMIT 300`)
+      `SELECT id, at, kind, msg_id, text, reply, status, detail FROM wa_events WHERE dept = ? AND wa_id = ? ORDER BY id DESC LIMIT 300`)
       .bind(DEPT, waId).all()).results || [];
-    const msgs = ev.reverse().filter((e) => ['message', 'reply', 'staff', 'echo'].includes(e.kind)).map((e) => {
-      let by = '';
-      if (e.kind === 'staff') { try { by = (JSON.parse(e.detail || '{}').by) || ''; } catch { /* */ } }
+    const all = ev.reverse();
+    const reacts = {};
+    for (const e of all) if (e.kind === 'reaction_out') { try { const x = JSON.parse(e.detail || '{}'); if (x.target) reacts[x.target] = x.emoji || ''; } catch { /* */ } }
+    const msgs = all.filter((e) => ['message', 'reply', 'staff', 'echo'].includes(e.kind)).map((e) => {
+      let dt = {}; try { dt = JSON.parse(e.detail || '{}') || {}; } catch { /* */ }
+      if (e.kind === 'reply' && dt.wamid && !e.msg_id) e.msg_id = dt.wamid;
       return {
         id: e.id, at: e.at, from: e.kind === 'message' ? 'customer' : e.kind === 'reply' ? 'bot' : 'staff',
         text: e.kind === 'reply' || e.kind === 'staff' ? (e.reply || e.text || '') : (e.text || ''),
-        status: e.status, by,
+        status: e.status, by: e.kind === 'staff' ? (dt.by || '') : e.kind === 'echo' ? 'من تطبيق الجوال' : '',
+        msg_id: e.msg_id || null, media: dt.m || null, react: (e.msg_id && reacts[e.msg_id]) || '',
       };
     });
+    const byWamid = {}; msgs.forEach((m) => { if (m.msg_id) byWamid[m.msg_id] = m; });
+    msgs.forEach((m) => { const c = m.media && m.media.ctx && byWamid[m.media.ctx]; if (c) m.quote = { from: c.from, text: String(c.text || '').slice(0, 140) }; });
     const s = await db.prepare('SELECT customer_name, handoff_until FROM wa_sessions WHERE session_key = ?').bind(key).first();
     const lastIn = [...msgs].reverse().find((m) => m.from === 'customer');
     return json({
@@ -163,28 +219,67 @@ export async function waInboxRoute(env, request, user, sub, id) {
 
   if (sub === 'send' && method === 'POST') {
     let b = {}; try { b = await request.json(); } catch { /* */ }
-    const text = String(b.text || '').trim().slice(0, 4000);
-    if (!text) return bad('اكتب نص الرد', 400);
     if (!env.WA_TOKEN) return bad('توكن واتساب غير مضبوط', 503);
     const lastIn = await db.prepare(`SELECT at FROM wa_events WHERE dept=? AND wa_id=? AND kind='message' ORDER BY id DESC LIMIT 1`).bind(DEPT, waId).first();
     if (!lastIn || Date.now() - Date.parse(String(lastIn.at).replace(' ', 'T') + 'Z') >= 24 * 3600e3) {
       return bad('مرّ أكثر من 24 ساعة على آخر رسالة من العميل — واتساب لا يسمح بالرد الحر؛ يلزم قالب معتمد.', 409);
     }
-    const phoneId = env.WA_PHONE_ID || DEFAULT_PHONE_ID;
-    const r = await fetch(`${GRAPH}/${phoneId}/messages`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.WA_TOKEN },
-      body: JSON.stringify({ messaging_product: 'whatsapp', to: waId, type: 'text', text: { body: text, preview_url: true } }),
-    });
-    const d = await r.json().catch(() => ({}));
-    const ok = r.ok && d.messages && d.messages[0];
+    const built = buildMessage(b);
+    if (built.error) return bad(built.error, 400);
+    const msg = { messaging_product: 'whatsapp', recipient_type: 'individual', to: waId, ...built.msg };
+    const ctx = String(b.reply_to || '').slice(0, 200);
+    if (ctx && built.msg.type !== 'reaction') msg.context = { message_id: ctx };
+    const r = await graph(env, `${env.WA_PHONE_ID || DEFAULT_PHONE_ID}/messages`, { method: 'POST', body: JSON.stringify(msg) });
+    const ok = r.ok && r.data.messages && r.data.messages[0];
+    const wamid = ok ? r.data.messages[0].id : null;
+    if (built.msg.type === 'reaction') {
+      await db.prepare(`INSERT INTO wa_events (dept, wa_id, kind, msg_id, status, detail) VALUES (?,?,?,?,?,?)`)
+        .bind(DEPT, waId, 'reaction_out', wamid, ok ? 'sent' : 'send_failed', JSON.stringify({ by: user.name, target: built.msg.reaction.message_id, emoji: built.msg.reaction.emoji })).run();
+      if (!ok) return bad('تعذّر الإرسال: ' + gErr(r), 502);
+      return json({ ok: true });
+    }
+    const m = built.media ? { ...built.media } : null;
+    if (ctx) (m ? m : (built.media = {})).ctx = ctx;
+    const det = { by: user.name, error: ok ? null : gErr(r) }; if (m || built.media) det.m = m || built.media;
     await db.prepare(`INSERT INTO wa_events (dept, wa_id, kind, msg_id, text, reply, status, detail) VALUES (?,?,?,?,?,?,?,?)`)
-      .bind(DEPT, waId, 'staff', ok ? d.messages[0].id : null, null, text, ok ? 'sent' : 'send_failed',
-        JSON.stringify({ by: user.name, error: ok ? null : (d.error && d.error.message) || `HTTP ${r.status}` }).slice(0, 1500)).run();
-    if (!ok) return bad('تعذّر الإرسال: ' + ((d.error && d.error.message) || r.status), 502);
-    await mergeIntoSession(db, key, waId, { r: 'staff', t: text, at: new Date().toISOString() },
+      .bind(DEPT, waId, 'staff', wamid, null, built.label, ok ? 'sent' : 'send_failed', JSON.stringify(det).slice(0, 1500)).run();
+    if (!ok) return bad('تعذّر الإرسال: ' + gErr(r), 502);
+    await mergeIntoSession(db, key, waId, { r: 'staff', t: built.label, at: new Date().toISOString() },
       new Date(Date.now() + STAFF_PAUSE_H * 3600e3).toISOString(), true);
-    return json({ ok: true });
+    return json({ ok: true, wamid });
+  }
+
+  // ---------- ذكاء نُبل: مسودة رد / تحسين / ترجمة / متابعة / ملخص ----------
+  if (sub === 'ai' && method === 'POST') {
+    let b = {}; try { b = await request.json(); } catch { /* */ }
+    const mode = String(b.mode || 'reply');
+    const draft = String(b.draft || '').slice(0, 3000);
+    const hint = String(b.hint || '').slice(0, 500);
+    const ev = ((await db.prepare(`SELECT kind, text, reply, detail FROM wa_events WHERE dept=? AND wa_id=? AND kind IN ('message','reply','staff','echo') ORDER BY id DESC LIMIT 30`)
+      .bind(DEPT, waId).all()).results || []).reverse();
+    const s = await db.prepare('SELECT customer_name FROM wa_sessions WHERE session_key = ?').bind(key).first();
+    const LBL = { message: 'العميل', reply: 'الرد الآلي', staff: 'الموظف', echo: 'الموظف' };
+    const transcript = ev.map((e) => `${LBL[e.kind]}: ${e.kind === 'message' || e.kind === 'echo' ? (e.text || '') : (e.reply || e.text || '')}`).join('\n') || '(لا رسائل بعد)';
+    const TASK = {
+      reply: 'اكتب أفضل رد مقترح على آخر رسالة من العميل.',
+      improve: 'حسّن مسودة الموظف التالية لغةً وإقناعاً دون تغيير معناها أو إضافة وعود أو أسعار غير مذكورة.',
+      shorter: 'اختصر مسودة الموظف التالية إلى سطرين أو ثلاثة مع الحفاظ على المعنى.',
+      formal: 'أعد صياغة مسودة الموظف بفصحى مهنية مهذبة تناسب جهة رسمية أو شركة.',
+      friendly: 'أعد صياغة مسودة الموظف بلهجة سعودية ودودة قريبة.',
+      english: 'Translate/rewrite the staff draft (or, if empty, a reply to the last customer message) into polished, friendly professional English.',
+      followup: 'اكتب رسالة متابعة لطيفة لعميل لم يرد منذ مدة، تذكّره بآخر ما دار وتنتهي بسؤال واحد واضح يدفع للخطوة التالية.',
+      close: 'اكتب رسالة تدفع العميل بلطف لاتخاذ القرار (حجز جلسة التشخيص المجانية أو اعتماد العرض) دون ضغط مزعج.',
+      summary: 'لخّص المحادثة للموظف (ليست رسالة للعميل): من العميل، ماذا يريد، ما الذي وُعد به، والخطوة التالية المقترحة — في 4 نقاط قصيرة.',
+    }[mode];
+    if (!TASK) return bad('نوع غير معروف', 400);
+    const system = `${COMMON}\n\n${KB.marketing || ''}${MARKETING_EXTRA}\n\n# مهمتك الآن
+أنت لا ترد على العميل مباشرة؛ أنت «ذكاء نُبل» تساعد موظف فريق التسويق (${user.name}) في صياغة رسالة يراجعها ثم يرسلها بنفسه من رقم التسويق.
+- لا تخترع سعراً أو موعداً أو خدمة غير مكتوبة في المعرفة أعلاه.
+- اكتب النص النهائي فقط بلا مقدمات ولا علامات اقتباس ولا شرح${mode === 'summary' ? '' : '، بصيغة رسالة واتساب جاهزة للإرسال'}.`;
+    const userMsg = `اسم العميل: ${(s && s.customer_name) || 'غير معروف'}\n\nالمحادثة (الأقدم أولاً):\n${transcript}\n\n${draft ? `مسودة الموظف:\n${draft}\n\n` : ''}${hint ? `توجيه الموظف: ${hint}\n\n` : ''}المطلوب: ${TASK}`;
+    const r = await askAI(env, system, userMsg);
+    if (!r.ok) return bad('تعذّر التوليد الآن: ' + String(r.error || '').slice(0, 200), 502);
+    return json({ text: r.text.replace(/^["«]|["»]$/g, '').trim(), engine: r.engine });
   }
 
   if (sub === 'bot' && method === 'POST') {
@@ -195,6 +290,73 @@ export async function waInboxRoute(env, request, user, sub, id) {
   }
 
   return bad('مسار غير معروف', 404);
+}
+
+// نوع وسائط واتساب من نوع الملف
+function waKind(mime) {
+  if (/^image\/(jpeg|png)$/.test(mime)) return 'image';
+  if (mime === 'image/webp') return 'sticker';
+  if (/^video\/(mp4|3gpp)$/.test(mime)) return 'video';
+  if (/^audio\/(aac|mp4|mpeg|amr|ogg|opus)/.test(mime)) return 'audio';
+  return 'document';
+}
+
+// بناء رسالة واتساب من طلب الواجهة — يعيد {msg, label, media} أو {error}
+function buildMessage(b) {
+  const t = String(b.type || 'text');
+  const cap = String(b.caption || b.text || '').trim().slice(0, 1024);
+  if (t === 'text') {
+    const text = String(b.text || '').trim().slice(0, 4096);
+    if (!text) return { error: 'اكتب نص الرد' };
+    return { msg: { type: 'text', text: { body: text, preview_url: true } }, label: text };
+  }
+  if (['image', 'video', 'audio', 'document', 'sticker'].includes(t)) {
+    const mid = String(b.media_id || '').replace(/\D/g, '');
+    if (!mid) return { error: 'ارفع الملف أولاً' };
+    const body = { id: mid };
+    if (cap && ['image', 'video', 'document'].includes(t)) body.caption = cap;
+    if (t === 'document') body.filename = String(b.filename || 'ملف').slice(0, 240);
+    const AR = { image: 'صورة', video: 'فيديو', audio: 'رسالة صوتية', document: 'ملف', sticker: 'ملصق' };
+    return { msg: { type: t, [t]: body }, label: `[${AR[t]}${t === 'document' ? ': ' + body.filename : ''}]${cap ? ' ' + cap : ''}`,
+      media: { t, id: mid, mime: String(b.mime || ''), fn: body.filename || String(b.filename || ''), cap } };
+  }
+  if (t === 'location') {
+    const lat = Number(b.lat), lng = Number(b.lng);
+    if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return { error: 'إحداثيات الموقع غير صالحة' };
+    const loc = { latitude: lat, longitude: lng };
+    if (b.name) loc.name = String(b.name).slice(0, 100);
+    if (b.address) loc.address = String(b.address).slice(0, 250);
+    return { msg: { type: 'location', location: loc }, label: `[موقع${loc.name ? ': ' + loc.name : ''}]`,
+      media: { t: 'location', loc: { lat, lng, name: loc.name || '', addr: loc.address || '' } } };
+  }
+  if (t === 'contacts') {
+    const list = (Array.isArray(b.contacts) ? b.contacts : []).slice(0, 5).map((c) => {
+      const p = normPhone(c.phone); const n = String(c.name || '').trim().slice(0, 80);
+      if (!p || !n) return null;
+      const parts = n.split(/\s+/);
+      const o = { name: { formatted_name: n, first_name: parts[0], ...(parts.length > 1 ? { last_name: parts.slice(1).join(' ') } : {}) }, phones: [{ phone: '+' + p, type: 'WORK', wa_id: p }] };
+      if (c.org) o.org = { company: String(c.org).slice(0, 80), ...(c.title ? { title: String(c.title).slice(0, 80) } : {}) };
+      if (c.email) o.emails = [{ email: String(c.email).slice(0, 120), type: 'WORK' }];
+      return o;
+    }).filter(Boolean);
+    if (!list.length) return { error: 'اختر جهة اتصال واحدة على الأقل برقم صالح' };
+    return { msg: { type: 'contacts', contacts: list }, label: `[جهة اتصال: ${list.map((c) => c.name.formatted_name).join('، ')}]`,
+      media: { t: 'contacts', ct: list.map((c) => ({ n: c.name.formatted_name, p: c.phones[0].phone, w: c.phones[0].wa_id })) } };
+  }
+  if (t === 'buttons') {
+    const body = String(b.text || '').trim().slice(0, 1024);
+    const btns = (Array.isArray(b.buttons) ? b.buttons : []).map((x) => String(x || '').trim().slice(0, 20)).filter(Boolean).slice(0, 3);
+    if (!body || !btns.length) return { error: 'اكتب نص الرسالة وزراً واحداً على الأقل (حتى 3 أزرار، 20 حرفاً لكل زر)' };
+    const msg = { type: 'interactive', interactive: { type: 'button', body: { text: body }, action: { buttons: btns.map((title, i) => ({ type: 'reply', reply: { id: 'b' + (i + 1), title } })) } } };
+    if (b.footer) msg.interactive.footer = { text: String(b.footer).slice(0, 60) };
+    return { msg, label: `${body}\n[أزرار: ${btns.join(' | ')}]`, media: { t: 'buttons', btns } };
+  }
+  if (t === 'reaction') {
+    const target = String(b.message_id || '').slice(0, 200);
+    if (!target) return { error: 'رسالة غير محددة' };
+    return { msg: { type: 'reaction', reaction: { message_id: target, emoji: String(b.emoji || '').slice(0, 8) } }, label: '' };
+  }
+  return { error: 'نوع رسالة غير معروف' };
 }
 
 // تحديث جلسة المساعد: إضافة رد الموظف لسياق المحادثة وضبط إيقاف الرد الآلي

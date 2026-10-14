@@ -48,41 +48,320 @@ async function waLoadThreads(active, quiet) {
   }).join('') : '<div class="empty">لا توجد محادثات بعد</div>';
 }
 
+// ---------- المحادثة: عرض الوسائط + أدوات الإرسال الكاملة + ذكاء نُبل ----------
+const WA_MEDIA = (mid, dl) => `${API}wa/media/${encodeURIComponent(mid)}${dl ? '?dl=1' : ''}`;
+const WA_EMOJI = ['👍', '❤️', '😂', '😮', '🙏', '✅'];
+const WA_QUICK = [
+  'حياك الله 🌷 معك فريق نُبل وابتكار للتسويق، كيف نقدر نخدمك؟',
+  'تمام، وصلتنا رسالتك ونرجع لك خلال الدوام بإذن الله 👌',
+  'ممكن تعطينا اسم النشاط ورابط حساباتك عشان نجهّز لك تشخيصاً مناسباً؟',
+  'يسعدنا نحجز لك جلسة تشخيص مجانية (45 دقيقة) — أي وقت يناسبك هذا الأسبوع؟',
+  'أرسلنا لك العرض، وإذا عندك أي استفسار أنا موجود ✨',
+  'شكراً لتواصلك معنا 🤍',
+];
+const WA_AI_MODES = [
+  ['reply', 'اقترح رداً', 'chat'], ['improve', 'حسّن مسودتي', 'spark'], ['shorter', 'اختصرها', 'edit'],
+  ['friendly', 'لهجة ودودة', 'users'], ['formal', 'صياغة رسمية', 'doc'], ['english', 'بالإنجليزية', 'link'],
+  ['followup', 'رسالة متابعة', 'clock'], ['close', 'دفع للقرار', 'star'], ['summary', 'لخّص المحادثة', 'book'],
+];
+const WA_ST = {}; // حالة كل محادثة: مسودة، مرفقات، رد على رسالة
+
+function waBubble(m) {
+  const md = m.media || {};
+  let inner = '';
+  if (m.quote) inner += `<div class="wa-q"><b>${m.quote.from === 'customer' ? 'العميل' : 'نحن'}</b>${esc(m.quote.text)}</div>`;
+  if (md.t === 'image' || md.t === 'sticker') {
+    inner += md.id ? `<a class="wa-img" href="${WA_MEDIA(md.id)}" target="_blank" rel="noopener"><img loading="lazy" src="${WA_MEDIA(md.id)}" alt="صورة"></a>` : '';
+    if (md.cap) inner += `<div>${esc(md.cap)}</div>`;
+  } else if (md.t === 'video') {
+    inner += md.id ? `<video controls preload="none" src="${WA_MEDIA(md.id)}"></video>` : '';
+    if (md.cap) inner += `<div>${esc(md.cap)}</div>`;
+  } else if (md.t === 'audio') {
+    inner += md.id ? `<audio controls preload="none" src="${WA_MEDIA(md.id)}"></audio>` : '';
+  } else if (md.t === 'document') {
+    inner += `<a class="wa-doc" href="${md.id ? WA_MEDIA(md.id, 1) : '#'}" target="_blank" rel="noopener"><span class="ico">${I.doc}</span><span><b>${esc(md.fn || 'ملف')}</b><small>${esc((md.mime || '').split('/').pop().toUpperCase())} · تنزيل</small></span></a>`;
+    if (md.cap) inner += `<div>${esc(md.cap)}</div>`;
+  } else if (md.t === 'location' && md.loc) {
+    const u = `https://www.google.com/maps?q=${md.loc.lat},${md.loc.lng}`;
+    inner += `<a class="wa-loc" href="${u}" target="_blank" rel="noopener"><span class="ico">${I.pin}</span><span><b>${esc(md.loc.name || 'موقع')}</b><small>${esc(md.loc.addr || `${Number(md.loc.lat).toFixed(5)}, ${Number(md.loc.lng).toFixed(5)}`)}</small><small class="lnk">فتح في الخرائط ↗</small></span></a>`;
+  } else if (md.t === 'contacts' && md.ct) {
+    inner += md.ct.map((c) => `<div class="wa-ct"><span class="ico">${I.team}</span><span><b>${esc(c.n)}</b><small class="num" dir="ltr">${esc(c.p)}</small></span>
+      ${m.from === 'customer' && (c.w || c.p) ? `<span class="wa-ct-a"><a class="btn btn-g btn-s" href="#/wa/${esc(String(c.w || c.p).replace(/\D/g, ''))}">محادثة</a><button type="button" class="btn btn-g btn-s" data-lead="${esc(c.n)}|${esc(c.p)}">عميل محتمل</button></span>` : ''}</div>`).join('');
+  } else {
+    inner += `<div>${esc(m.text).replace(/\n/g, '<br>')}</div>`;
+    if (md.t === 'buttons' && md.btns) inner = `<div>${esc(String(m.text).split('\n[أزرار')[0]).replace(/\n/g, '<br>')}</div><div class="wa-pbtns">${md.btns.map((x) => `<span>${esc(x)}</span>`).join('')}</div>`;
+  }
+  const acts = m.msg_id ? `<div class="wa-ma"><button type="button" data-rep="${esc(m.msg_id)}" title="رد على هذه الرسالة">↩︎</button>${m.from === 'customer' ? `<button type="button" data-rx="${esc(m.msg_id)}" title="تفاعل">☺︎</button>` : ''}<button type="button" data-cp title="نسخ">⧉</button></div>` : '';
+  return `<div class="wa-m ${m.from}" data-mid="${esc(m.msg_id || '')}"><div class="wa-b">${inner}${m.react ? `<span class="wa-rx">${esc(m.react)}</span>` : ''}${acts}</div>
+    <div class="wa-meta small muted">${m.from === 'bot' ? '🤖 الرد الآلي · ' : m.from === 'staff' ? `👤 ${esc(m.by || 'موظف')} · ` : ''}${waTime(m.at)}${m.status === 'send_failed' ? ' · <b style="color:var(--red)">لم يُرسل</b>' : ''}</div></div>`;
+}
+
 async function waLoadThread(id, quiet) {
+  const st = WA_ST[id] ||= { files: [], reply: null };
+  const ta0 = $('#wa-text'); if (ta0) st.draft = ta0.value;
+  if (quiet && (st.files.length || st.busy || $('.wa-aip:not([hidden])'))) return; // لا تقاطع الموظف أثناء التحضير
   const d = await api('wa/thread/' + encodeURIComponent(id));
   const el = $('#wa-thread'); if (!el) return;
+  const box0 = $('#wa-msgs'); const atBottom = !box0 || box0.scrollHeight - box0.scrollTop - box0.clientHeight < 80;
   const on = waBotOn(d.bot_paused_until);
-  const draft = $('#wa-text') ? $('#wa-text').value : '';
-  el.innerHTML = `<div class="wa-th"><a class="btn btn-g btn-s wa-back" href="#/wa">→ المحادثات</a>
-      <div><b>${esc(d.name || waPhone(d.wa_id))}</b><div class="small muted num" dir="ltr">${esc(waPhone(d.wa_id))}</div></div><span class="sp"></span>
-      <button class="btn btn-s ${on ? 'btn-g' : 'btn-p'}" id="wa-bot">${on ? 'إيقاف الرد الآلي' : 'تشغيل الرد الآلي'}</button>
-      <a class="btn btn-wa btn-s" href="tel:${esc(waPhone(d.wa_id))}">اتصال</a></div>
-    <div class="small ${on ? 'muted' : ''}" style="padding:6px 14px;${on ? '' : 'color:var(--terra)'}">${on ? 'الرد الآلي يعمل لهذه المحادثة.' : `الرد الآلي متوقف لهذه المحادثة حتى ${waTime(d.bot_paused_until)} — أنت من يرد.`}</div>
-    <div class="wa-msgs" id="wa-msgs">${d.messages.map((m) => `<div class="wa-m ${m.from}"><div class="wa-b">${esc(m.text).replace(/\n/g, '<br>')}</div>
-      <div class="wa-meta small muted">${m.from === 'bot' ? '🤖 الرد الآلي · ' : m.from === 'staff' ? `👤 ${esc(m.by || 'موظف')} · ` : ''}${waTime(m.at)}${m.status === 'send_failed' ? ' · <b style="color:var(--red)">لم يُرسل</b>' : ''}</div></div>`).join('') || '<div class="empty">لا رسائل</div>'}</div>
-    ${d.window_open ? `<form class="wa-compose" id="wa-form"><textarea class="inp" id="wa-text" rows="2" placeholder="اكتب ردك للعميل… (Enter للإرسال، Shift+Enter لسطر جديد)">${esc(draft)}</textarea>
-      <button class="btn btn-wa">${I.wa} إرسال</button></form>
-      <div class="small muted" style="padding:0 14px 10px">إرسال ردك يوقف الرد الآلي لهذه المحادثة 12 ساعة تلقائياً.</div>`
-    : '<div class="wa-closed small"><span>مرّ أكثر من 24 ساعة على آخر رسالة من العميل، وواتساب لا يسمح بالرد الحر الآن. ابدأ برسالة قالب معتمد، ومتى ردّ العميل يُفتح الرد الحر 24 ساعة.</span><button class="btn btn-wa btn-s" id="wa-tpl">إرسال قالب</button></div>'}`;
+  st.msgs = d.messages; st.name = d.name;
+  el.innerHTML = `<div class="wa-th"><a class="btn btn-g btn-s wa-back" href="#/wa" title="المحادثات">→</a>
+      <div class="wa-av">${esc((d.name || '؟').trim().charAt(0))}</div>
+      <div class="wa-who"><b>${esc(d.name || waPhone(d.wa_id))}</b><div class="small muted num" dir="ltr">${esc(waPhone(d.wa_id))}</div></div><span class="sp"></span>
+      <button class="btn btn-s btn-g" id="wa-sum" title="ملخص المحادثة بذكاء نُبل">${I.ai}<span class="wa-hide-m"> ملخص</span></button>
+      <button class="btn btn-s ${on ? 'btn-g' : 'btn-p'}" id="wa-bot" title="${on ? 'إيقاف الرد الآلي' : 'تشغيل الرد الآلي'}">🤖<span class="wa-hide-m"> ${on ? 'إيقاف الرد الآلي' : 'تشغيل الرد الآلي'}</span></button>
+      <a class="btn btn-wa btn-s" href="tel:${esc(waPhone(d.wa_id))}" title="اتصال">${I.phone}</a></div>
+    <div class="wa-bar small ${on ? 'muted' : 'off'}">${on ? 'الرد الآلي يعمل لهذه المحادثة.' : `الرد الآلي متوقف حتى ${waTime(d.bot_paused_until)} — أنت من يرد.`}${d.window_open ? ` · <span class="wa-win">${I.clock} نافذة الرد الحر مفتوحة</span>` : ''}</div>
+    <div class="wa-msgs" id="wa-msgs">${d.messages.map(waBubble).join('') || '<div class="empty">لا رسائل</div>'}</div>
+    ${d.window_open ? `<div class="wa-aip" id="wa-aip" hidden></div><div class="wa-rep" id="wa-rep" hidden></div><div class="wa-files" id="wa-files" hidden></div>
+      <form class="wa-compose" id="wa-form">
+        <div class="wa-tools">
+          <div class="wa-menu"><button type="button" class="wa-tb" id="wa-att" title="إرفاق">${I.clip}</button>
+            <div class="wa-pop" id="wa-attpop" hidden>
+              <button type="button" data-a="media">${I.upload}<span>صور وفيديو</span></button>
+              <button type="button" data-a="doc">${I.doc}<span>ملفات ومستندات</span></button>
+              <button type="button" data-a="audio">${I.chat}<span>ملف صوتي</span></button>
+              <button type="button" data-a="loc">${I.pin}<span>موقع</span></button>
+              <button type="button" data-a="ct">${I.team}<span>جهة اتصال</span></button>
+              <button type="button" data-a="btns">${I.layers}<span>رسالة بأزرار</span></button>
+              <button type="button" data-a="quick">${I.spark}<span>ردود جاهزة</span></button>
+            </div></div>
+          <div class="wa-menu"><button type="button" class="wa-tb aib" id="wa-ai" title="ذكاء نُبل">${I.ai}</button>
+            <div class="wa-pop" id="wa-aipop" hidden><div class="wa-pop-h">${I.ai} ذكاء نُبل</div>${WA_AI_MODES.filter((x) => x[0] !== 'summary').map(([k, l, ic]) => `<button type="button" data-ai="${k}">${I[ic]}<span>${l}</span></button>`).join('')}
+              <input class="inp" id="wa-aihint" placeholder="توجيه إضافي (اختياري): مثلاً اذكر الباقة السنوية"></div></div>
+        </div>
+        <textarea class="inp" id="wa-text" rows="1" placeholder="${MOBILE_WA() ? 'اكتب ردك…' : 'اكتب ردك… (Enter للإرسال · Shift+Enter سطر جديد)'}">${esc(st.draft || '')}</textarea>
+        <button class="btn btn-wa wa-send" title="إرسال">${I.wa}<span class="wa-hide-m"> إرسال</span></button>
+        <input type="file" id="wa-fmedia" accept="image/jpeg,image/png,video/mp4,video/3gpp" multiple hidden>
+        <input type="file" id="wa-fdoc" multiple hidden>
+        <input type="file" id="wa-faudio" accept="audio/*" multiple hidden>
+      </form>
+      <div class="small muted wa-hint">ردك يوقف الرد الآلي لهذه المحادثة 12 ساعة · اسحب الملفات وأفلتها هنا لإرفاقها</div>`
+    : `<div class="wa-closed small"><span>مرّ أكثر من 24 ساعة على آخر رسالة من العميل، وواتساب لا يسمح بالرد الحر الآن. ابدأ برسالة قالب معتمد، ومتى ردّ العميل تُفتح النافذة 24 ساعة.</span>
+      <span class="wa-acts"><button class="btn btn-g btn-s" id="wa-sum2">${I.ai} ملخص</button><button class="btn btn-wa btn-s" id="wa-tpl">إرسال قالب</button></span></div>`}`;
+  const box = $('#wa-msgs'); if (box && (atBottom || !quiet)) box.scrollTop = box.scrollHeight;
   if ($('#wa-tpl')) $('#wa-tpl').onclick = () => waStartModal({ to: waPhone(d.wa_id), name: d.name });
-  const box = $('#wa-msgs'); if (box) box.scrollTop = box.scrollHeight;
   $('#wa-bot').onclick = async () => {
     try { await api('wa/bot/' + encodeURIComponent(id), { method: 'POST', body: { on: !on } }); toast(on ? 'أُوقف الرد الآلي لهذه المحادثة' : 'عاد الرد الآلي للعمل'); waLoadThread(id); waLoadThreads(id); }
     catch (e) { toast(e.message, 1); }
   };
-  const f = $('#wa-form');
-  if (f) {
-    const ta = $('#wa-text');
-    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); f.requestSubmit(); } });
-    f.onsubmit = async (e) => {
-      e.preventDefault(); const text = ta.value.trim(); if (!text) return;
-      const b = $('button', f); b.disabled = true;
-      try { await api('wa/send/' + encodeURIComponent(id), { method: 'POST', body: { text } }); ta.value = ''; toast('أُرسل الرد'); await waLoadThread(id); waLoadThreads(id); }
-      catch (err) { toast(err.message, 1); b.disabled = false; }
-    };
-    if (!quiet) ta.focus();
-  }
+  const sumBtn = () => waSummary(id);
+  $('#wa-sum').onclick = sumBtn; if ($('#wa-sum2')) $('#wa-sum2').onclick = sumBtn;
+
+  // أفعال الرسائل: رد، تفاعل، نسخ، حفظ جهة الاتصال
+  box && box.addEventListener('click', async (e) => {
+    const rep = e.target.closest('[data-rep]'); const rx = e.target.closest('[data-rx]'); const cp = e.target.closest('[data-cp]'); const ld = e.target.closest('[data-lead]');
+    if (rep) { const m = st.msgs.find((x) => x.msg_id === rep.dataset.rep); st.reply = m ? { id: m.msg_id, text: m.text, from: m.from } : null; drawReply(); $('#wa-text')?.focus(); }
+    if (cp) { const b = cp.closest('.wa-b'); navigator.clipboard?.writeText(b.innerText.replace(/[↩︎☺︎⧉]/g, '').trim()); toast('نُسخ النص'); }
+    if (ld) { const [n, p] = ld.dataset.lead.split('|'); openForm('leads', null, { name: n, phone: p, source: 'واتساب' }); }
+    if (rx) {
+      $$('.wa-rxp').forEach((x) => x.remove());
+      const pop = document.createElement('div'); pop.className = 'wa-rxp';
+      pop.innerHTML = WA_EMOJI.map((em) => `<button type="button">${em}</button>`).join('') + '<button type="button" data-none title="إزالة">✕</button>';
+      rx.closest('.wa-b').appendChild(pop);
+      pop.onclick = async (ev) => {
+        const b = ev.target.closest('button'); if (!b) return; pop.remove();
+        try { await api('wa/send/' + encodeURIComponent(id), { method: 'POST', body: { type: 'reaction', message_id: rx.dataset.rx, emoji: b.dataset.none !== undefined ? '' : b.textContent } }); waLoadThread(id); }
+        catch (err) { toast(err.message, 1); }
+      };
+    }
+  });
+
+  const f = $('#wa-form'); if (!f) return;
+  const ta = $('#wa-text');
+  const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 180) + 'px'; }; grow();
+  ta.addEventListener('input', () => { st.draft = ta.value; grow(); });
+  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !MOBILE_WA()) { e.preventDefault(); f.requestSubmit(); } });
+  const drawReply = () => {
+    const r = $('#wa-rep'); if (!r) return;
+    r.hidden = !st.reply;
+    r.innerHTML = st.reply ? `<div><b>رد على ${st.reply.from === 'customer' ? 'العميل' : 'رسالتنا'}</b><span>${esc(String(st.reply.text || '').slice(0, 120))}</span></div><button type="button" aria-label="إلغاء">✕</button>` : '';
+    if (st.reply) $('button', r).onclick = () => { st.reply = null; drawReply(); };
+  };
+  const drawFiles = () => {
+    const w = $('#wa-files'); if (!w) return;
+    w.hidden = !st.files.length;
+    w.innerHTML = st.files.map((x, i) => `<div class="wa-fi ${x.err ? 'err' : ''}">
+      ${x.preview ? `<img src="${x.preview}" alt="">` : `<span class="ico">${x.kind === 'video' ? I.upload : x.kind === 'audio' ? I.chat : I.doc}</span>`}
+      <div class="wa-fi-b"><b title="${esc(x.file.name)}">${esc(x.file.name)}</b><small>${x.file.size < 1048576 ? Math.max(1, Math.round(x.file.size / 1024)) + ' ك.ب' : (x.file.size / 1048576).toFixed(1) + ' م.ب'}${x.err ? ' · ' + esc(x.err) : x.done ? ' · ✓' : ''}</small>
+        ${x.kind !== 'audio' ? `<input class="inp" data-cap="${i}" placeholder="وصف (اختياري)" value="${esc(x.cap || '')}">` : ''}</div>
+      <button type="button" class="wa-fi-x" data-rm="${i}" title="حذف">${I.trash}</button></div>`).join('') + (st.files.length ? `<div class="small muted">${st.files.length} مرفق — يُرسل كل مرفق برسالة مستقلة مع وصفه</div>` : '');
+    $$('[data-cap]', w).forEach((inp) => inp.oninput = () => { st.files[+inp.dataset.cap].cap = inp.value; });
+    $$('[data-rm]', w).forEach((b) => b.onclick = () => { const x = st.files.splice(+b.dataset.rm, 1)[0]; if (x && x.preview) URL.revokeObjectURL(x.preview); drawFiles(); });
+  };
+  const addFiles = (list) => {
+    for (const file of list) {
+      const t = (file.type || '').toLowerCase();
+      const kind = /^image\/(jpeg|png)$/.test(t) ? 'image' : /^video\/(mp4|3gpp)$/.test(t) ? 'video' : /^audio\//.test(t) ? 'audio' : 'document';
+      const lim = { image: 5, video: 16, audio: 16, document: 100 }[kind];
+      const x = { file, kind, cap: '', preview: kind === 'image' ? URL.createObjectURL(file) : '' };
+      if (file.size > lim * 1048576) x.err = `أكبر من ${lim} م.ب`;
+      st.files.push(x);
+    }
+    drawFiles();
+  };
+  drawReply(); drawFiles();
+  const pick = (sel) => { const inp = $(sel); inp.value = ''; inp.onchange = () => addFiles([...inp.files]); inp.click(); };
+  const pops = { '#wa-att': '#wa-attpop', '#wa-ai': '#wa-aipop' };
+  Object.entries(pops).forEach(([b, p]) => { $(b).onclick = (e) => { e.stopPropagation(); const el2 = $(p); const was = el2.hidden; $$('.wa-pop').forEach((x) => x.hidden = true); el2.hidden = !was; }; });
+  $$('#wa-attpop [data-a]').forEach((b) => b.onclick = () => {
+    $('#wa-attpop').hidden = true;
+    const a = b.dataset.a;
+    if (a === 'media') pick('#wa-fmedia'); else if (a === 'doc') pick('#wa-fdoc'); else if (a === 'audio') pick('#wa-faudio');
+    else if (a === 'loc') waLocationModal(id); else if (a === 'ct') waContactsModal(id); else if (a === 'btns') waButtonsModal(id, ta.value);
+    else if (a === 'quick') waQuickModal((t) => { ta.value = t; st.draft = t; grow(); ta.focus(); });
+  });
+  $$('#wa-aipop [data-ai]').forEach((b) => b.onclick = () => { $('#wa-aipop').hidden = true; waAI(id, b.dataset.ai, ta.value, $('#wa-aihint').value); });
+  // السحب والإفلات واللصق
+  const zone = $('#wa-thread');
+  zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('drop'); };
+  zone.ondragleave = (e) => { if (e.target === zone) zone.classList.remove('drop'); };
+  zone.ondrop = (e) => { e.preventDefault(); zone.classList.remove('drop'); if (e.dataTransfer.files.length) addFiles([...e.dataTransfer.files]); };
+  ta.addEventListener('paste', (e) => { const fl = [...(e.clipboardData?.files || [])]; if (fl.length) { e.preventDefault(); addFiles(fl); } });
+
+  f.onsubmit = async (e) => {
+    e.preventDefault(); if (st.busy) return;
+    const text = ta.value.trim(); const files = st.files.filter((x) => !x.err && !x.done);
+    if (!text && !files.length) return;
+    const b = $('.wa-send', f); b.disabled = true; st.busy = true;
+    const replyTo = st.reply ? st.reply.id : undefined;
+    try {
+      for (const x of files) {
+        const fd = new FormData(); fd.append('file', x.file, x.file.name);
+        const up = await fetch(API + 'wa/upload', { method: 'POST', body: fd, credentials: 'same-origin' });
+        const u = await up.json().catch(() => ({}));
+        if (!up.ok) { x.err = u.error || 'تعذّر الرفع'; drawFiles(); continue; }
+        await api('wa/send/' + encodeURIComponent(id), { method: 'POST', body: { type: u.kind, media_id: u.id, mime: u.mime, filename: u.name, caption: x.cap || '', reply_to: replyTo } });
+        x.done = true; drawFiles();
+      }
+      if (text) await api('wa/send/' + encodeURIComponent(id), { method: 'POST', body: { type: 'text', text, reply_to: files.length ? undefined : replyTo } });
+      const failed = st.files.filter((x) => x.err);
+      st.files = failed; st.reply = null; st.draft = ''; ta.value = '';
+      toast(failed.length ? `أُرسل الباقي — ${failed.length} مرفق لم يُرسل` : 'أُرسل', !!failed.length);
+      st.busy = false; await waLoadThread(id); waLoadThreads(id);
+    } catch (err) { toast(err.message, 1); st.busy = false; b.disabled = false; }
+  };
+  if (!quiet && !MOBILE_WA()) ta.focus();
 }
+const MOBILE_WA = () => window.matchMedia('(max-width:860px)').matches;
+
+// ذكاء نُبل داخل المحادثة
+async function waAI(id, mode, draft, hint) {
+  const p = $('#wa-aip'); if (!p) return;
+  const label = (WA_AI_MODES.find((x) => x[0] === mode) || [])[1] || '';
+  p.hidden = false;
+  p.innerHTML = `<div class="wa-aih">${I.ai}<b>ذكاء نُبل — ${esc(label)}</b><span class="sp"></span><button type="button" data-x>✕</button></div><div class="wa-ait shimmer">يكتب…</div>`;
+  $('[data-x]', p).onclick = () => { p.hidden = true; };
+  try {
+    const r = await api('wa/ai/' + encodeURIComponent(id), { method: 'POST', body: { mode, draft, hint } });
+    p.innerHTML = `<div class="wa-aih">${I.ai}<b>ذكاء نُبل — ${esc(label)}</b><span class="sp"></span><button type="button" data-x>✕</button></div>
+      <textarea class="inp wa-ait" rows="4">${esc(r.text)}</textarea>
+      <div class="wa-aia">${mode === 'summary' ? '' : '<button type="button" class="btn btn-n btn-s" data-use>استخدم في الرد</button>'}<button type="button" class="btn btn-g btn-s" data-again>توليد آخر</button>
+      <span class="small muted">راجع النص قبل الإرسال — لا يُرسل شيء تلقائياً</span></div>`;
+    $('[data-x]', p).onclick = () => { p.hidden = true; };
+    $('[data-again]', p).onclick = () => waAI(id, mode, draft, hint);
+    const use = $('[data-use]', p);
+    if (use) use.onclick = () => { const ta = $('#wa-text'); ta.value = $('textarea', p).value; ta.dispatchEvent(new Event('input')); p.hidden = true; ta.focus(); };
+  } catch (e) { p.innerHTML = `<div class="wa-aih">${I.ai}<b>ذكاء نُبل</b><span class="sp"></span><button type="button" data-x>✕</button></div><div class="wa-ait">${esc(e.message)}</div>`; $('[data-x]', p).onclick = () => { p.hidden = true; }; }
+}
+async function waSummary(id) {
+  const m = modal({ title: 'ملخص المحادثة — ذكاء نُبل', icon: 'ai', body: '<div class="wa-ait shimmer">يحلل المحادثة…</div>' });
+  try { const r = await api('wa/ai/' + encodeURIComponent(id), { method: 'POST', body: { mode: 'summary' } }); $('.modal-b', m.el).innerHTML = `<div class="ai-box">${esc(r.text)}</div>`; }
+  catch (e) { $('.modal-b', m.el).innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+// إرسال موقع
+function waLocationModal(id) {
+  const m = modal({ title: 'إرسال موقع', icon: 'pin', body: `<form class="fgrid" id="wa-lf" novalidate>
+    <div class="full wa-lbtns"><button type="button" class="btn btn-g" id="wa-gps">${I.pin} موقعي الحالي</button></div>
+    <label class="f full"><span>أو الصق رابط خرائط جوجل أو الإحداثيات</span><input class="inp" name="link" dir="ltr" placeholder="https://maps.google.com/?q=21.54,39.17  أو  21.54, 39.17"></label>
+    <label class="f"><span>خط العرض <i>*</i></span><input class="inp num" name="lat" dir="ltr" inputmode="decimal"></label>
+    <label class="f"><span>خط الطول <i>*</i></span><input class="inp num" name="lng" dir="ltr" inputmode="decimal"></label>
+    <label class="f"><span>اسم المكان</span><input class="inp" name="name" placeholder="مثال: مقر نُبل وابتكار"></label>
+    <label class="f"><span>العنوان</span><input class="inp" name="address" placeholder="الحي، الشارع، جدة"></label>
+    <div class="full small muted" id="wa-lprev"></div></form>`,
+    foot: '<button class="btn btn-wa" data-go>إرسال الموقع</button><button class="btn btn-g" data-x>إلغاء</button>' });
+  const f = $('#wa-lf', m.el);
+  const prev = () => { const a = +f.lat.value, b = +f.lng.value; $('#wa-lprev', m.el).innerHTML = a && b ? `<a href="https://www.google.com/maps?q=${a},${b}" target="_blank" rel="noopener">معاينة على الخرائط ↗</a>` : ''; };
+  f.link.oninput = () => {
+    const s = f.link.value; const mm = s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || s.match(/[?&](?:q|ll|query)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/) || s.match(/^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/);
+    if (mm) { f.lat.value = mm[1]; f.lng.value = mm[2]; prev(); }
+  };
+  f.lat.oninput = prev; f.lng.oninput = prev;
+  $('#wa-gps', m.el).onclick = () => {
+    if (!navigator.geolocation) return toast('المتصفح لا يدعم تحديد الموقع', 1);
+    $('#wa-gps', m.el).disabled = true;
+    navigator.geolocation.getCurrentPosition((p) => { f.lat.value = p.coords.latitude.toFixed(6); f.lng.value = p.coords.longitude.toFixed(6); prev(); $('#wa-gps', m.el).disabled = false; },
+      (e) => { toast('تعذّر تحديد الموقع: ' + e.message, 1); $('#wa-gps', m.el).disabled = false; }, { enableHighAccuracy: true, timeout: 15000 });
+  };
+  $('[data-x]', m.el).onclick = m.close;
+  $('[data-go]', m.el).onclick = async (e) => {
+    e.target.disabled = true;
+    try { await api('wa/send/' + encodeURIComponent(id), { method: 'POST', body: { type: 'location', lat: f.lat.value, lng: f.lng.value, name: f.name.value, address: f.address.value } }); m.close(); toast('أُرسل الموقع'); waLoadThread(id); }
+    catch (err) { toast(err.message, 1); e.target.disabled = false; }
+  };
+}
+
+// إرسال جهات اتصال (من العملاء والعملاء المحتملين أو يدوياً)
+async function waContactsModal(id) {
+  await Promise.all(['clients', 'leads'].map((r) => refs(r).catch(() => [])));
+  const pool = [...(S.cache.clients?.rows || []).filter((r) => r.phone).map((r) => ({ n: r.contact_name ? `${r.contact_name} — ${r.name}` : r.name, p: r.phone, org: r.name, k: 'عميل' })),
+    ...(S.cache.leads?.rows || []).filter((r) => r.phone).map((r) => ({ n: r.name || r.company, p: r.phone, org: r.company || '', k: 'عميل محتمل' }))];
+  const chosen = [];
+  const m = modal({ title: 'إرسال جهة اتصال', icon: 'team', body: `<label class="f"><span>ابحث في العملاء والعملاء المحتملين</span><input class="inp" id="wa-cq" placeholder="الاسم أو الجوال"></label>
+    <div class="pick" id="wa-cl"></div><div class="wa-chosen" id="wa-cc"></div>
+    <details class="wa-man"><summary>أو أضف يدوياً</summary><div class="fgrid"><label class="f"><span>الاسم</span><input class="inp" id="wa-mn"></label><label class="f"><span>الجوال</span><input class="inp" id="wa-mp" dir="ltr" placeholder="05xxxxxxxx"></label>
+    <label class="f"><span>الجهة / المسمى</span><input class="inp" id="wa-mo"></label><div class="f" style="align-self:end"><button type="button" class="btn btn-g" id="wa-madd">إضافة</button></div></div></details>`,
+    foot: '<button class="btn btn-wa" data-go>إرسال</button><button class="btn btn-g" data-x>إلغاء</button>' });
+  const draw = () => {
+    const q = $('#wa-cq', m.el).value.trim();
+    const hits = pool.filter((x) => !q || x.n.includes(q) || String(x.p).includes(q.replace(/\D/g, '') || '§')).slice(0, 30);
+    $('#wa-cl', m.el).innerHTML = hits.map((x, i) => `<div class="list-i" data-i="${pool.indexOf(x)}"><div class="g"><b>${esc(x.n)}</b><span class="small muted num" dir="ltr">${esc(x.p)}</span></div><span class="pill">${x.k}</span></div>`).join('') || '<div class="empty small">لا نتائج</div>';
+    $$('#wa-cl [data-i]', m.el).forEach((d) => d.onclick = () => { if (chosen.length >= 5) return toast('حتى 5 جهات في الرسالة', 1); chosen.push(pool[+d.dataset.i]); drawC(); });
+  };
+  const drawC = () => {
+    $('#wa-cc', m.el).innerHTML = chosen.map((x, i) => `<span class="pill t">${esc(x.n)} <button type="button" data-r="${i}">✕</button></span>`).join('');
+    $$('#wa-cc [data-r]', m.el).forEach((b) => b.onclick = () => { chosen.splice(+b.dataset.r, 1); drawC(); });
+  };
+  $('#wa-cq', m.el).oninput = draw; draw();
+  $('#wa-madd', m.el).onclick = () => { const n = $('#wa-mn', m.el).value.trim(), p = $('#wa-mp', m.el).value.trim(); if (!n || !p) return toast('الاسم والجوال مطلوبان', 1); chosen.push({ n, p, org: $('#wa-mo', m.el).value.trim() }); drawC(); };
+  $('[data-x]', m.el).onclick = m.close;
+  $('[data-go]', m.el).onclick = async (e) => {
+    if (!chosen.length) return toast('اختر جهة اتصال', 1);
+    e.target.disabled = true;
+    try { await api('wa/send/' + encodeURIComponent(id), { method: 'POST', body: { type: 'contacts', contacts: chosen.map((x) => ({ name: x.n, phone: x.p, org: x.org })) } }); m.close(); toast('أُرسلت جهة الاتصال'); waLoadThread(id); }
+    catch (err) { toast(err.message, 1); e.target.disabled = false; }
+  };
+}
+
+// رسالة بأزرار رد سريع (حتى 3)
+function waButtonsModal(id, text) {
+  const m = modal({ title: 'رسالة بأزرار رد سريع', icon: 'layers', body: `<form class="fgrid" id="wa-bf" novalidate>
+    <label class="f full"><span>نص الرسالة <i>*</i></span><textarea class="inp" name="text" rows="3">${esc(text || '')}</textarea></label>
+    <label class="f"><span>الزر 1 <i>*</i></span><input class="inp" name="b1" maxlength="20" placeholder="مثال: أحجز جلسة"></label>
+    <label class="f"><span>الزر 2</span><input class="inp" name="b2" maxlength="20" placeholder="مثال: أرسل العرض"></label>
+    <label class="f"><span>الزر 3</span><input class="inp" name="b3" maxlength="20" placeholder="مثال: لاحقاً"></label>
+    <label class="f"><span>تذييل صغير</span><input class="inp" name="footer" maxlength="60" placeholder="نُبل وابتكار للتسويق"></label>
+    <div class="full"><span class="small muted">معاينة</span><div class="wa-prev" id="wa-bprev"></div></div></form>`,
+    foot: '<button class="btn btn-wa" data-go>إرسال</button><button class="btn btn-g" data-x>إلغاء</button>' });
+  const f = $('#wa-bf', m.el);
+  const prev = () => { $('#wa-bprev', m.el).innerHTML = esc(f.text.value).replace(/\n/g, '<br>') + (f.footer.value ? `<div class="small muted">${esc(f.footer.value)}</div>` : '') + `<div class="wa-pbtns">${[f.b1, f.b2, f.b3].map((x) => x.value.trim()).filter(Boolean).map((x) => `<span>${esc(x)}</span>`).join('')}</div>`; };
+  f.oninput = prev; prev();
+  $('[data-x]', m.el).onclick = m.close;
+  $('[data-go]', m.el).onclick = async (e) => {
+    e.target.disabled = true;
+    try { await api('wa/send/' + encodeURIComponent(id), { method: 'POST', body: { type: 'buttons', text: f.text.value, footer: f.footer.value, buttons: [f.b1.value, f.b2.value, f.b3.value] } }); m.close(); toast('أُرسلت الرسالة'); const ta = $('#wa-text'); if (ta) { ta.value = ''; (WA_ST[id] || {}).draft = ''; } waLoadThread(id); }
+    catch (err) { toast(err.message, 1); e.target.disabled = false; }
+  };
+}
+
+function waQuickModal(onPick) {
+  const m = modal({ title: 'ردود جاهزة', icon: 'spark', body: `<div class="pick">${WA_QUICK.map((t, i) => `<div class="list-i" data-i="${i}"><div class="g"><span>${esc(t)}</span></div></div>`).join('')}</div>
+    <div class="small muted" style="margin-top:8px">تُدرج في خانة الرد لتعدّلها قبل الإرسال.</div>` });
+  $$('[data-i]', m.el).forEach((d) => d.onclick = () => { m.close(); onPick(WA_QUICK[+d.dataset.i]); });
+}
+
+document.addEventListener('click', (e) => { if (!e.target.closest('.wa-menu')) $$('.wa-pop').forEach((x) => { x.hidden = true; }); if (!e.target.closest('.wa-rxp,[data-rx]')) $$('.wa-rxp').forEach((x) => x.remove()); });
 
 // بدء محادثة جديدة (أو إعادة فتح محادثة مغلقة) برسالة قالب معتمد
 let waTplCache = null;
@@ -220,6 +499,65 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-avatar{width:110px;height:110px;border-radius:50%;overflow:hidden;background:var(--soft);display:grid;place-items:center}
   .wa-avatar img{width:100%;height:100%;object-fit:cover}.wa-avatar svg{width:44px;height:44px;color:#1FA855}
   @media(max-width:860px){.wa-prof{flex-direction:column;align-items:center}.wa-closed{flex-direction:column;align-items:stretch}.wa-box{grid-template-columns:1fr;height:auto}.wa-box.has-thread .wa-list{display:none}
-    .wa-box:not(.has-thread) .wa-thread{display:none}.wa-back{display:inline-flex}.wa-msgs{max-height:60vh}}`;
+    .wa-box:not(.has-thread) .wa-thread{display:none}.wa-back{display:inline-flex}.wa-msgs{max-height:60vh}}
+  .wa-th{gap:10px}.wa-av{width:40px;height:40px;border-radius:14px;background:var(--g-brand,#15556B);color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
+  .wa-who{min-width:0}.wa-who b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wa-th .btn .ai,.wa-th .btn svg{width:17px;height:17px}
+  .wa-bar{padding:6px 14px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;align-items:center}.wa-bar.off{color:var(--terra)}
+  .wa-win{display:inline-flex;align-items:center;gap:4px;color:var(--teal);font-weight:600}.wa-win .ai{width:14px;height:14px}
+  .wa-msgs{background:#EFE9DE;background-image:radial-gradient(rgba(21,85,107,.06) 1px,transparent 1px);background-size:18px 18px}
+  .wa-b{position:relative;border-radius:16px;padding:8px 12px 10px;line-height:1.7}
+  .wa-m.customer .wa-b{border-top-right-radius:4px}.wa-m.staff .wa-b,.wa-m.bot .wa-b{border-top-left-radius:4px}
+  .wa-img img{display:block;max-width:min(280px,100%);max-height:320px;border-radius:12px;margin-bottom:4px;object-fit:cover;background:#ddd}
+  .wa-b video{max-width:min(300px,100%);border-radius:12px;display:block}
+  .wa-b audio{width:min(280px,70vw);display:block}
+  .wa-doc,.wa-loc,.wa-ct{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.65);border:1px solid rgba(0,0,0,.05);color:inherit;margin-bottom:4px;min-width:220px}
+  .wa-doc b,.wa-loc b,.wa-ct b{display:block;font-size:13.5px;word-break:break-all}.wa-doc small,.wa-loc small,.wa-ct small{display:block;color:var(--muted);font-size:11.5px}
+  .wa-doc .ico,.wa-loc .ico,.wa-ct .ico{width:36px;height:36px;font-size:19px}
+  .wa-ct{flex-wrap:wrap}.wa-ct-a{display:flex;gap:6px;width:100%}
+  .wa-q{border-inline-start:3px solid var(--teal);background:rgba(0,0,0,.04);border-radius:8px;padding:4px 8px;margin-bottom:6px;font-size:12.5px;color:var(--muted)}.wa-q b{display:block;color:var(--teal);font-size:11.5px}
+  .wa-rx{position:absolute;bottom:-12px;inset-inline-start:8px;background:#fff;border-radius:99px;padding:0 5px;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+  .wa-ma{position:absolute;top:-14px;inset-inline-end:6px;display:none;gap:2px;background:#fff;border-radius:99px;padding:2px 4px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+  .wa-m:hover .wa-ma,.wa-m:focus-within .wa-ma{display:flex}
+  .wa-ma button{border:0;background:none;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:14px;color:var(--navy)}.wa-ma button:hover{background:var(--soft)}
+  .wa-rxp{position:absolute;top:-46px;inset-inline-start:0;display:flex;gap:2px;background:#fff;border-radius:99px;padding:4px 6px;box-shadow:0 10px 24px rgba(0,0,0,.2);z-index:5;animation:mpop .3s var(--spring,ease) both}
+  .wa-rxp button{border:0;background:none;font-size:20px;width:34px;height:34px;border-radius:50%;cursor:pointer;transition:transform .2s}.wa-rxp button:hover{transform:scale(1.25)}
+  .wa-compose{align-items:flex-end;gap:8px;padding:10px 12px;background:#fff}
+  .wa-compose textarea.inp{min-height:46px;max-height:180px;resize:none;border-radius:16px;line-height:1.6;padding-top:11px}
+  .wa-tools{display:flex;gap:6px}
+  .wa-tb{width:44px;height:46px;border-radius:14px;border:1.5px solid var(--line-2,#D8CCB6);background:#fff;color:var(--navy);display:grid;place-items:center;cursor:pointer;transition:transform .25s}
+  .wa-tb:hover{transform:translateY(-2px)}.wa-tb .ai{width:22px;height:22px}
+  .wa-tb.aib{background:linear-gradient(135deg,#0C3B4C,#308D8B);color:#fff;border:0;--ic-a:#F2B562;--ic-b:#A6E3E0}
+  .wa-menu{position:relative}
+  .wa-pop{position:absolute;bottom:calc(100% + 8px);inset-inline-start:0;z-index:20;width:250px;background:#fff;border-radius:18px;padding:8px;box-shadow:0 24px 50px -16px rgba(8,42,55,.5);border:1px solid var(--line);animation:mpop .3s var(--spring,ease) both}
+  .wa-pop button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:9px 10px;border-radius:12px;cursor:pointer;font:inherit;color:var(--ink);text-align:start}
+  .wa-pop button:hover{background:var(--soft)}.wa-pop button .ai{width:20px;height:20px;color:var(--navy)}
+  .wa-pop-h{display:flex;align-items:center;gap:6px;font-weight:700;color:var(--deep);padding:4px 10px 6px}.wa-pop-h .ai{width:18px;height:18px}
+  .wa-pop .inp{min-height:40px;font-size:13px;margin-top:6px}
+  .wa-send{min-height:46px;border-radius:14px}
+  .wa-hint{padding:0 14px 10px;background:#fff}
+  .wa-rep,.wa-aip,.wa-files{margin:0 12px;padding:10px 12px;border-radius:14px 14px 0 0;background:#F6F1E6;border:1px solid var(--line);border-bottom:0}
+  .wa-rep{display:flex;gap:10px;align-items:center;border-inline-start:4px solid var(--teal)}.wa-rep div{flex:1;min-width:0}.wa-rep b{display:block;color:var(--teal);font-size:12px}.wa-rep span{display:block;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wa-rep button,.wa-aih button{border:0;background:none;cursor:pointer;font-size:16px;color:var(--muted)}
+  .wa-rep[hidden],.wa-aip[hidden],.wa-files[hidden]{display:none}
+  .wa-files{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto}
+  .wa-fi{display:flex;gap:10px;align-items:center;background:#fff;border-radius:12px;padding:6px 8px;border:1px solid var(--line)}
+  .wa-fi img{width:52px;height:52px;border-radius:10px;object-fit:cover}.wa-fi .ico{width:52px;height:52px}
+  .wa-fi-b{flex:1;min-width:0}.wa-fi-b b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wa-fi-b small{color:var(--muted);font-size:11.5px}
+  .wa-fi-b .inp{min-height:36px;margin-top:4px;font-size:13px;padding:6px 10px}
+  .wa-fi.err{border-color:#E2A496;background:#FFF6F3}
+  .wa-fi-x{border:0;background:var(--soft);width:36px;height:36px;border-radius:10px;cursor:pointer;color:var(--red);display:grid;place-items:center}.wa-fi-x .ai{width:18px;height:18px}
+  .wa-aip{background:linear-gradient(135deg,#0C3B4C,#15556B);color:#E6F0F3;border:0}
+  .wa-aih{display:flex;align-items:center;gap:8px;margin-bottom:8px}.wa-aih .ai{width:18px;height:18px;--ic-a:#F2B562;--ic-b:#A6E3E0}.wa-aih .sp{flex:1}.wa-aih button{color:#CFE5EA}
+  .wa-aip textarea.wa-ait{background:rgba(255,255,255,.96);color:var(--ink);min-height:90px}
+  .wa-aia{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}.wa-aia .muted{color:#BFD9DF!important}
+  .shimmer{background:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,.4),rgba(255,255,255,.15));background-size:200% 100%;animation:shim 1.2s linear infinite;border-radius:10px;padding:14px;color:#fff}
+  .modal .shimmer{color:var(--deep);background:linear-gradient(90deg,#F2ECE0,#FFF,#F2ECE0);background-size:200% 100%}
+  @keyframes shim{to{background-position:-200% 0}}
+  .wa-thread.drop{outline:3px dashed var(--teal);outline-offset:-8px}
+  .wa-chosen{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.wa-chosen button{border:0;background:none;cursor:pointer;color:inherit}
+  .wa-man{margin-top:8px}.wa-man summary{cursor:pointer;color:var(--navy);font-weight:600;margin-bottom:8px}
+  @media(max-width:860px){.wa-hide-m{display:none}.wa-compose{padding:8px}.wa-tb{width:42px}.wa-pop{position:fixed;inset-inline:10px;bottom:calc(var(--bn,72px) + 90px);width:auto}
+    .wa-hint{display:none}.wa-th{flex-wrap:nowrap}.wa-th .btn-s{padding:5px 9px}.wa-box.has-thread .wa-thread{height:calc(100dvh - var(--top,58px) - var(--bn,72px) - 44px);display:flex}.wa-msgs{max-height:none}}`;
   const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
 })();

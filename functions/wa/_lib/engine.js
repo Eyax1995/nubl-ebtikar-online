@@ -32,11 +32,28 @@ function describe(m) {
   if (m.type === 'text') return (m.text && m.text.body) || '';
   if (m.type === 'interactive') { const r = m.interactive.button_reply || m.interactive.list_reply || {}; return r.title || ''; }
   if (m.type === 'button') return (m.button && m.button.text) || '';
+  if (m.type === 'location') { const l = m.location || {}; return '[أرسل موقعاً' + (l.name ? ': ' + l.name : '') + (l.address ? ' — ' + l.address : '') + ']'; }
+  if (m.type === 'contacts') return '[أرسل جهة اتصال: ' + (m.contacts || []).map((c) => (c.name && c.name.formatted_name) || '').filter(Boolean).join('، ') + ']';
   if (MEDIA[m.type]) {
     const md = m[m.type] || {};
     return '[أرسل ' + MEDIA[m.type] + (md.filename ? ': ' + md.filename : '') + ']' + (md.caption ? ' ' + md.caption : '');
   }
   return '[رسالة من نوع ' + m.type + ']';
+}
+
+// بيانات الوسائط للعرض في صندوق المنصة: الصورة/الملف/الصوت/الموقع/جهات الاتصال + الرسالة المُقتبسة
+export function mediaInfo(m) {
+  const o = {};
+  if (m.context && m.context.id) o.ctx = m.context.id;
+  if (['image', 'video', 'audio', 'document', 'sticker'].includes(m.type)) {
+    const md = m[m.type] || {};
+    Object.assign(o, { t: m.type, id: md.id || null, mime: md.mime_type || '', fn: md.filename || '', cap: md.caption || '', voice: md.voice || undefined });
+  } else if (m.type === 'location') {
+    const l = m.location || {}; Object.assign(o, { t: 'location', loc: { lat: l.latitude, lng: l.longitude, name: l.name || '', addr: l.address || '', url: l.url || '' } });
+  } else if (m.type === 'contacts') {
+    o.t = 'contacts'; o.ct = (m.contacts || []).slice(0, 5).map((c) => ({ n: (c.name && c.name.formatted_name) || '', p: ((c.phones || [])[0] || {}).phone || '', w: ((c.phones || [])[0] || {}).wa_id || '' }));
+  } else if (m.type === 'interactive' || m.type === 'button') o.t = 'button';
+  return Object.keys(o).length ? o : null;
 }
 
 // يحوّل حمولة Meta إلى أحداث مبسّطة
@@ -55,11 +72,11 @@ export function parseEvents(body) {
         for (const c of (v.contacts || [])) names[c.wa_id] = (c.profile && c.profile.name) || '';
         for (const m of (v.messages || [])) {
           if (m.type === 'reaction' || m.type === 'system') continue;
-          out.push({ ...base, kind: 'message', wa_id: m.from, name: names[m.from] || '', type: m.type, text: String(describe(m)).trim(), msg_id: m.id, ts: Number(m.timestamp) || 0 });
+          out.push({ ...base, kind: 'message', wa_id: m.from, name: names[m.from] || '', type: m.type, text: String(describe(m)).trim(), msg_id: m.id, ts: Number(m.timestamp) || 0, media: mediaInfo(m) });
         }
       } else if (change.field === 'smb_message_echoes') {
         for (const e of (v.message_echoes || [])) {
-          out.push({ ...base, kind: 'echo', wa_id: e.to, name: '', type: e.type, text: String(describe(e)).trim(), msg_id: e.id, ts: Number(e.timestamp) || 0 });
+          out.push({ ...base, kind: 'echo', wa_id: e.to, name: '', type: e.type, text: String(describe(e)).trim(), msg_id: e.id, ts: Number(e.timestamp) || 0, media: mediaInfo(e) });
         }
       } else if (change.field === 'history') {
         for (const hh of (v.history || [])) for (const th of (hh.threads || [])) for (const hm of (th.messages || [])) {
@@ -173,7 +190,7 @@ async function claude(env, system, user) {
   return { ok: false, error: 'claude: ' + lastErr.slice(0, 300) };
 }
 
-async function askAI(env, system, user) {
+export async function askAI(env, system, user) {
   const c = await claude(env, system, user);
   if (c.ok) return c;
   const g = await gemini(env, system, user);
@@ -231,7 +248,7 @@ async function workersAI(env, system, user) {
 
 // معالجة حدث واحد (رسالة أو صدى رد موظف)
 async function handleLive(env, origin, ev) {
-  const fresh = await logEvent(env, { dept: ev.dept, wa_id: ev.wa_id, kind: ev.kind, msg_id: ev.msg_id, text: ev.text, status: 'received' });
+  const fresh = await logEvent(env, { dept: ev.dept, wa_id: ev.wa_id, kind: ev.kind, msg_id: ev.msg_id, text: ev.text, status: 'received', detail: ev.media ? JSON.stringify({ m: ev.media }).slice(0, 1500) : null });
   if (!fresh) return; // مكررة
   const key = ev.dept + ':' + ev.wa_id;
   const row = (await getSession(env, key)) || {};
