@@ -172,14 +172,18 @@ function buildPrompt(ev, session, history) {
 // ترتيب المحركات: Claude (إن ضُبط ANTHROPIC_API_KEY) ← Gemini ← Workers AI داخل Cloudflare — أي عطل ينتقل للتالي تلقائياً
 async function claude(env, system, user, fast) {
   if (!env.ANTHROPIC_API_KEY) return { ok: false, error: 'no key', skip: true };
-  const model = env.CLAUDE_MODEL || 'claude-sonnet-4-5';
+  const model = env.CLAUDE_MODEL || 'claude-haiku-5-5';
+  // تقسيم التعليمات: الجزء الثابت (المعرفة والأسلوب) يُخزَّن مؤقتاً لدى Claude فيصبح الرد أسرع وأرخص، والجزء المتغير (السياق) بعده
+  const cut = ['\n\n# سياق هذه المحادثة', '\n\n# مهمتك الآن'].map((m) => system.indexOf(m)).filter((i) => i > 0).sort((a, b) => a - b)[0];
+  const sys = cut ? [{ type: 'text', text: system.slice(0, cut), cache_control: { type: 'ephemeral' } }, { type: 'text', text: system.slice(cut) }]
+    : [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
   let lastErr = '';
   for (let i = 0; i < (fast ? 1 : 2); i++) {
     try {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model, max_tokens: 1500, temperature: 0.5, system, messages: [{ role: 'user', content: user }] }),
+        body: JSON.stringify({ model, max_tokens: 1200, system: sys, messages: [{ role: 'user', content: user }] }),
       });
       const d = await r.json().catch(() => ({}));
       const text = (d.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();

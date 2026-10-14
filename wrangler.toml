@@ -2,6 +2,10 @@ name = "nubl-ebtikar-online"
 pages_build_output_dir = "."
 compatibility_date = "2026-09-16"
 
+# متغيرات غير سرية. مفتاح Claude نفسه (ANTHROPIC_API_KEY) سرّ يُضاف من لوحة Cloudflare فقط.
+[vars]
+CLAUDE_MODEL = "claude-haiku-5-5"
+
 # ربط Workers AI لاستوديو الأطباع (functions/api/restyle.js يقرؤه باسم env.AI).
 # نُعرّفه هنا داخل المستودع بدل لوحة Cloudflare: هذا الملف يصبح مصدر الحقيقة
 # لإعدادات المشروع، فلا يحتاج أحد إلى فتح اللوحة عند أي تغيير لاحق.

@@ -19,6 +19,7 @@ import { SECTORS } from './_lib/seed.js';
 import { xqBridge, xqRoute } from './_lib/xq.js';
 import { waInboxRoute } from './_lib/wainbox.js';
 import { opsRoute } from './_lib/ops.js';
+import { askAI } from '../../../wa/_lib/engine.js';
 import { bearerOf, tokenUser, tokenBlocked, tokensRoute, mcpHandle } from './_lib/agent.js';
 import { studioRoute } from './_lib/studio.js';
 import { sendReport, buildReport, toWA } from './_lib/reports.js';
@@ -1078,9 +1079,8 @@ async function notificationsRoute(db, env, request, user, action) {
   return bad('إجراء غير معروف', 404);
 }
 
-// ---------- ذكاء نُبل (Workers AI) ----------
+// ---------- ذكاء نُبل (Claude ← Gemini ← Workers AI) ----------
 async function aiRoute(env, db, request, user) {
-  if (!env.AI) return bad('خدمة الذكاء الاصطناعي غير مفعّلة', 503);
   const d = await body(request);
   const ctx = String(d.context || '').slice(0, 4000);
   const prompts = {
@@ -1090,13 +1090,9 @@ async function aiRoute(env, db, request, user) {
     caption: 'اكتب نص منشور (كابشن) عربي جذاب ومختصر لمنصات التواصل مع دعوة واضحة لاتخاذ إجراء و3 وسوم مناسبة، بنبرة العلامة الموضحة. الفكرة:',
   };
   const p = prompts[d.action]; if (!p) return bad('إجراء غير معروف');
-  const res = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
-    messages: [
-      { role: 'system', content: 'أنت مساعد تسويق محترف يكتب بالعربية الفصحى المعاصرة أو اللهجة السعودية حسب الطلب، بدقة ودون اختلاق أرقام.' },
-      { role: 'user', content: `${p}\n${ctx}` },
-    ],
-    max_tokens: 700,
-  });
+  const r = await askAI(env, 'أنت «ذكاء نُبل»، مساعد تسويق محترف لفريق نُبل وابتكار للتسويق في جدة، يكتب بالعربية الفصحى المعاصرة أو اللهجة السعودية حسب الطلب، بدقة ودون اختلاق أرقام أو أسعار أو وعود. اكتب الناتج المطلوب فقط بلا مقدمات.', `${p}\n${ctx}`, true);
+  if (!r.ok) return bad('تعذّر التوليد الآن: ' + String(r.error || '').slice(0, 200), 502);
+  const res = { response: r.text };
   await audit(db, user, 'ai', d.action, null);
   return json({ text: res.response || '' });
 }
