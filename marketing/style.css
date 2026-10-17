@@ -59,7 +59,7 @@ header.hdr{position:sticky;top:0;z-index:90;background:rgba(8,42,55,.92);backdro
 
 /* hero */
 .hero{position:relative;background:radial-gradient(1200px 600px at 85% 20%,#18566D 0%,var(--navy-d) 40%,var(--deep) 100%);color:#fff;overflow:hidden}
-.hero .pattern{position:absolute;inset:0;opacity:.045;background-image:url("pattern.svg");background-size:520px;pointer-events:none}
+.hero .pattern{position:absolute;inset:0;opacity:.045;background-image:url("chevrons-bg.svg");background-size:520px;pointer-events:none}
 .hero .wrap{position:relative;display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;min-height:calc(100vh - 110px);padding:56px 0 64px}
 .hero h1{color:#fff}
 .hero .tag{color:var(--gold)}.hero .tag::before{background:var(--gold)}

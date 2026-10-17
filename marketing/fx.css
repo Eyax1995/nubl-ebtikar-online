@@ -7,7 +7,7 @@ body{overflow-x:clip}
 .fx{position:fixed;inset:0;z-index:60;pointer-events:none}
 .fx canvas{width:100%;height:100%;display:block}
 .curtain{position:fixed;inset:0;z-index:55;background:linear-gradient(135deg,#123F50 0%,#124354 55%,#18566D 100%);pointer-events:none;clip-path:inset(0 0 0 100%);overflow:hidden}
-.curtain .cpat{position:absolute;inset:0;background:url(pattern.svg) center/420px;opacity:.07}
+.curtain .cpat{position:absolute;inset:0;background:url(chevrons-bg.svg) center/420px;opacity:.07}
 .curtain::after{content:"";position:absolute;inset-block:0;inset-inline-end:0;width:6px;background:linear-gradient(var(--gold),var(--terra));box-shadow:none}
 .curtain .cmark{position:absolute;inset:auto 0 12vh 0;text-align:center;opacity:.9}
 .curtain .cmark img{height:44px;opacity:.9}
@@ -55,7 +55,7 @@ html.has-slides{scroll-snap-type:y mandatory}
 .slide.light:nth-of-type(even){background:var(--cream)}
 .slide.terra{background:linear-gradient(135deg,#D06429 0%,#B4541F 60%,#A8501F 100%);color:#fff}
 .slide-in{position:relative;z-index:2;width:var(--wrap)}
-.slide-bg{position:absolute;inset:0;z-index:0;pointer-events:none;background:url(pattern.svg) center/520px;opacity:.05}
+.slide-bg{position:absolute;inset:0;z-index:0;pointer-events:none;background:url(chevrons-bg.svg) center/520px;opacity:.05}
 .slide.light .slide-bg{filter:invert(1);opacity:.05}
 .slide-bg::before,.slide-bg::after{content:"";position:absolute;border-radius:50%;filter:blur(70px);opacity:.5;animation:orb 14s ease-in-out infinite alternate}
 .slide.dark .slide-bg::before{width:42vw;height:42vw;left:-10vw;bottom:-18vw;background:#338C89}

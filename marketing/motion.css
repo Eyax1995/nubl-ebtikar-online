@@ -110,3 +110,8 @@ html.entering .csweep .sw{animation:sw-out .72s cubic-bezier(.6,0,.4,1) both;ani
 @keyframes sw-in{from{opacity:0;transform:translateY(70vh) rotateX(-20deg) rotateY(-40deg)}to{opacity:1;transform:translateY(0) rotateX(-14deg) rotateY(-20deg)}}
 @keyframes sw-out{from{opacity:1;transform:translateY(0) rotateX(-14deg) rotateY(-20deg)}to{opacity:0;transform:translateY(-75vh) rotateX(10deg) rotateY(25deg)}}
 @media (prefers-reduced-motion:reduce){.c3d-item,.c3d-item .c3d,.csweep .sw{animation:none!important}}
+/* مجسّم الأسهم WebGL (chevrons3d.js) */
+html.gl3 .slot.gl-on .c3d-col,html.gl3 .slot.gl-on svg.chev3{display:none!important}
+html.gl3 .csweep{display:none!important}
+html.cx-hot,html.cx-hot body,html.cx-hot a{cursor:pointer}
+#cx3d{contain:strict}
