@@ -1,10 +1,12 @@
 // مولّد ملفات Word على أوراق «نُبل وابتكار للتسويق» — بنفس تنسيق عرض BBR المعتمد (14 أكتوبر 2026)
-// العناوين كحلي #134E62 بخط سفلي برتقالي #D06329، الجداول برأس كحلي وإجماليات مظللة، صناديق تنبيه بحد برتقالي، خط Tajawal، من اليمين لليسار.
+// هوية 3.0: العناوين كحلي #18566D بخط سفلي برتقالي #D06429، الجداول برأس كحلي ونص أبيض، صناديق تنبيه بخلفية تركوازي 25٪ وحد برتقالي، خط DG Agnadeen مضمّن، من اليمين لليسار.
 import { LETTERHEAD } from './letterhead.js';
 import { zip, b64ToU8 } from './zip.js';
 
-const NAVY = '134E62', ORANGE = 'D06329', INK = '1A1A1A', GREY = '5A6B72', SHADE = 'F3F6F8', BOX = 'EEF3F5', LINE = 'D5DEE2';
-const WIDTH = 8312;
+// هوية 3.0: كحلي 18566D · برتقالي D06429 · بطاقات تركوازي 25% CCE2E2 · صفوف كحلي 25% · خط DG Agnadeen مضمّن
+const NAVY = '18566D', ORANGE = 'D06429', INK = '1E3E4A', GREY = '3E5A66', SHADE = 'E8EEF0', BOX = 'CCE2E2', LINE = 'C5D5DA';
+const FONT = '<w:rFonts w:ascii="DG Agnadeen" w:hAnsi="DG Agnadeen" w:eastAsia="DG Agnadeen" w:cs="DG Agnadeen"/>';
+const WIDTH = 9468;
 const x = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
 const AR = '٠١٢٣٤٥٦٧٨٩';
 export const arDigits = (s) => String(s ?? '').replace(/[0-9]/g, (d) => AR[d]);
@@ -25,7 +27,7 @@ export const ORD = ['أولاً', 'ثانياً', 'ثالثاً', 'رابعاً'
 
 // ---------- عناصر XML ----------
 function rPr({ b, color = INK, sz = 18 } = {}) {
-  return `<w:rPr>${b ? '<w:b/><w:bCs/>' : ''}<w:color w:val="${color}"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/><w:rtl/></w:rPr>`;
+  return `<w:rPr>${FONT}${b ? '<w:b/><w:bCs/>' : ''}<w:color w:val="${color}"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/><w:rtl/></w:rPr>`;
 }
 const run = (text, o) => `<w:r>${rPr(o)}<w:t xml:space="preserve">${x(text)}</w:t></w:r>`;
 // **نص** يصبح غامقاً داخل الفقرة
@@ -94,7 +96,7 @@ export function render(blocks) {
 }
 
 const NS = 'xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" mc:Ignorable="w14 wp14"';
-const SECT = '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/><w:footerReference w:type="default" r:id="rId8"/><w:pgSz w:w="11906" w:h="16838" w:code="9"/><w:pgMar w:top="2410" w:right="1797" w:bottom="2127" w:left="1797" w:header="709" w:footer="1224" w:gutter="0"/><w:cols w:space="708"/><w:bidi/><w:rtlGutter/><w:docGrid w:linePitch="360"/></w:sectPr>';
+const SECT = '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/><w:footerReference w:type="default" r:id="rId8"/><w:pgSz w:w="11906" w:h="16838" w:code="9"/><w:pgMar w:top="2948" w:right="1304" w:bottom="1588" w:left="1134" w:header="709" w:footer="1134" w:gutter="0"/><w:cols w:space="708"/><w:bidi/><w:rtlGutter/><w:docGrid w:linePitch="360"/></w:sectPr>';
 
 export async function buildDocx(blocks, { title = '', subject = '' } = {}) {
   const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${NS}><w:body>${render(blocks)}${SECT}</w:body></w:document>`;

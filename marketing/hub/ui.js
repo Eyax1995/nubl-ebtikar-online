@@ -25,7 +25,7 @@
     folder: A(`<path class="t" d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>${s('M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z')}<path class="f m-open o-b" d="M5 11h15l-1.6 7H3.4z" opacity=".55"/><rect class="f2 m-slide" x="8" y="8.5" width="8" height="2" rx="1"/>`),
     check: A(`<rect class="t" x="3" y="3" width="18" height="18" rx="4"/><rect class="s" x="3" y="3" width="18" height="18" rx="4"/><path class="x m-draw" pathLength="1" d="M7.5 12.3l3.2 3.2 5.8-6.8"/>`),
     cal: A(`<rect class="t" x="3" y="5" width="18" height="16" rx="2.5"/><rect class="s" x="3" y="5" width="18" height="16" rx="2.5"/>${s('M3 10h18')}<g class="m-flip o-t"><path class="f" d="M5 5.2h14V10H5z" opacity=".6"/></g>${s('M8 3v4M16 3v4')}<circle class="f2 m-pulse" cx="15.5" cy="15.5" r="1.8"/><circle class="t" cx="8.5" cy="15.5" r="1.2"/>`),
-    star: A(`<path class="f m-tw" d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z"/><circle class="f2 m-sp1" cx="19" cy="5" r="1.4"/><circle class="f2 m-sp2" cx="5" cy="19" r="1.1"/>`),
+    star: A(`<path class="x m-tw" d="M6 10.5l6-6 6 6"/><path class="s" d="M6 18.5l6-6 6 6"/>`),
     book: A(`<path class="t" d="M4 4h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4z"/>${s('M4 4h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4zM20 4h-6a3 3 0 0 0-3 3')}${s('M20 4v14h-7')}<path class="f m-flip o-l" d="M13 6.5c1.5-1.2 3.5-1.5 5.5-1.3v11c-2-.2-4 .1-5.5 1.3z" opacity=".55"/>`),
     chart: A(`${s('M2 20.5h20')}<rect class="f2 m-g1 o-b" x="4" y="10" width="3.4" height="10" rx="1"/><rect class="f m-g2 o-b" x="10.3" y="4" width="3.4" height="16" rx="1"/><rect class="f2 m-g3 o-b" x="16.6" y="13" width="3.4" height="7" rx="1"/>`),
     team: A(`<circle class="t" cx="12" cy="8" r="4"/><g class="m-bob"><circle class="s" cx="12" cy="8" r="4"/></g>${s('M4 21c1-4 4-6 8-6s7 2 8 6')}<circle class="f m-pulse" cx="18.5" cy="5.5" r="2"/>`),
@@ -71,7 +71,7 @@
   }
 
   function decorateNav() {
-    const logo = $('.side .brand img'); if (logo) logo.setAttribute('src', '../logo-white.png');
+    const logo = $('.side .brand img'); if (logo) logo.setAttribute('src', 'brand/logo-h-dark.svg');
     $$('.side .nav-a').forEach((a, i) => {
       if (a.querySelector('.ico')) return;
       const svg = a.querySelector('svg'); if (!svg) return;
@@ -323,7 +323,7 @@
     }
   };
 
-  const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.setAttribute('content', '#F6F3EC');
+  const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.setAttribute('content', '#F3F6F7');
   if (!document.querySelector('meta[name="apple-mobile-web-app-capable"]')) {
     document.head.insertAdjacentHTML('beforeend', '<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="منصة نُبل">');
   }

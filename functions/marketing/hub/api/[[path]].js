@@ -55,7 +55,7 @@ export async function onRequest(ctx) {
         try {
           const res = await dispatch(db, env, new Request(new URL('/marketing/hub/api/' + path, request.url), init), tu, sub);
           let d = {}; try { d = await res.json(); } catch { /* */ }
-          return { status: res.status, data: d };
+          return { status: d.__status || res.status, data: d };
         } catch (e) { return { status: e.status || 500, data: { error: e.message } }; }
       };
       if (parts[0] === 'mcp') return await mcpHandle(db, env, request, tu, call);

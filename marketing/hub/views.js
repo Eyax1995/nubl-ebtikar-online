@@ -377,18 +377,18 @@ async function catalogPicker(onPick) {
 function docShell(title, inner) {
   const s = S.meta.settings;
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
-  <style>@page{size:A4;margin:16mm 14mm}*{box-sizing:border-box}body{font-family:Tajawal,sans-serif;color:#12333F;font-size:13.5px;line-height:1.7;margin:0}
-  .hd{display:flex;align-items:center;gap:16px;border-bottom:3px solid #15556B;padding-bottom:12px;margin-bottom:18px}.hd img{height:70px}.hd .c{flex:1}.hd b{font-size:18px;color:#082A37}
-  .hd .m{font-size:11.5px;color:#5D7581}.ttl{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px}.ttl h1{font-size:22px;margin:0;color:#082A37}
-  .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;background:#F8F4EC;border-radius:10px;padding:12px 16px;margin-bottom:16px}
-  table{width:100%;border-collapse:collapse;margin:8px 0}th{background:#15556B;color:#fff;padding:8px 10px;text-align:start;font-weight:500}td{padding:8px 10px;border-bottom:1px solid #E3D9C9;vertical-align:top}
-  .n{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}.tot{width:300px;margin-inline-start:auto}.tot div{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #E3D9C9}
-  .tot .g{font-weight:800;font-size:16px;border:0;color:#082A37}h3{color:#15556B;font-size:15px;margin:18px 0 6px}ul{margin:4px 0;padding-inline-start:20px}
-  .ft{margin-top:26px;border-top:1px solid #E3D9C9;padding-top:10px;font-size:11px;color:#5D7581;text-align:center}.sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:34px}
-  .sig div{border-top:1px solid #12333F;padding-top:6px;text-align:center}.strip{height:5px;background:repeating-linear-gradient(90deg,#15556B 0 16px,#fff 16px 20px,#D2652A 20px 36px,#fff 36px 40px,#DC9C47 40px 56px,#fff 56px 60px,#308D8B 60px 76px,#fff 76px 80px);margin-top:8px}
+  <style>@font-face{font-family:'The Year of Handicrafts';src:url(${location.origin}/marketing/hub/fonts/TheYearofHandicrafts-Bold.woff2) format('woff2');font-weight:700}@font-face{font-family:'DG Agnadeen';src:url(${location.origin}/marketing/hub/fonts/DGAgnadeen-Regular.woff2) format('woff2');font-weight:400}@font-face{font-family:'DG Agnadeen';src:url(${location.origin}/marketing/hub/fonts/DGAgnadeen-Bold.woff2) format('woff2');font-weight:700}h1,h2,h3{font-family:'The Year of Handicrafts','DG Agnadeen',Tajawal,sans-serif}</style>
+  <style>@page{size:A4;margin:16mm 14mm}*{box-sizing:border-box}body{font-family:'DG Agnadeen',Tajawal,sans-serif;color:#1E3E4A;font-size:13.5px;line-height:1.7;margin:0}
+  .hd{display:flex;align-items:center;gap:16px;border-bottom:3px solid #18566D;padding-bottom:12px;margin-bottom:18px}.hd img{height:70px}.hd .c{flex:1}.hd b{font-size:18px;color:#123F50}
+  .hd .m{font-size:11.5px;color:#3E5A66}.ttl{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px}.ttl h1{font-size:22px;margin:0;color:#123F50}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;background:#F3F6F7;border-radius:10px;padding:12px 16px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;margin:8px 0}th{background:#18566D;color:#fff;padding:8px 10px;text-align:start;font-weight:500}td{padding:8px 10px;border-bottom:1px solid #DCE5E8;vertical-align:top}
+  .n{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}.tot{width:300px;margin-inline-start:auto}.tot div{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #DCE5E8}
+  .tot .g{font-weight:800;font-size:16px;border:0;color:#123F50}h3{color:#18566D;font-size:15px;margin:18px 0 6px}ul{margin:4px 0;padding-inline-start:20px}
+  .ft{margin-top:26px;border-top:1px solid #DCE5E8;padding-top:10px;font-size:11px;color:#3E5A66;text-align:center}.sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:34px}
+  .sig div{border-top:1px solid #1E3E4A;padding-top:6px;text-align:center}.strip{height:5px;background:repeating-linear-gradient(90deg,#18566D 0 16px,#fff 16px 20px,#D06429 20px 36px,#fff 36px 40px,#DB9C47 40px 56px,#fff 56px 60px,#338C89 60px 76px,#fff 76px 80px);margin-top:8px}
   @media screen{body{max-width:820px;margin:20px auto;padding:20px;box-shadow:0 0 30px rgba(0,0,0,.1)}}</style></head><body>
-  <div class="hd"><img src="${location.origin}/marketing/logo.png" alt=""><div class="c"><b>${esc(s.company_name)}</b><div class="m">${esc(s.company_city)} · س.ت ${esc(s.cr_number)} · الرقم الضريبي ${esc(s.vat_number)} · ${esc(s.sales_phone || '')}</div></div></div>
+  <div class="hd"><img src="${location.origin}/marketing/hub/brand/logo-h-color.svg" alt=""><div class="c"><b>${esc(s.company_name)}</b><div class="m">${esc(s.company_city)} · س.ت ${esc(s.cr_number)} · الرقم الضريبي ${esc(s.vat_number)} · ${esc(s.sales_phone || '')}</div></div></div>
   ${inner}<div class="ft">نتعامل بنُبل… ونحلّ بابتكار<div class="strip"></div></div><script>window.onload=()=>setTimeout(()=>print(),400)<\/script></body></html>`;
 }
 function openDoc(html) { const w = window.open('', '_blank'); if (!w) return toast('اسمح بالنوافذ المنبثقة للطباعة', 1); w.document.open(); w.document.write(html); w.document.close(); }
@@ -429,7 +429,7 @@ function printContract(c, client) {
   <li>تختص محاكم جدة بالنظر في أي نزاع ينشأ عن هذا العقد.</li></ul>
   ${c.notes ? `<h3>4. ملاحظات</h3><p style="white-space:pre-wrap">${esc(c.notes)}</p>` : ''}
   <div class="sig"><div>الطرف الأول<br>${esc(s.company_name)}</div><div>الطرف الثاني<br>${esc(client?.name || '')}</div></div>
-  <p style="font-size:11px;color:#5D7581;margin-top:18px">نموذج تشغيلي — يُراجع قانونياً قبل اعتماده كصيغة نهائية.</p>`));
+  <p style="font-size:11px;color:#3E5A66;margin-top:18px">نموذج تشغيلي — يُراجع قانونياً قبل اعتماده كصيغة نهائية.</p>`));
 }
 function printInvoice(inv, client) {
   const s = S.meta.settings;
@@ -439,7 +439,7 @@ function printInvoice(inv, client) {
   <table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody><tr><td>${esc(inv.description || '')}</td><td class="n">${moneyTxt(inv.subtotal)}</td></tr></tbody></table>
   <div class="tot"><div><span>المبلغ قبل الضريبة</span><span class="n">${moneyTxt(inv.subtotal)}</span></div><div><span>ضريبة القيمة المضافة ${s.vat_rate}%</span><span class="n">${moneyTxt(inv.vat)}</span></div>
   <div class="g"><span>الإجمالي (ر.س)</span><span class="n">${moneyTxt(inv.total)}</span></div>${inv.paid ? `<div><span>المدفوع</span><span class="n">${moneyTxt(inv.paid)}</span></div><div class="g"><span>المتبقي</span><span class="n">${moneyTxt(inv.total - inv.paid)}</span></div>` : ''}</div>
-  <p style="font-size:12px;color:#5D7581">${inv.tax_ref ? `الفاتورة الضريبية الرسمية رقم <b>${esc(inv.tax_ref)}</b> صادرة من النظام المحاسبي.` : 'هذه مطالبة مالية؛ تصدر الفاتورة الضريبية الإلكترونية الرسمية من النظام المحاسبي المعتمد.'}</p>`));
+  <p style="font-size:12px;color:#3E5A66">${inv.tax_ref ? `الفاتورة الضريبية الرسمية رقم <b>${esc(inv.tax_ref)}</b> صادرة من النظام المحاسبي.` : 'هذه مطالبة مالية؛ تصدر الفاتورة الضريبية الإلكترونية الرسمية من النظام المحاسبي المعتمد.'}</p>`));
 }
 
 /* ====================== العقد والفاتورة ====================== */

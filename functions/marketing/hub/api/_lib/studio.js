@@ -293,6 +293,24 @@ const PLAN_SCHEMA = `{
  "risks": [ { "risk": "...", "mitigation": "..." } ],
  "next_steps": ["من يفعل ماذا ومتى"]
 }`;
+const PLAN_SCHEMA_A = `{
+ "title": "عنوان الخطة",
+ "summary": "ملخص تنفيذي 3-5 جمل",
+ "summary_callout": "أهم قرار أو رسالة في جملة",
+ "swot": { "strengths": [], "weaknesses": [], "opportunities": [], "threats": [] },
+ "objectives": [ { "goal": "هدف SMART", "kpi": "المؤشر", "target": "رقم مستهدف واقعي مع الفترة" } ],
+ "audience": [ { "segment": "الشريحة", "insight": "الدافع/الاحتياج", "message": "الرسالة" } ],
+ "positioning": "التموضع والرسالة الرئيسية"
+}`;
+const PLAN_SCHEMA_B = `{
+ "pillars": [ { "name": "تعليمي|عرض / بيع|خلف الكواليس|موسمي|دليل اجتماعي|هوية وقيم", "share": 30, "examples": ["فكرة"] } ],
+ "channels": [ { "platform": "إنستقرام", "role": "الدور في القمع", "frequency": "3 أسبوعياً", "best_times": "8–11 م" } ],
+ "calendar": [ { "month": "نوفمبر 2026", "theme": "الفكرة الرئيسية", "seasons": ["مناسبة"] } ],
+ "ads": { "budget": "الميزانية الشهرية المقترحة", "split": [ { "channel": "ميتا — رسائل واتساب", "objective": "الهدف", "pct": 60 } ] },
+ "roadmap": [ { "phase": "التأسيس", "duration": "الأسبوعان 1-2", "actions": ["..."] } ],
+ "risks": [ { "risk": "...", "mitigation": "..." } ],
+ "next_steps": ["من يفعل ماذا ومتى"]
+}`;
 async function seasonsAhead(db, from, months) {
   const { results } = await db.prepare('SELECT name, date, sectors FROM seasons WHERE date >= ? AND date <= ? ORDER BY date').bind(from, addMonths(from, months)).all();
   return results;
@@ -311,8 +329,8 @@ async function aiPlan(db, env, user, d, h) {
   const start = /^\d{4}-\d{2}-\d{2}$/.test(d.start_date || '') ? d.start_date : today();
   const [seas, pkg, party] = await Promise.all([seasonsAhead(db, start, months), packageFor(db, client), partyContext(db, { client_id: client.id })]);
   const pd = pkg ? parse(pkg.details, {}) : null;
-  const { data, engine } = await runAI(env, `${BRAND}\nأنت استراتيجي تسويق أول تكتب خطة تسويقية تنفيذية لعميل سعودي. ابنِ الخطة على: المشكلة ← الجمهور ← التموضع ← القيمة ← القنوات ← المحتوى ← الإعلانات ← مؤشرات الأداء ← خارطة التنفيذ. الأهداف SMART وواقعية، والقنوات حسب جمهور القطاع في السعودية، ومجموع نسب المحاور 100 ومجموع نسب الإعلانات 100. اربط التقويم بالمواسم المعطاة فقط. لا تختلق أرقاماً عن أداء العميل الحالي؛ إن لم تتوفر فاجعل الهدف الأول قياس خط الأساس.`,
-    `${partyText(party)}
+  const sys = `${BRAND}\nأنت استراتيجي تسويق أول تكتب خطة تسويقية تنفيذية لعميل سعودي. ابنِ الخطة على: المشكلة ← الجمهور ← التموضع ← القيمة ← القنوات ← المحتوى ← الإعلانات ← مؤشرات الأداء ← خارطة التنفيذ. الأهداف SMART وواقعية، والقنوات حسب جمهور القطاع في السعودية، ومجموع نسب المحاور 100 ومجموع نسب الإعلانات 100. اربط التقويم بالمواسم المعطاة فقط. لا تختلق أرقاماً عن أداء العميل الحالي؛ إن لم تتوفر فاجعل الهدف الأول قياس خط الأساس.`;
+  const brief = `${partyText(party)}
 ${pkg ? `الباقة المتعاقد عليها: ${pkg.name} — ${pd?.posts || '?'} منشوراً و${pd?.designs || '?'} تصميماً شهرياً على ${pd?.platforms || '?'} منصات، وإدارة إعلانات حتى ${pd?.adcap || '?'} ر.س` : ''}
 مدة الخطة: ${months} أشهر تبدأ ${start}
 الأهداف والاحتياج: ${str(d.goals, 2500) || 'غير محددة — اقترح الأنسب للقطاع'}
@@ -320,8 +338,14 @@ ${pkg ? `الباقة المتعاقد عليها: ${pkg.name} — ${pd?.posts |
 ${d.audience ? `الجمهور: ${str(d.audience, 800)}` : ''}${d.platforms?.length ? `\nالمنصات المفضلة: ${arr(d.platforms).join('، ')}` : ''}${d.notes ? `\nملاحظات: ${str(d.notes, 1500)}` : ''}
 المواسم والمناسبات خلال الفترة: ${seas.map((x) => `${x.name} (${x.date})`).join('، ') || 'لا مواسم مسجلة'}
 
-أعد الخطة بهذه البنية:
-${PLAN_SCHEMA}`, { max: 7000 });
+`;
+  // توليد متوازٍ لنصفي الخطة (الاستراتيجية + التنفيذ) — يختصر الزمن للنصف تقريباً
+  const [A, B] = await Promise.all([
+    runAI(env, sys, `${brief}\nاكتب الجزء الاستراتيجي من الخطة فقط بهذه البنية:\n${PLAN_SCHEMA_A}`, { max: 4500 }),
+    runAI(env, sys, `${brief}\nاكتب الجزء التنفيذي من الخطة فقط (القسم الاستراتيجي يكتبه زميل بالتوازي على المعطيات نفسها) بهذه البنية:\n${PLAN_SCHEMA_B}`, { max: 5000 }),
+  ]);
+  const data = { ...B.data, ...A.data };
+  const engine = A.engine === B.engine ? A.engine : `${A.engine} + ${B.engine}`;
   const doc = { ...data, months };
   const r = await db.prepare(`INSERT INTO plans (client_id, title, start_date, months, goals, budget, status, doc, engine, created_by) VALUES (?,?,?,?,?,?, 'مسودة', ?, ?, ?)`)
     .bind(client.id, str(data.title, 200) || `الخطة التسويقية — ${client.name}`, start, months, str(d.goals, 2000), str(d.budget, 100), JSON.stringify(doc), engine, user.id).run();
@@ -359,16 +383,25 @@ async function aiPosts(db, env, user, d, h) {
   const platforms = arr(d.platforms).filter((p) => PLATFORMS.includes(p));
   const { results: existing } = await db.prepare('SELECT publish_date, platform, title FROM content WHERE client_id = ? AND publish_date BETWEEN ? AND ?').bind(client.id, from, to).all();
   const pdoc = plan ? parse(plan.doc, {}) : null;
-  const { data, engine } = await runAI(env, `${BRAND}\nأنت مدير محتوى أول تعدّ تقويم منشورات شهري جاهزاً للتصميم والجدولة.\n${POST_RULES}`,
-    `العميل: ${client.name}${client.brand ? ' / ' + client.brand : ''} · القطاع: ${client.sector || ''} · المدينة: ${client.city || ''}\nنبذة وملاحظات: ${str(client.notes, 800)}
-الشهر: ${month} (من ${from} إلى ${to}) · عدد المنشورات: ${count}
+  // دفعات متوازية (حتى 8 منشورات لكل دفعة على مدى أيام مستقل) — أسرع وأمتن من طلب واحد طويل
+  const days0 = Number(to.slice(8)); const nb = Math.min(5, Math.ceil(count / 8));
+  const batches = Array.from({ length: nb }, (_, k) => {
+    const d1 = 1 + Math.floor((k * days0) / nb); const d2 = Math.floor(((k + 1) * days0) / nb);
+    const n = Math.floor(count / nb) + (k < count % nb ? 1 : 0);
+    return { n, f: `${month}-${String(d1).padStart(2, '0')}`, t: `${month}-${String(d2).padStart(2, '0')}` };
+  });
+  const sysP = `${BRAND}\nأنت مدير محتوى أول تعدّ تقويم منشورات شهري جاهزاً للتصميم والجدولة.\n${POST_RULES}`;
+  const res = await Promise.all(batches.map(({ n, f, t }) => runAI(env, sysP, `العميل: ${client.name}${client.brand ? ' / ' + client.brand : ''} · القطاع: ${client.sector || ''} · المدينة: ${client.city || ''}\nنبذة وملاحظات: ${str(client.notes, 800)}
+الشهر: ${month} · هذه الدفعة: ${n} منشوراً بين ${f} و${t} فقط (دفعات أخرى تغطي بقية الشهر)
 المنصات: ${platforms.length ? platforms.join('، ') : (pdoc?.channels || []).map((c) => c.platform).join('، ') || 'إنستقرام، تيك توك، سناب شات'}
 ${pdoc ? `من الخطة التسويقية «${plan.title}»: التموضع: ${str(pdoc.positioning, 400)} · المحاور: ${(pdoc.pillars || []).map((p) => `${p.name} ${p.share}%`).join('، ')} · الأهداف: ${(pdoc.objectives || []).map((o) => o.goal).join('؛ ')}` : ''}
 المواسم في الشهر: ${seas.map((s) => `${s.name} (${s.date})`).join('، ') || 'لا يوجد'}
 ${existing.length ? `منشورات موجودة مسبقاً (لا تكررها ولا تضع فوقها): ${existing.map((e) => `${e.publish_date} ${e.platform} ${e.title}`).join(' | ')}` : ''}
 ${d.notes ? `توجيهات الفريق: ${str(d.notes, 1500)}` : ''}
 
-أعد: { "posts": [ { "date": "YYYY-MM-DD", "time": "HH:MM", "platform": "${PLATFORMS.join('|')}", "format": "${FORMATS.join('|')}", "pillar": "${PILLARS.join('|')}", "title": "عنوان داخلي قصير", "caption": "النص الكامل", "hashtags": "#وسم #وسم", "cta": "الدعوة لاتخاذ إجراء", "design_brief": "..." } ] }`, { max: 12000 });
+أعد: { "posts": [ { "date": "YYYY-MM-DD", "time": "HH:MM", "platform": "${PLATFORMS.join('|')}", "format": "${FORMATS.join('|')}", "pillar": "${PILLARS.join('|')}", "title": "عنوان داخلي قصير", "caption": "النص الكامل", "hashtags": "#وسم #وسم", "cta": "الدعوة لاتخاذ إجراء", "design_brief": "..." } ] }`, { max: Math.min(12000, 1200 + n * 750) })));
+  const data = { posts: res.flatMap((r) => arr(r.data.posts || r.data)) };
+  const engine = [...new Set(res.map((r) => r.engine))].join(' + ');
   const posts = arr(data.posts || data).slice(0, count);
   if (!posts.length) throw new HttpError(422, 'لم يُنتج الذكاء منشورات — أعد المحاولة بتوجيهات أوضح');
   const days = Number(to.slice(8)); let i = 0;
@@ -437,6 +470,33 @@ export async function studioRoute(db, env, request, user, parts, h) {
   if (a === 'doc' && method === 'GET') return docFile(db, user, b, Number(c), h);
   if (user.via === 'token' && user.scope !== 'write') return bad('المفتاح للقراءة فقط', 403);
   const d = method === 'GET' ? {} : await readBody(request);
+  // عمليات التوليد الطويلة تُبث كاستجابة متدفقة: نبضات كل 8 ثوانٍ تمنع مهلة Cloudflare (524 بعد 100 ثانية)
+  const long = method === 'POST' && ((a === 'quote' && (!b || c === 'revise')) || a === 'contract' || a === 'plan' || a === 'posts');
+  if (long) return streamed(() => dispatch(db, env, user, a, b, c, method, d, h));
+  return dispatch(db, env, user, a, b, c, method, d, h);
+}
+
+// يبث مسافات فارغة (يتجاهلها JSON.parse) حتى يكتمل التوليد، ثم النتيجة مع __status
+function streamed(work) {
+  const { readable, writable } = new TransformStream();
+  const w = writable.getWriter(); const enc = new TextEncoder();
+  const beat = setInterval(() => { w.write(enc.encode(' ')).catch(() => {}); }, 8000);
+  (async () => {
+    let out;
+    try {
+      const res = await work();
+      const body = await res.json().catch(() => ({}));
+      out = { ...body, __status: res.status };
+    } catch (e) {
+      out = { error: e.message || 'تعذّر التوليد', __status: e.status || 500 };
+    }
+    clearInterval(beat);
+    try { await w.write(enc.encode(JSON.stringify(out))); await w.close(); } catch { /* أغلق المتصفح الاتصال */ }
+  })();
+  return new Response(readable, { status: 200, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-accel-buffering': 'no' } });
+}
+
+async function dispatch(db, env, user, a, b, c, method, d, h) {
   if (a === 'quote' && !b && method === 'POST') return aiQuote(db, env, user, d, h);
   if (a === 'quote' && b && c === 'revise' && method === 'POST') return reviseQuote(db, env, user, Number(b), d, h);
   if (a === 'quote' && b && c === 'approve' && method === 'POST') return approveQuote(db, env, user, Number(b), h);

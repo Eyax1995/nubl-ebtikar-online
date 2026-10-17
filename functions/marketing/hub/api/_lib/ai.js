@@ -11,6 +11,7 @@ function extractJSON(text) {
   return null;
 }
 
+// بث (stream) من Claude: لا مهلة خمول على الاتصال الطويل، ويُجمَّع النص كاملاً
 async function claude(env, system, user, max) {
   if (!env.ANTHROPIC_API_KEY) return { ok: false, skip: true, error: 'ANTHROPIC_API_KEY غير مضاف' };
   const model = env.CLAUDE_MODEL || 'claude-sonnet-4-5';
@@ -18,12 +19,35 @@ async function claude(env, system, user, max) {
     const r = await fetch(`${env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com'}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model, max_tokens: max, temperature: 0.4, system, messages: [{ role: 'user', content: user }] }),
+      body: JSON.stringify({ model, max_tokens: max, temperature: 0.4, stream: true, system, messages: [{ role: 'user', content: user }] }),
     });
-    const d = await r.json().catch(() => ({}));
-    const text = (d.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();
-    if (r.ok && text) return { ok: true, text, engine: 'claude:' + model, truncated: d.stop_reason === 'max_tokens' };
-    return { ok: false, error: 'Claude: ' + ((d.error && d.error.message) || `HTTP ${r.status}`) };
+    const ct = r.headers.get('content-type') || '';
+    if (!r.ok || !ct.includes('event-stream')) {
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) { // خادم لا يدعم البث (اختبار) — رد كامل
+        const text = (d.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();
+        if (text) return { ok: true, text, engine: 'claude:' + model, truncated: d.stop_reason === 'max_tokens' };
+      }
+      return { ok: false, error: 'Claude: ' + ((d.error && d.error.message) || `HTTP ${r.status}`) };
+    }
+    const reader = r.body.getReader(); const dec = new TextDecoder();
+    let buf = ''; let text = ''; let stop = null; let err = null;
+    for (;;) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (!line.startsWith('data:')) continue;
+        let ev; try { ev = JSON.parse(line.slice(5)); } catch { continue; }
+        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') text += ev.delta.text;
+        else if (ev.type === 'message_delta' && ev.delta?.stop_reason) stop = ev.delta.stop_reason;
+        else if (ev.type === 'error') err = ev.error?.message || 'خطأ';
+      }
+    }
+    text = text.trim();
+    if (text && !err) return { ok: true, text, engine: 'claude:' + model, truncated: stop === 'max_tokens' };
+    return { ok: false, error: 'Claude: ' + (err || 'رد فارغ') };
   } catch (e) { return { ok: false, error: 'Claude: ' + e.message }; }
 }
 async function gemini(env, system, user, max) {

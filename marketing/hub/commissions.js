@@ -157,8 +157,8 @@
     const w = window.open('', '_blank'); if (!w) return toast('اسمح بالنوافذ المنبثقة للطباعة', 1);
     const row = (r) => `<tr><td>${r.earned_at || ''}</td><td>${esc(r.client || '')}</td><td>${esc(r.note || '')}</td><td>${moneyTxt(r.base_amount)}</td><td>${moneyTxt(r.amount)}</td><td>${esc(r.status)}</td></tr>`;
     w.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>كشف حساب ${esc(s.rep.name)}</title>
-      <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet"><style>body{font-family:Tajawal,sans-serif;color:#082A37;margin:32px}h1{color:#15556B;border-bottom:3px solid #DC9C47;padding-bottom:8px}
-      table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th{background:#308D8B;color:#fff;padding:7px}td{border-bottom:1px solid #e5ddd0;padding:6px}.c{display:flex;gap:12px;margin:14px 0}.c div{flex:1;border:1px solid #e5ddd0;border-radius:10px;padding:10px}.c b{display:block;font-size:20px;color:#15556B}</style></head><body>
+      <style>@font-face{font-family:'The Year of Handicrafts';src:url(${location.origin}/marketing/hub/fonts/TheYearofHandicrafts-Bold.woff2) format('woff2');font-weight:700}@font-face{font-family:'DG Agnadeen';src:url(${location.origin}/marketing/hub/fonts/DGAgnadeen-Regular.woff2) format('woff2');font-weight:400}@font-face{font-family:'DG Agnadeen';src:url(${location.origin}/marketing/hub/fonts/DGAgnadeen-Bold.woff2) format('woff2');font-weight:700}h1,h2,h3{font-family:'The Year of Handicrafts','DG Agnadeen',Tajawal,sans-serif}</style><style>body{font-family:'DG Agnadeen',Tajawal,sans-serif;color:#123F50;margin:32px}h1{color:#18566D;border-bottom:3px solid #DB9C47;padding-bottom:8px}
+      table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th{background:#18566D;color:#fff;padding:7px}td{border-bottom:1px solid #DCE5E8;padding:6px}.c{display:flex;gap:12px;margin:14px 0}.c div{flex:1;border:1px solid #DCE5E8;border-radius:6px;padding:10px}.c b{display:block;font-size:20px;color:#18566D}</style></head><body>
       <h1>كشف حساب عمولات — ${esc(s.rep.name)}</h1><p>نُبل وابتكار للتسويق · نسبة ${s.rep.rate}% · حتى تاريخ ${todayStr()}</p>
       <div class="c"><div>مستحق<b>${moneyTxt(s.totals.due)}</b></div><div>معتمد<b>${moneyTxt(s.totals.approved)}</b></div><div>مصروف<b>${moneyTxt(s.totals.paid)}</b></div><div>الإجمالي<b>${moneyTxt(s.totals.all)}</b></div></div>
       <table><thead><tr><th>التاريخ</th><th>العميل</th><th>البيان</th><th>الأساس (ر.س)</th><th>العمولة (ر.س)</th><th>الحالة</th></tr></thead><tbody>${s.rows.map(row).join('')}</tbody></table>
@@ -211,7 +211,7 @@
   // ---------- التسجيل ----------
   const css = document.createElement('style');
   css.textContent = `.cm-tabs{margin:0}.cm-rep{display:flex;flex-direction:column;gap:10px}.cm-rep.off{opacity:.6}.cm-h{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}.cm-h b{font-size:16px;color:var(--deep)}
-    .cm-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.cm-nums div{background:var(--soft,#F4EDE1);border-radius:10px;padding:8px}.cm-nums span{display:block;font-size:11.5px;color:var(--muted)}.cm-nums b{font-size:13.5px}
+    .cm-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.cm-nums div{background:var(--soft,#EEF3F4);border-radius:10px;padding:8px}.cm-nums span{display:block;font-size:11.5px;color:var(--muted)}.cm-nums b{font-size:13.5px}
     .cm-acts{display:flex;flex-wrap:wrap;gap:6px}.cm-st-h{display:flex;justify-content:space-between;align-items:center;gap:10px}#cmst h4{margin:14px 0 6px;color:var(--navy)}
     .ak-tabs{display:flex;gap:6px;flex-wrap:wrap}.ak-tabs button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:5px 13px;font-size:13px;cursor:pointer}.ak-tabs button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
     @media(max-width:700px){.cm-nums b{font-size:12px}}`;

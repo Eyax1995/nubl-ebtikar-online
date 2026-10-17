@@ -475,7 +475,7 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-lh svg{width:16px;height:16px;color:#1FA855;vertical-align:-3px}
   .wa-threads{overflow:auto;flex:1}
   .wa-ti{display:block;padding:10px 14px;border-bottom:1px solid var(--line);color:inherit}
-  .wa-ti:hover{background:var(--soft)}.wa-ti.on{background:#E3F2F1}
+  .wa-ti:hover{background:var(--soft)}.wa-ti.on{background:#CCE2E2}
   .wa-tn,.wa-tf{display:flex;justify-content:space-between;align-items:center;gap:8px}
   .wa-tp{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:2px 0}
   .wa-th{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
@@ -488,10 +488,10 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-meta{padding:2px 6px}
   .wa-compose{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line);align-items:flex-end}
   .wa-compose textarea{flex:1;resize:vertical;min-height:44px}
-  .wa-closed{padding:12px 14px;border-top:1px solid var(--line);background:#FBEEE8;color:#A04A1F;display:flex;gap:12px;align-items:center;justify-content:space-between}
+  .wa-closed{padding:12px 14px;border-top:1px solid var(--line);background:#F3D8CA;color:#A8501F;display:flex;gap:12px;align-items:center;justify-content:space-between}
   .wa-acts{display:flex;gap:6px}
   .wa-prev{margin-top:6px;padding:12px 14px;border-radius:12px;background:#DCF5E3;line-height:1.8;max-width:520px}
-  .wa-ph{color:#A04A1F;background:#FBEEE8;border-radius:4px;padding:0 3px}
+  .wa-ph{color:#A8501F;background:#F3D8CA;border-radius:4px;padding:0 3px}
   .wa-pbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.wa-pbtns span{background:#fff;border-radius:8px;padding:4px 10px;font-size:.85em;color:#1F8A4C}
   .wa-note{padding:14px;background:var(--soft);border-radius:10px;line-height:1.9}
   .wa-prof{display:flex;gap:18px;align-items:flex-start;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
@@ -500,12 +500,12 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-avatar img{width:100%;height:100%;object-fit:cover}.wa-avatar svg{width:44px;height:44px;color:#1FA855}
   @media(max-width:860px){.wa-prof{flex-direction:column;align-items:center}.wa-closed{flex-direction:column;align-items:stretch}.wa-box{grid-template-columns:1fr;height:auto}.wa-box.has-thread .wa-list{display:none}
     .wa-box:not(.has-thread) .wa-thread{display:none}.wa-back{display:inline-flex}.wa-msgs{max-height:60vh}}
-  .wa-th{gap:10px}.wa-av{width:40px;height:40px;border-radius:14px;background:var(--g-brand,#15556B);color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
+  .wa-th{gap:10px}.wa-av{width:40px;height:40px;border-radius:14px;background:var(--g-brand,#18566D);color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
   .wa-who{min-width:0}.wa-who b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .wa-th .btn .ai,.wa-th .btn svg{width:17px;height:17px}
   .wa-bar{padding:6px 14px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;align-items:center}.wa-bar.off{color:var(--terra)}
   .wa-win{display:inline-flex;align-items:center;gap:4px;color:var(--teal);font-weight:600}.wa-win .ai{width:14px;height:14px}
-  .wa-msgs{background:#EFE9DE;background-image:radial-gradient(rgba(21,85,107,.06) 1px,transparent 1px);background-size:18px 18px}
+  .wa-msgs{background:#EFE9DE;background-image:radial-gradient(rgba(24,86,109,.06) 1px,transparent 1px);background-size:18px 18px}
   .wa-b{position:relative;border-radius:16px;padding:8px 12px 10px;line-height:1.7}
   .wa-m.customer .wa-b{border-top-right-radius:4px}.wa-m.staff .wa-b,.wa-m.bot .wa-b{border-top-left-radius:4px}
   .wa-img img{display:block;max-width:min(280px,100%);max-height:320px;border-radius:12px;margin-bottom:4px;object-fit:cover;background:#ddd}
@@ -525,9 +525,9 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-compose{align-items:flex-end;gap:8px;padding:10px 12px;background:#fff}
   .wa-compose textarea.inp{min-height:46px;max-height:180px;resize:none;border-radius:16px;line-height:1.6;padding-top:11px}
   .wa-tools{display:flex;gap:6px}
-  .wa-tb{width:44px;height:46px;border-radius:14px;border:1.5px solid var(--line-2,#D8CCB6);background:#fff;color:var(--navy);display:grid;place-items:center;cursor:pointer;transition:transform .25s}
+  .wa-tb{width:44px;height:46px;border-radius:14px;border:1.5px solid var(--line-2,#C5D5DA);background:#fff;color:var(--navy);display:grid;place-items:center;cursor:pointer;transition:transform .25s}
   .wa-tb:hover{transform:translateY(-2px)}.wa-tb .ai{width:22px;height:22px}
-  .wa-tb.aib{background:linear-gradient(135deg,#0C3B4C,#308D8B);color:#fff;border:0;--ic-a:#F2B562;--ic-b:#A6E3E0}
+  .wa-tb.aib{background:linear-gradient(135deg,#124354,#338C89);color:#fff;border:0;--ic-a:#E4B575;--ic-b:#CCE2E2}
   .wa-menu{position:relative}
   .wa-pop{position:absolute;bottom:calc(100% + 8px);inset-inline-start:0;z-index:20;width:250px;background:#fff;border-radius:18px;padding:8px;box-shadow:0 24px 50px -16px rgba(8,42,55,.5);border:1px solid var(--line);animation:mpop .3s var(--spring,ease) both}
   .wa-pop button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:9px 10px;border-radius:12px;cursor:pointer;font:inherit;color:var(--ink);text-align:start}
@@ -547,8 +547,8 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-fi-b .inp{min-height:36px;margin-top:4px;font-size:13px;padding:6px 10px}
   .wa-fi.err{border-color:#E2A496;background:#FFF6F3}
   .wa-fi-x{border:0;background:var(--soft);width:36px;height:36px;border-radius:10px;cursor:pointer;color:var(--red);display:grid;place-items:center}.wa-fi-x .ai{width:18px;height:18px}
-  .wa-aip{background:linear-gradient(135deg,#0C3B4C,#15556B);color:#E6F0F3;border:0}
-  .wa-aih{display:flex;align-items:center;gap:8px;margin-bottom:8px}.wa-aih .ai{width:18px;height:18px;--ic-a:#F2B562;--ic-b:#A6E3E0}.wa-aih .sp{flex:1}.wa-aih button{color:#CFE5EA}
+  .wa-aip{background:linear-gradient(135deg,#124354,#18566D);color:#E8EEF0;border:0}
+  .wa-aih{display:flex;align-items:center;gap:8px;margin-bottom:8px}.wa-aih .ai{width:18px;height:18px;--ic-a:#E4B575;--ic-b:#CCE2E2}.wa-aih .sp{flex:1}.wa-aih button{color:#CFE5EA}
   .wa-aip textarea.wa-ait{background:rgba(255,255,255,.96);color:var(--ink);min-height:90px}
   .wa-aia{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}.wa-aia .muted{color:#BFD9DF!important}
   .shimmer{background:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,.4),rgba(255,255,255,.15));background-size:200% 100%;animation:shim 1.2s linear infinite;border-radius:10px;padding:14px;color:#fff}

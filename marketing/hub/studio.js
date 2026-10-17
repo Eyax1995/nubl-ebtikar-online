@@ -184,7 +184,7 @@
       ${P.perk ? `<div class="pp-call"><b>${esc(P.perk_label || 'ميزة عند التعاقد')}:</b> ${bold(P.perk)}</div>` : ''}` : '';
     const post = (doc.sections || []).filter((s) => s.after_pricing).map(sec).join('');
     const tl = doc.timeline?.length || doc.terms?.length ? `${H(doc.timeline_heading || 'الجدول الزمني والمطلوب منكم')}${doc.timeline?.length ? `<table class="pp-t"><thead><tr><th>المرحلة</th><th>المدة</th></tr></thead><tbody>${doc.timeline.map((x) => `<tr><td class="k">${esc(x.phase)}</td><td class="c">${esc(x.duration)}</td></tr>`).join('')}</tbody></table>` : ''}${doc.terms?.length ? `<ul class="pp-ul">${doc.terms.map((x) => `<li>${bold(x)}</li>`).join('')}</ul>` : ''}` : '';
-    return `<div class="paper"><div class="pp-head"><img src="../logo.png" alt=""><span>نُبل وابتكار للتسويق</span></div>
+    return `<div class="paper"><div class="pp-head"><img src="brand/logo-h-color.svg" alt="نُبل وابتكار للخدمات التسويقية"><span dir="ltr">NUBL@EBTEKAR FOR MARKETING</span></div>
       <p class="pp-date">جدة، في ${fdate(String(q.created_at || todayStr()).slice(0, 10))}</p><h3 class="pp-title">عرض سعر</h3>${doc.subject ? `<p class="pp-sub">${esc(doc.subject)}</p>` : ''}
       <p class="pp-for"><b>أُعِدّ لـ:</b> ${esc(doc.prepared_for || '')}</p><p class="pp-no"><b>رقم العرض:</b> <span dir="ltr">${esc(q.number || '')}</span></p>${doc.intro ? `<p>${bold(doc.intro)}</p>` : ''}
       ${pre}${fin}${post}${tl}
@@ -272,7 +272,7 @@
     let n = 0; const H = (x) => `<h4 class="pp-h1">${ORD[n++]}: ${esc(x)}</h4>`;
     const T = (cols, rows) => (rows?.length ? `<table class="pp-t"><thead><tr>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td${i ? '' : ' class="k"'}>${bold(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '');
     const sw = d.swot || {}; const j = (a) => (a || []).join(' · ');
-    return `<div class="paper"><div class="pp-head"><img src="../logo.png" alt=""><span>نُبل وابتكار للتسويق</span></div><h3 class="pp-title">الخطة التسويقية</h3><p class="pp-sub">${esc(d.title || p.title || '')}</p>
+    return `<div class="paper"><div class="pp-head"><img src="brand/logo-h-color.svg" alt="نُبل وابتكار للخدمات التسويقية"><span dir="ltr">NUBL@EBTEKAR FOR MARKETING</span></div><h3 class="pp-title">الخطة التسويقية</h3><p class="pp-sub">${esc(d.title || p.title || '')}</p>
       <p class="pp-for"><b>أُعِدّت لـ:</b> ${esc(refLabel('clients', p.client_id))} · ${p.months} أشهر تبدأ ${fdate(p.start_date)}</p>
       ${d.summary ? `<p>${bold(d.summary)}</p>` : ''}${d.summary_callout ? `<div class="pp-call"><b>الخلاصة:</b> ${bold(d.summary_callout)}</div>` : ''}
       ${sw.strengths || sw.weaknesses ? H('تحليل الوضع الحالي (SWOT)') + T(['المحور', 'التحليل'], [['نقاط القوة', j(sw.strengths)], ['نقاط الضعف', j(sw.weaknesses)], ['الفرص', j(sw.opportunities)], ['التهديدات', j(sw.threats)]].filter((r) => r[1])) : ''}
@@ -378,28 +378,28 @@
 
   const css = document.createElement('style');
   css.textContent = `
-  .st-hero{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;background:linear-gradient(135deg,var(--deep,#082A37),var(--navy,#15556B));color:#fff;border-radius:18px;padding:20px 22px}
+  .st-hero{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;background:var(--navy,#18566D) url(brand/chevron-4.svg) no-repeat left 22px center/28px auto;color:#fff;border-radius:6px;padding:20px 22px;padding-inline-end:70px}
   .st-hero h2{margin:0 0 4px;font-size:22px}.st-hero p{margin:0;opacity:.85;max-width:620px;font-size:14px}
   .st-flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px;opacity:.9}.st-flow span{background:#ffffff1f;border-radius:99px;padding:4px 11px}
   .st-card{display:flex;flex-direction:column;gap:8px}.st-card h3{margin:0}.st-card p{flex:1;margin:0}.st-ic svg{width:34px;height:34px}
   .st-busy{text-align:center;padding:18px 6px}.st-busy p{font-weight:600;margin:14px 0 4px}
-  .st-orb{display:inline-flex;gap:7px}.st-orb i{width:12px;height:12px;border-radius:50%;background:var(--gold,#DC9C47);animation:stb 1s infinite ease-in-out}.st-orb i:nth-child(2){animation-delay:.15s;background:var(--teal,#308D8B)}.st-orb i:nth-child(3){animation-delay:.3s;background:var(--terra,#D2652A)}
+  .st-orb{display:inline-flex;gap:7px}.st-orb i{width:12px;height:12px;border-radius:50%;background:var(--gold,#DB9C47);animation:stb 1s infinite ease-in-out}.st-orb i:nth-child(2){animation-delay:.15s;background:var(--teal,#338C89)}.st-orb i:nth-child(3){animation-delay:.3s;background:var(--terra,#D06429)}
   @keyframes stb{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(-8px);opacity:1}}
   .st-cat{border:1px solid var(--line);border-radius:10px;padding:6px 10px;margin-top:6px}.st-cat summary{cursor:pointer;font-weight:600;font-size:13px}.st-cat .chips{margin-top:8px}
   .st-q{display:grid;grid-template-columns:300px minmax(0,1fr);gap:14px;align-items:start}.st-side{position:sticky;top:80px}
   .st-item{display:grid;grid-template-columns:2fr 2fr 60px 110px auto auto;gap:6px;align-items:center;margin-top:6px}
   .st-chipset{display:inline-flex;gap:6px;flex-wrap:wrap}
-  .paper{background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px 34px;box-shadow:0 8px 30px #082a370f;color:#1A1A1A;font-size:14px;line-height:1.8;max-width:860px}
-  .paper p{margin:0 0 10px;text-align:justify}.pp-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e6edf0;padding-bottom:10px;margin-bottom:12px}.pp-head img{height:46px}.pp-head span{color:#134E62;font-weight:700}
-  .pp-date{color:#5A6B72;font-size:12.5px}.pp-title{text-align:center;color:#134E62;font-size:24px;margin:4px 0}.pp-sub{text-align:center!important;color:#D06329;font-weight:700;font-size:15.5px}
-  .pp-for{background:#EEF3F5;padding:4px 10px;border-radius:6px}.pp-for b{color:#D06329}.pp-no{font-size:12.5px}
-  .pp-h1{color:#134E62;font-size:17px;border-bottom:2px solid #D06329;padding-bottom:4px;margin:20px 0 10px}.pp-h2{color:#D06329;font-size:14.5px;margin:14px 0 6px}
-  .pp-t{width:100%;border-collapse:collapse;font-size:12.8px;margin-bottom:10px}.pp-t th{background:#134E62;color:#fff;padding:6px 8px;font-weight:600}.pp-t td{border:1px solid #D5DEE2;padding:6px 8px;vertical-align:top}
-  .pp-t td.k{color:#134E62;font-weight:700}.pp-t td.c{text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}.pp-t td small{display:block;color:#5A6B72;font-weight:400}.pp-t tr.tot td{background:#F3F6F8;color:#134E62;font-weight:700}
-  .pp-t tr.rv td{background:#FFF6EC}.pp-tag{display:inline-block;font-size:10.5px;border-radius:99px;padding:0 7px;margin-inline-start:6px;font-weight:600}.pp-tag.lk{background:#E5EEF2;color:#134E62}.pp-tag.rv{background:#FBE3D3;color:#A2471A}
-  .pp-call{background:#EEF3F5;border-inline-start:5px solid #D06329;padding:8px 12px;margin:8px 0 12px;font-size:13px}
-  .pp-ul{margin:4px 0 10px;padding-inline-start:20px}.pp-ul li::marker{color:#D06329}
-  .pp-small{font-size:12px;color:#333}.pp-close{text-align:center!important;color:#134E62;font-weight:700;margin-top:18px!important}.pp-sign{text-align:center!important;color:#5A6B72;font-size:13px}.pp-sign b{color:#134E62;font-size:15px}
+  .paper{background:#fff;border:1px solid var(--line);border-radius:6px;padding:28px 34px;border-inline-start:6px solid #18566D;color:#1E3E4A;font-size:14px;line-height:1.8;max-width:860px}
+  .paper p{margin:0 0 10px;text-align:justify}.pp-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #E8EEF0;padding-bottom:10px;margin-bottom:12px}.pp-head{border-bottom:2px solid #18566D!important}.pp-head img{height:44px}.pp-head span{color:#18566D;font-weight:700;letter-spacing:.12em;font-size:12px}.pp-title,.pp-h1,.pp-h2{font-family:var(--f-ar)}
+  .pp-date{color:#3E5A66;font-size:12.5px}.pp-title{text-align:center;color:#18566D;font-size:24px;margin:4px 0}.pp-sub{text-align:center!important;color:#D06429;font-weight:700;font-size:15.5px}
+  .pp-for{background:#CCE2E2;padding:4px 10px;border-radius:6px}.pp-for b{color:#D06429}.pp-no{font-size:12.5px}
+  .pp-h1{color:#18566D;font-size:17px;border-bottom:2px solid #D06429;padding-bottom:4px;margin:20px 0 10px}.pp-h2{color:#D06429;font-size:14.5px;margin:14px 0 6px}
+  .pp-t{width:100%;border-collapse:collapse;font-size:12.8px;margin-bottom:10px}.pp-t th{background:#18566D;color:#fff;padding:6px 8px;font-weight:600}.pp-t td{border:1px solid #C5D5DA;padding:6px 8px;vertical-align:top}
+  .pp-t td.k{color:#18566D;font-weight:700}.pp-t td.c{text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}.pp-t td small{display:block;color:#3E5A66;font-weight:400}.pp-t tr.tot td{background:#E8EEF0;color:#18566D;font-weight:700}
+  .pp-t tr.rv td{background:#FBF0EA}.pp-tag{display:inline-block;font-size:10.5px;border-radius:99px;padding:0 7px;margin-inline-start:6px;font-weight:600}.pp-tag.lk{background:#E8EEF0;color:#18566D}.pp-tag.rv{background:#F3D8CA;color:#A8501F}
+  .pp-call{background:#CCE2E2;border-inline-start:5px solid #D06429;padding:8px 12px;margin:8px 0 12px;font-size:13px}
+  .pp-ul{margin:4px 0 10px;padding-inline-start:20px}.pp-ul li::marker{color:#D06429}
+  .pp-small{font-size:12px;color:#333}.pp-close{text-align:center!important;color:#18566D;font-weight:700;margin-top:18px!important}.pp-sign{text-align:center!important;color:#3E5A66;font-size:13px}.pp-sign b{color:#18566D;font-size:15px}
   @media(max-width:900px){.st-q{grid-template-columns:1fr}.st-side{position:static}.paper{padding:16px 14px;font-size:13.5px}.pp-t{font-size:12px}.st-item{grid-template-columns:1fr 1fr}
     .pp-t{display:block;overflow-x:auto}}`;
   document.head.appendChild(css);
