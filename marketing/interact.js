@@ -147,7 +147,7 @@
     e.preventDefault(); openTool(b.dataset.tool, b.dataset.title);
   });
 
-  function run(rootEl) { rootEl.querySelectorAll(CARDS).forEach(glass); ulines(rootEl); magnets(rootEl); spots(rootEl); parallax(rootEl); }
+  function run(rootEl) { rootEl.querySelectorAll('.note').forEach((n) => n.classList.toggle('note-dark', isDark(n))); rootEl.querySelectorAll(CARDS).forEach(glass); ulines(rootEl); magnets(rootEl); spots(rootEl); parallax(rootEl); }
   function boot() {
     if (cur) { document.body.append(cur, dot); }
     run(document); requestAnimationFrame(frame);

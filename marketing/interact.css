@@ -130,3 +130,14 @@ footer:before{background-image:var(--strip-r)!important;animation:strip-ltr 6s l
 @keyframes strip-rtl{from{background-position:0 center}to{background-position:-56px center}}
 @keyframes strip-ltr{from{background-position:0 center}to{background-position:56px center}}
 @media (prefers-reduced-motion:reduce){.strip,.hero.small:after,footer:before{animation:none!important}}
+
+/* 18 أكتوبر: ترويسة بلا تداخل، باقات بلا تمرير على الحاسب، ملاحظة الأسعار، نجوم التقييم */
+.nav .logo{flex:none}.nav .logo img{height:39px;width:auto;max-width:none}
+@media (max-width:1199px){.nav ul,.nav .cta{display:none!important}.burger{display:flex!important}}
+@media (min-width:640px) and (max-width:1099px){
+  .pk-car .car-track{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;overflow:visible!important;scroll-snap-type:none}
+  .pk-car .car-track .pc{flex:none!important;min-width:0!important;width:auto!important}
+  .pk-car .car-btn,.pk-car .car-dots{display:none!important}}
+.note{color:#18566D!important;background:rgba(219,156,71,.16)!important;border-inline-start:4px solid #DB9C47!important;font-weight:700!important;font-size:14.5px!important;padding:12px 18px!important;line-height:1.7}
+.note.note-dark{color:#F6E6D1!important;background:rgba(219,156,71,.18)!important}
+.cvrate{color:#DB9C47!important;font-size:18px;gap:3px}
