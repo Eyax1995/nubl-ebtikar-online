@@ -51,6 +51,11 @@ async function workers(env, system, user, max) {
   } catch (e) { return { ok: false, error: 'Workers AI: ' + e.message }; }
 }
 
+// فحص سريع لمحرك Claude يعيد سبب الفشل إن وُجد (للإعداد والمتابعة)
+export async function aiPing(env) {
+  const r = await claude(env, 'رد بكلمة واحدة.', 'قل: جاهز', 20);
+  return r.ok ? { ok: true, engine: r.engine } : { ok: false, error: r.error, model: env.CLAUDE_MODEL || 'claude-sonnet-4-5' };
+}
 export const aiReady = (env) => !!(env.ANTHROPIC_API_KEY || env.GEMINI_API_KEY || env.AI);
 
 // يعيد { data, engine } أو يرمي خطأً مفهوماً
@@ -61,7 +66,7 @@ export async function aiJSON(env, system, user, { max = 8000 } = {}) {
     const r = await fn(env, sys, user, max);
     if (!r.ok) { if (!r.skip) errs.push(r.error); continue; }
     const data = extractJSON(r.text);
-    if (data) return { data, engine: r.engine };
+    if (data) return { data, engine: errs.length ? `${r.engine} (بعد تعذّر: ${errs.join(' | ').slice(0, 160)})` : r.engine };
     errs.push(`${r.engine}: رد غير منظم${r.truncated ? ' (تجاوز الطول)' : ''}`);
   }
   const e = new Error(errs.length ? 'تعذّر التوليد بالذكاء الاصطناعي — ' + errs.join(' | ').slice(0, 400) : 'الذكاء الاصطناعي غير مفعّل: أضف ANTHROPIC_API_KEY في إعدادات Cloudflare Pages');

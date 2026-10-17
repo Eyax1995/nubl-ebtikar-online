@@ -5,7 +5,7 @@
 //   • المنشورات تُجهَّز وتوزَّع في تقويم المنصة (لا نشر آلي على المنصات في هذه المرحلة)، مع تصدير CSV للجدولة.
 import { json, bad, HttpError, audit, getSettings, today, addDays, addMonths, round2, nextNumber } from './core.js';
 import { notifyRoles, notifyUser, h as hx } from './telegram.js';
-import { aiJSON, aiReady, BRAND } from './ai.js';
+import { aiJSON, aiReady, aiPing, BRAND } from './ai.js';
 import { buildDocx } from './docx.js';
 import { quoteBlocks, contractBlocks, planBlocks, quoteTotals } from './docs.js';
 
@@ -78,7 +78,10 @@ const QUOTE_RULES = `قواعد عرض السعر (نموذج «عرض BBR» ا�
 - لا تحسب الضريبة ولا المجاميع؛ المنصة تحسبها. البند المشمول مجاناً price=0.
 - الإضافات: اقترح 2-4 خيارات نمو منطقية (مثل تصوير عبر قطاع الإنتاج في المجموعة، باقة تسويقية من الكتالوج، نسخة إنجليزية، أتمتة) فقط عندما تخدم هدف العميل.
 - الشروط: شروط الدفع (setup_split يطابقها، مجموعها 100)، جولات التعديل، الملكية للعميل، الضريبة. لا تضف الحساب البنكي ولا الختام (تضيفهما المنصة).
-- لا تذكر منافسين بالاسم، ولا أرقام أداء مضمونة.`;
+- لا تذكر منافسين بالاسم، ولا أرقام أداء مضمونة.
+- subject وصف للخدمة فقط ولا يبدأ بعبارة «عرض سعر» (العنوان مكتوب مسبقاً).
+- لا تخترع خدمات أو أدوات أو مزايا لم ترد في الاحتياج أو الكتالوج. الميزة عند التعاقد (perk) فقط إن كانت منطقية من المعطيات (مثل الإعفاء من رسوم الدعم عند التعاقد على باقة تسويقية)، وإلا اتركها فارغة.
+- راجع الإملاء قبل الإخراج (واجهات لا وجهات، تكويد/برمجة، همزات القطع)، وكل صف في جداول الأقسام يحتوي عمودين مكتملين.`;
 
 function normItems(items, cmap, group) {
   return arr(items).slice(0, 25).map((i) => {
@@ -428,6 +431,7 @@ async function docFile(db, user, kind, id, h) {
 export async function studioRoute(db, env, request, user, parts, h) {
   const method = request.method.toUpperCase();
   const [, a, b, c] = parts; // studio/<a>/<b>/<c>
+  if (a === 'status' && method === 'GET' && new URL(request.url).searchParams.get('test')) return json({ claude: await aiPing(env) });
   if (a === 'status' && method === 'GET') return json({ ai: aiReady(env), engines: { claude: !!env.ANTHROPIC_API_KEY, gemini: !!env.GEMINI_API_KEY, workers: !!env.AI }, can_approve: APPROVERS.includes(user.role) });
   if (a === 'doc' && method === 'GET') return docFile(db, user, b, Number(c), h);
   if (user.via === 'token' && user.scope !== 'write') return bad('المفتاح للقراءة فقط', 403);
