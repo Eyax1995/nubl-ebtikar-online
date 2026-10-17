@@ -55,9 +55,10 @@
 
   // مطابقة أيقونات الموقع الثابتة بأيقونات المنصة
   const MAP = [
-    [/rx="5"\/><circle cx="12" cy="12" r="4"/, 'insta'], [/M3 11v2a2 2 0 0 0 2 2h2l6 4V5/, 'mega'], [/M12 3l9 4\.5v9L12 21/, 'cube'],
+    [/width="18" height="18" rx="5"/, 'insta'], [/M3 11v2a2 2 0 0 0 2 2h2l6 4V5/, 'mega'], [/M12 3l9 4\.5v9L12 21/, 'cube'],
     [/M4 8h3l2-3h6l2 3h3v11H4z/, 'camera'], [/rect x="3" y="5" width="18" height="16"/, 'cal'], [/M4 20V10M10 20V4/, 'chart'],
     [/M3 9l1\.5-5h15L21 9/, 'store'], [/M12 21s7-6 7-12a7 7 0 0 0-14 0/, 'pin'], [/M6 9V3h12v6/, 'print'],
+    [/M3 4h18l-7 8v6l-4 2v-8z/, 'funnel'], [/M12 3l9 5-9 5-9-5z/, 'layers'], [/M8 21h8M12 17v4/, 'gear'], [/M8 8l-4 4 4 4M16 8l4 4-4 4/, 'link'],
   ];
   function upgrade(root) {
     root.querySelectorAll('svg[viewBox="0 0 24 24"][stroke="currentColor"]:not(.ai)').forEach((svg) => {

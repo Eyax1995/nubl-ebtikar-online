@@ -1,0 +1,124 @@
+/* نُبل وابتكار للتسويق — البطاقات الزجاجية والتفاعل مع المؤشر والتمرير (interact.js) */
+:root{--gx-ease:cubic-bezier(.2,.8,.2,1)}
+
+/* ---------- البطاقات الزجاجية ---------- */
+.gx{position:relative;isolation:isolate;
+  background:linear-gradient(140deg,rgba(255,255,255,.80),rgba(255,255,255,.46))!important;
+  border:1px solid rgba(255,255,255,.75)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 0 0 1px rgba(24,86,109,.07),0 18px 40px -26px rgba(18,63,80,.55)!important;
+  -webkit-backdrop-filter:blur(16px) saturate(170%);backdrop-filter:blur(16px) saturate(170%);
+  transition:transform .55s var(--gx-ease),box-shadow .35s,border-color .35s,background .35s,opacity .6s ease,filter .6s ease;
+  transform-style:preserve-3d;will-change:transform}
+.gx.gx-dark{background:linear-gradient(140deg,rgba(255,255,255,.15),rgba(255,255,255,.04))!important;
+  border-color:rgba(255,255,255,.18)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 20px 44px -26px rgba(0,0,0,.6)!important}
+.gx.gx-hot{box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 0 0 1px rgba(219,156,71,.45),0 28px 60px -28px rgba(18,63,80,.6)!important}
+.gx.gx-dark.gx-hot{box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 0 0 1px rgba(219,156,71,.55),0 30px 60px -26px rgba(0,0,0,.7)!important}
+.gx.gx-move{transition:transform .12s linear,box-shadow .35s,border-color .35s,opacity .6s ease,filter .6s ease}
+.gx.gx-press{transform:perspective(900px) scale(.965)!important;transition:transform .12s ease!important}
+
+/* لمعة تتبع المؤشر + حافة متوهجة */
+.gx-glare{position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;opacity:0;transition:opacity .35s;
+  background:radial-gradient(380px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.55),transparent 42%)}
+.gx-dark .gx-glare{background:radial-gradient(380px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.16),transparent 45%)}
+.gx-glare:before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;
+  background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),#DB9C47,rgba(208,100,41,.55) 35%,transparent 70%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+.gx-hot .gx-glare{opacity:1}
+/* موجة الضغط */
+.gx-wave{position:absolute;border-radius:50%;pointer-events:none;z-index:-1;transform:translate(-50%,-50%) scale(0);
+  width:520px;height:520px;background:radial-gradient(circle,rgba(219,156,71,.35),rgba(51,140,137,.18) 45%,transparent 65%);
+  animation:gx-wave .75s var(--gx-ease) forwards}
+@keyframes gx-wave{to{transform:translate(-50%,-50%) scale(1);opacity:0}}
+.gx-clip{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none;z-index:-1}
+
+/* خلفية ملوّنة ناعمة خلف الزجاج في الأقسام الفاتحة */
+.gx-host{position:relative;isolation:isolate}
+.gx-orbs{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:-1}
+.gx-orbs i{position:absolute;width:var(--s,34vw);height:var(--s,34vw);border-radius:50%;filter:blur(70px);opacity:.55;
+  background:var(--c);left:var(--x);top:var(--y);translate:0 var(--py,0);animation:gx-drift 18s ease-in-out infinite alternate;animation-delay:var(--d,0s)}
+@keyframes gx-drift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(6vw,-4vh) scale(1.12)}100%{transform:translate(-4vw,5vh) scale(.92)}}
+
+/* ---------- المؤشر ---------- */
+.gx-cur,.gx-dot{position:fixed;left:0;top:0;pointer-events:none;z-index:120;border-radius:50%;opacity:0;transition:opacity .3s}
+.gx-cur{width:36px;height:36px;margin:-18px 0 0 -18px;border:1.5px solid rgba(219,156,71,.9);
+  transition:opacity .3s,width .35s var(--gx-ease),height .35s var(--gx-ease),margin .35s var(--gx-ease),background .3s,border-color .3s}
+.gx-dot{width:6px;height:6px;margin:-3px 0 0 -3px;background:#D06429}
+html.gx-curon .gx-cur,html.gx-curon .gx-dot{opacity:1}
+html.gx-link .gx-cur{width:58px;height:58px;margin:-29px 0 0 -29px;background:rgba(219,156,71,.14)}
+html.gx-card .gx-cur{width:78px;height:78px;margin:-39px 0 0 -39px;border-color:rgba(51,140,137,.8);background:rgba(51,140,137,.08)}
+html.gx-card .gx-cur:after{content:"";position:absolute;inset:0;margin:auto;width:18px;height:11px;background:#DB9C47;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 12'%3E%3Cpolyline points='2,10 10,2 18,10' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 12'%3E%3Cpolyline points='2,10 10,2 18,10' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
+html.gx-down .gx-cur{width:26px;height:26px;margin:-13px 0 0 -13px;background:rgba(208,100,41,.25)}
+
+/* أزرار مغناطيسية */
+.gx-mag{transition:translate .35s var(--gx-ease),transform .2s,box-shadow .3s,background .2s,color .2s}
+.gx-mag.gx-pull{transition:translate .1s linear,transform .2s,box-shadow .3s,background .2s,color .2s}
+
+/* ---------- التمرير ---------- */
+.rv{filter:blur(6px)}
+.rv.in{filter:none}
+.gx-par{will-change:translate}
+.hero .pattern,.slide-bg{inset:-90px 0!important}
+.gx-spot{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0;transition:opacity .5s;
+  background:radial-gradient(520px circle at var(--hx,50%) var(--hy,50%),rgba(219,156,71,.16),rgba(51,140,137,.08) 40%,transparent 70%)}
+.gx-spot.on{opacity:1}
+.gx-uline{display:block;height:4px;width:0;margin-top:10px;border-radius:4px;background:linear-gradient(270deg,#D06429,#DB9C47 50%,#338C89);transition:width 1s var(--gx-ease) .2s}
+.in .gx-uline,.gx-uline.in{width:72px}
+
+@media (prefers-reduced-motion:reduce){
+  .gx,.gx-orbs i{animation:none!important;transition:none!important}
+  .rv{filter:none}
+  .gx-cur,.gx-dot{display:none}
+}
+@media (hover:none){.gx-cur,.gx-dot{display:none}}
+.gx.pc.best{border:2px solid rgba(219,156,71,.9)!important}
+
+/* ---------- نقاط التنقل الجانبية: لا تتداخل مع المحتوى ---------- */
+.rail button{position:relative}
+.rail span{position:absolute;left:24px;top:50%;translate:0 -50%}
+.rail button.on span{opacity:0;transform:translate(-6px)}
+.rail button:hover span{opacity:1;transform:none}
+@media (max-width:1279px){.rail{display:none!important}}
+
+/* ---------- الباقات كاملة على الحاسب ---------- */
+@media (min-width:1100px){
+  .pk-car .car-track{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible;scroll-snap-type:none}
+  .pk-car .car-track .pc{flex:none;min-width:0}
+  .pk-car .car-btn,.pk-car .car-dots{display:none!important}
+}
+/* ملاحظة الأسعار مقروءة على الخلفيات الداكنة */
+.s-pk .note,.dark .note,.sec-navy .note{color:#EEF4F6!important;background:rgba(255,255,255,.09)!important;border-inline-start:3px solid #DB9C47!important;padding:10px 16px!important;font-size:13.5px!important}
+.mail-l{color:#EDCEA3;text-decoration:underline;text-underline-offset:3px;direction:ltr;unicode-bidi:isolate}
+
+/* ---------- الأدوات في الصفحة الرئيسية ---------- */
+.tool-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:22px}
+.tool-card{font:inherit;color:var(--ink,#123F50);text-align:start;width:100%;cursor:pointer;display:flex;flex-direction:column;gap:10px;padding:clamp(20px,3vh,30px);border-radius:14px}
+.tool-card .n{font-size:12.5px;font-weight:700;color:#338C89}
+.tool-card h3{font-size:clamp(20px,1.8vw,26px);color:var(--deep,#123F50)}
+.tool-card p{color:var(--muted,#5b6b72);font-size:14.5px;line-height:1.7}
+.tool-card .btn{align-self:flex-start;margin-top:6px;pointer-events:none}
+@media (max-width:700px){.tool-grid{grid-template-columns:1fr}}
+
+/* نافذة الأداة */
+.tm{position:fixed;inset:0;z-index:150;display:grid;place-items:center;background:rgba(10,35,45,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .3s}
+.tm.open{opacity:1;pointer-events:auto}
+.tm-box{width:min(940px,94vw);height:min(88vh,860px);background:#fff;border-radius:18px;overflow:hidden;display:flex;flex-direction:column;transform:translateY(24px) scale(.98);transition:transform .4s var(--gx-ease);box-shadow:0 30px 80px -20px rgba(0,0,0,.55)}
+.tm.open .tm-box{transform:none}
+.tm-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:#18566D;color:#fff;font-weight:700}
+.tm-bar button{width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;font-size:22px;line-height:1;cursor:pointer}
+.tm-bar a{color:#EDCEA3;font-size:13px;font-weight:600;margin-inline-start:auto}
+.tm iframe{flex:1;border:0;width:100%;background:#fff}
+.tm-load{position:absolute;inset:0;display:grid;place-items:center;color:#18566D;font-weight:700;pointer-events:none}
+.tm-body{position:relative;flex:1;display:flex}
+html.tm-lock{overflow:hidden}
+@media (max-width:600px){.tm-box{width:100vw;height:100dvh;border-radius:0}}
+
+/* وضع التضمين داخل النافذة */
+html.embed .hdr,html.embed .topbar,html.embed footer,html.embed .cbar,html.embed .wa-float,html.embed .curtain,html.embed .rail,html.embed #cx3d,
+html.embed .gx-cur,html.embed .gx-dot,html.embed .pbar,html.embed .dock,html.embed .hero .slot,html.embed .crumbs,html.embed .lightbox{display:none!important}
+html.embed .hero.small{padding:26px 0 20px!important;min-height:0!important}
+html.embed body{padding-top:0!important}
+.slide.terra .badge-big{color:#fff!important}

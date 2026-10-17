@@ -89,8 +89,8 @@ table.t tr:hover .ai *{animation-play-state:running}
   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 12'%3E%3Cpolyline points='2,10 10,2 18,10' fill='none' stroke='%23D06429' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
 :is(.svt,.svc,.card,.tc,.wk,.pc,.glass):hover>.cv-corner{opacity:1;transform:none}
 /* رمز السهم بدل النجمة (التقييمات والنقاط) */
-.cvr{display:inline-block;width:.95em;height:.6em;vertical-align:.08em;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 12'%3E%3Cpolyline points='2,10 10,2 18,10' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 12'%3E%3Cpolyline points='2,10 10,2 18,10' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
-.cvrate{display:inline-flex;gap:3px;color:#DB9C47}
+.cvr{display:inline-block;width:1em;height:1em;vertical-align:-.12em;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.3l-5.8 3.1 1.2-6.5-4.8-4.5 6.5-.8z' fill='%23000' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.3l-5.8 3.1 1.2-6.5-4.8-4.5 6.5-.8z' fill='%23000' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
+.cvrate{display:inline-flex;gap:2px;color:#DB9C47}
 /* الأسهم المجسّمة ثلاثية الأبعاد */
 .c3d{position:relative;width:var(--w);height:calc(var(--w) * .64);transform-style:preserve-3d}
 .c3d svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
