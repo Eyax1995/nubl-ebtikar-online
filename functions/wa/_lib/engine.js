@@ -12,6 +12,7 @@ import { COMMON, KB } from './kb.js';
 import { MARKETING_EXTRA } from './marketing.js';
 import { notifyRoles, h as hx } from '../../marketing/hub/api/_lib/telegram.js';
 import { getSettings } from '../../marketing/hub/api/_lib/core.js';
+import { findStaff, handleStaffMessage } from '../../marketing/hub/api/_lib/staffwa.js';
 
 // الأرقام المخدومة — رقم «نُبل وابتكار للتسويق» فقط (قرار إياد 12 أكتوبر 2026).
 // أرقام الدعاية والإعلان ومروج الحجاز مستبعدة تماماً: رسائلها تُتجاهل فلا تُخزَّن ولا يُرد عليها ولا تصل لمنصة التسويق.
@@ -72,7 +73,8 @@ export function parseEvents(body) {
         for (const c of (v.contacts || [])) names[c.wa_id] = (c.profile && c.profile.name) || '';
         for (const m of (v.messages || [])) {
           if (m.type === 'reaction' || m.type === 'system') continue;
-          out.push({ ...base, kind: 'message', wa_id: m.from, name: names[m.from] || '', type: m.type, text: String(describe(m)).trim(), msg_id: m.id, ts: Number(m.timestamp) || 0, media: mediaInfo(m) });
+          const rid = m.type === 'interactive' ? ((m.interactive.button_reply || m.interactive.list_reply || {}).id || '') : m.type === 'button' ? ((m.button && m.button.payload) || '') : '';
+          out.push({ ...base, kind: 'message', wa_id: m.from, name: names[m.from] || '', type: m.type, text: String(describe(m)).trim(), reply_id: rid, msg_id: m.id, ts: Number(m.timestamp) || 0, media: mediaInfo(m) });
         }
       } else if (change.field === 'smb_message_echoes') {
         for (const e of (v.message_echoes || [])) {
@@ -89,7 +91,7 @@ export function parseEvents(body) {
 }
 
 async function graph(env, path, payload) {
-  const r = await fetch(`${GRAPH}/${path}`, {
+  const r = await fetch(`${env.WA_GRAPH_URL || GRAPH}/${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${env.WA_TOKEN}` },
     body: JSON.stringify(payload),
@@ -264,6 +266,14 @@ async function handleLive(env, origin, ev) {
     return;
   }
   if (ev.ts && now / 1000 - ev.ts > STALE_SEC) return;
+
+  // عضو في الفريق (رقمه مسجّل في المنصة): إدارة المهام والتقارير — لا رد آلي للعملاء ولا تسجيل كعميل محتمل
+  const staff = await findStaff(env.DB, ev.wa_id);
+  if (staff) {
+    graph(env, `${ev.phone_number_id}/messages`, { messaging_product: 'whatsapp', status: 'read', message_id: ev.msg_id }).catch(() => {});
+    await handleStaffMessage(env, ev, staff);
+    return;
+  }
 
   history.push({ r: 'customer', t: ev.text, at: new Date(now).toISOString() });
   await registerLead(env, origin, ev, ev.text);

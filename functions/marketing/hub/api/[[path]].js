@@ -15,6 +15,7 @@ import { waInboxRoute } from './_lib/wainbox.js';
 import { opsRoute } from './_lib/ops.js';
 import { bearerOf, tokenUser, tokenBlocked, tokensRoute, mcpHandle } from './_lib/agent.js';
 import { studioRoute } from './_lib/studio.js';
+import { sendReport, buildReport, toWA } from './_lib/reports.js';
 import { accrueForPayment, voidForPayment, refreshForPayment, syncClient, publicRep, commissionsRoute } from './_lib/reps.js';
 
 export async function onRequest(ctx) {
@@ -948,7 +949,13 @@ async function notificationsRoute(db, env, request, user, action) {
   const url = new URL(request.url);
   if (!action && method === 'GET') {
     const unread = await db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(user.id).first('n');
-    if (url.searchParams.get('count')) return json({ unread });
+    if (url.searchParams.get('count')) {
+      // since=<آخر رقم> للنوافذ المنبثقة: الإشعارات الجديدة غير المقروءة فقط
+      const since = Number(url.searchParams.get('since') || 0);
+      const latest = await db.prepare('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id = ?').bind(user.id).first('m');
+      const fresh = since ? (await db.prepare('SELECT id, kind, title, body, link FROM notifications WHERE user_id = ? AND id > ? AND read_at IS NULL ORDER BY id LIMIT 5').bind(user.id, since).all()).results : [];
+      return json({ unread, latest, fresh });
+    }
     const { results } = await db.prepare('SELECT id, kind, title, body, link, channels, read_at, created_at FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 40').bind(user.id).all();
     return json({ unread, rows: results });
   }
@@ -957,6 +964,29 @@ async function notificationsRoute(db, env, request, user, action) {
     if (d.id) await db.prepare("UPDATE notifications SET read_at = datetime('now') WHERE id = ? AND user_id = ?").bind(d.id, user.id).run();
     else await db.prepare("UPDATE notifications SET read_at = datetime('now') WHERE user_id = ? AND read_at IS NULL").bind(user.id).run();
     return json({ ok: true });
+  }
+  // التقارير الدورية: إعدادات المدير + «أرسل تقريري الآن» لأي عضو
+  if (action === 'reports') {
+    const s = await getSettings(db);
+    if (method === 'PUT') {
+      if (user.role !== 'admin') return bad('للمدير العام فقط', 403);
+      const d = await body(request);
+      const times = String(d.times || '').split(/[,،\s]+/).map((x) => x.trim()).filter((x) => /^([01]\d|2[0-3]):[0-5]\d$/.test(x));
+      if (!times.length) return bad('أدخل موعداً واحداً على الأقل بصيغة 08:00');
+      await db.batch([
+        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('report_times', [...new Set(times)].sort().join(',')),
+        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('reports_enabled', d.enabled ? '1' : '0'),
+      ]);
+      await audit(db, user, 'settings', 'reports', null, times.join(','));
+      return json({ ok: true });
+    }
+    if (method === 'POST') {
+      const u = await db.prepare('SELECT * FROM users WHERE id = ?').bind(user.id).first();
+      const slot = ((new Date().getUTCHours() + 3) % 24) >= 13 ? 'pm' : 'am';
+      const r = await sendReport(db, env, u, slot, { force: true });
+      return json({ ...r, preview: toWA(await buildReport(db, u, slot)) });
+    }
+    return json({ enabled: s.reports_enabled !== '0', times: s.report_times || '08:00,17:00', wa_number: '0563413040' });
   }
   if (action === 'prefs') {
     if (method === 'PUT') {
@@ -1069,7 +1099,8 @@ async function tgDigest(db, env, request) {
   const s = await getSettings(db);
   const key = new URL(request.url).searchParams.get('key') || request.headers.get('x-cron-key');
   if (!s.tg_cron_key || key !== s.tg_cron_key) return bad('مرفوض', 403);
-  const digest = await dailyDigest(db, env);
+  // التقارير الدورية الجديدة (reports.js) تغني عن ملخص الصباح القديم ما لم تُعطَّل
+  const digest = s.reports_enabled === '0' ? await dailyDigest(db, env) : { skipped: 'reports.js' };
   let backup = null;
   try { backup = await sendBackup(db, env); } catch (e) { backup = { ok: false, error: e.message }; }
   return json({ ...digest, backup });

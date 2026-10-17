@@ -17,7 +17,7 @@ async function windowOpen(env, to) {
 }
 
 async function sendTemplate(env, to, title, details) {
-  const r = await fetch(`https://graph.facebook.com/v23.0/${FROM_PHONE_ID}/messages`, {
+  const r = await fetch(`${env.WA_GRAPH_URL || 'https://graph.facebook.com/v23.0'}/${FROM_PHONE_ID}/messages`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.WA_TOKEN },
     body: JSON.stringify({
@@ -39,12 +39,12 @@ export async function onRequestPost({ request, env }) {
   let r; let mode;
   if (await windowOpen(env, to)) {
     mode = 'text';
-    const text = [`🔔 ${d.title || 'إشعار من منصة التسويق'}`, d.body || '', d.link ? `↗ ${d.link}` : ''].filter(Boolean).join('\n').slice(0, 3500);
+    const text = (d.kind === 'report' ? [d.body || ''] : [`🔔 ${d.title || 'إشعار من منصة التسويق'}`, d.body || '', d.link ? `↗ ${d.link}` : '']).filter(Boolean).join('\n').slice(0, 4000);
     r = await sendText(env, FROM_PHONE_ID, to, text);
   } else {
     mode = 'template';
     const title = clip(d.title || 'إشعار من منصة التسويق', 200) || 'إشعار';
-    const details = clip([d.body || d.summary || '', d.link ? `الرابط: ${d.link}` : ''].filter(Boolean).join(' — '), 900) || 'افتح المنصة للتفاصيل';
+    const details = clip([d.short || d.body || d.summary || '', d.link ? `الرابط: ${d.link}` : ''].filter(Boolean).join(' — '), 900) || 'افتح المنصة للتفاصيل';
     r = await sendTemplate(env, to, title, details);
   }
   return Response.json({ delivered: r.ok, mode, wamid: r.data?.messages?.[0]?.id || null, error: r.data?.error?.message || null }, { status: r.ok ? 200 : 502 });

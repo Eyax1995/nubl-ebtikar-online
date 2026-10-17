@@ -44,6 +44,24 @@
   const wireChips = (el) => $$('[data-chips] .chipb', el).forEach((b) => b.onclick = () => b.classList.toggle('on'));
   const chipVals = (el, name) => $$(`[data-chips="${name}"] .chipb.on`, el).map((b) => b.dataset.v);
   const refVal = (el, name) => { const v = $(`[name="${name}"]`, el)?.value || ''; const m = v.match(/⟨(\d+)⟩\s*$/); return m ? +m[1] : null; };
+  // يقبل الاختيار من القائمة أو كتابة الاسم يدوياً: يطابقه مع سجل موجود، وإن كان عميلاً جديداً يُنشئه بعد التأكيد
+  const norm = (x) => String(x || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, ' ').trim().toLowerCase();
+  async function partyId(el, name, ent, label) {
+    const id = refVal(el, name); if (id) return id;
+    const text = ($(`[name="${name}"]`, el)?.value || '').replace(/⟨\d+⟩\s*$/, '').trim();
+    if (!text) return null;
+    const rows = await refs(ent, true).catch(() => []);
+    const hit = rows.filter((r) => [REF[ent]?.label(r), r.name, r.company, r.title].some((v) => v && norm(v) === norm(text)));
+    if (hit.length === 1) return hit[0].id;
+    const near = rows.filter((r) => [r.name, r.company, r.title].some((v) => v && norm(v).includes(norm(text))));
+    if (near.length === 1) return near[0].id;
+    if (ent === 'clients' && can('clients', 'w')) {
+      if (!(await confirmBox(`«${esc(text)}» غير مسجّل كعميل في المنصة. هل تريد إنشاءه الآن ثم المتابعة؟`))) throw new Error('اختر العميل من القائمة المقترحة');
+      const r = await api('e/clients', { method: 'POST', body: { name: text, status: 'نشط' } }); invalidate('clients');
+      toast(`أُضيف العميل «${text}»`); return r.row.id;
+    }
+    throw new Error(near.length > 1 ? `أكثر من ${label} يطابق «${text}» — اختره من القائمة المقترحة` : `لم أجد ${label} باسم «${text}» — اختره من القائمة المقترحة`);
+  }
   const word = (kind, id) => { location.href = `${API}studio/doc/${kind}/${id}`; };
   const aiBanner = (st) => (st.ai ? '' : `<div class="notice">الذكاء الاصطناعي غير مفعّل بعد: أضف المفتاح <b dir="ltr">ANTHROPIC_API_KEY</b> في إعدادات مشروع Cloudflare Pages ‹ Settings ‹ Variables and Secrets، ثم أعد النشر.</div>`);
 
@@ -67,7 +85,7 @@
     $('[data-go]', m.el).onclick = async () => {
       const f = $('form', m.el);
       let body;
-      try { body = { client_id: refVal(f, 'client_id'), lead_id: refVal(f, 'lead_id'), deal_id: refVal(f, 'deal_id'), brief: f.brief.value.trim(), budget: f.budget.value.trim(), months: +f.months.value || null, services: chipVals(f, 'svc').map(Number) }; } catch (e) { return toast(e.message, 1); }
+      try { body = { client_id: await partyId(f, 'client_id', 'clients', 'عميل'), lead_id: ($('[name=lead_id]', f).value.trim() ? await partyId(f, 'lead_id', 'leads', 'عميل محتمل') : null), deal_id: ($('[name=deal_id]', f).value.trim() ? await partyId(f, 'deal_id', 'deals', 'صفقة') : null), brief: f.brief.value.trim(), budget: f.budget.value.trim(), months: +f.months.value || null, services: chipVals(f, 'svc').map(Number) }; } catch (e) { return toast(e.message, 1); }
       if (!body.client_id && !body.lead_id) return toast('اختر العميل أو العميل المحتمل', 1);
       if (body.brief.length < 15) return toast('صف الاحتياج بجملة أو جملتين على الأقل', 1);
       m.close();
@@ -91,7 +109,7 @@
     foot: '<button class="btn btn-p" data-go>توليد الخطة</button><button class="btn btn-g" data-x>إلغاء</button>' });
     wireChips(m.el); $('[data-x]', m.el).onclick = m.close;
     $('[data-go]', m.el).onclick = async () => {
-      const f = $('form', m.el); let cid; try { cid = refVal(f, 'client_id'); } catch (e) { return toast(e.message, 1); }
+      const f = $('form', m.el); let cid; try { cid = await partyId(f, 'client_id', 'clients', 'عميل'); } catch (e) { return toast(e.message, 1); }
       if (!cid) return toast('اختر العميل', 1);
       const body = { client_id: cid, start_date: f.start_date.value, months: +f.months.value, budget: f.budget.value.trim(), goals: f.goals.value.trim(), audience: f.audience.value.trim(), platforms: chipVals(f, 'pl'), notes: f.notes.value.trim() };
       m.close();
@@ -115,7 +133,7 @@
     foot: '<button class="btn btn-p" data-go>تجهيز المنشورات</button><button class="btn btn-g" data-x>إلغاء</button>' });
     wireChips(m.el); $('[data-x]', m.el).onclick = m.close;
     $('[data-go]', m.el).onclick = async () => {
-      const f = $('form', m.el); let cid, pid; try { cid = refVal(f, 'client_id'); pid = refVal(f, 'plan_id'); } catch (e) { return toast(e.message, 1); }
+      const f = $('form', m.el); let cid, pid; try { cid = await partyId(f, 'client_id', 'clients', 'عميل'); pid = $('[name=plan_id]', f).value.trim() ? await partyId(f, 'plan_id', 'plans', 'خطة') : null; } catch (e) { return toast(e.message, 1); }
       if (!cid) return toast('اختر العميل', 1);
       const body = { client_id: cid, month: f.month.value, count: +f.count.value || null, plan_id: pid, platforms: chipVals(f, 'pl'), notes: f.notes.value.trim() };
       m.close();
