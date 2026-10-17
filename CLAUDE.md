@@ -17,12 +17,12 @@
 | `functions/wa/` | مساعد واتساب + الجسر + فحص الصحة (D1 `WA_DB`) |
 
 ### واجهة المنصة `marketing/hub/`
-ترتيب التحميل في `index.html`: `hub.js` (النواة: `$`, `api`, `I`, `ENT`, `NAV`, `ROUTES`, `modal`, `openForm`, `listView`, `renderShell`, `rerender`) ← `views.js` ← `notif.js` ← `agent.js` ← `debts.js` ← `xreq.js` ← `tpl.js` (يستدعي `boot()`) ← `wainbox.js` ← `fields.js` ← `ops.js` ← `commissions.js` ← `studio.js` ← `alerts.js` ← `ui.js`.
+ترتيب التحميل في `index.html`: `hub.js` (النواة: `$`, `api`, `I`, `ENT`, `NAV`, `ROUTES`, `modal`, `openForm`, `listView`, `renderShell`, `rerender`) ← `views.js` ← `notif.js` ← `agent.js` ← `debts.js` ← `xreq.js` ← `tpl.js` (يستدعي `boot()`) ← `wainbox.js` ← `fields.js` ← `ops.js` ← `commissions.js` ← `studio.js` ← `alerts.js` ← `ui.js` ← `shapes3d.js` (أسهم الهوية المجسّمة ثلاثية الأبعاد بطبقات CSS 3D بلا مكتبات: شاشة الدخول، أسفل القائمة، مؤشر التحميل، انتظار ذكاء نُبل — `window.nubl3d.column/chevron/loader`).
 - الوحدات الإضافية تغلّف `renderShell`/`rerender` ولا تعدّل النواة.
 - **`theme.css` + `ui.js` = نظام الواجهة 3.0 «نُبل موشن»**: أيقونات متحركة ثنائية اللون تستبدل `I.*` (أضف أي أيقونة جديدة في `ICONS` داخل ui.js بنفس الأسلوب: `.s` خط، `.f/.f2` تعبئة الهوية، `.t` ظل، وفئات الحركة `m-*`)، درج جانبي آمن للجوال، شريط سفلي وزر إنشاء سريع، لوحة أوامر Ctrl+K، انتقالات، وعدّ الأرقام.
 - عند تعديل أي ملف واجهة ارفع رقم الإصدار `?v=` في `index.html` لكسر التخزين المؤقت.
 - **ثيم الواجهة**: أعاد إياد (17 أكتوبر 2026) واجهة المنصة إلى ثيم «نُبل موشن» السابق (`#082A37` `#15556B` `#308D8B` `#DC9C47` `#D2652A`، IBM Plex Sans Arabic) — لا تغيّر ثيم الواجهة دون طلب صريح. هوية 3.0 تُطبَّق على **المخرجات** فقط: كل المستندات المطبوعة عبر `docShell` في views.js على الأوراق الرسمية (`brand/letterhead-a4.png` في كل صفحة، من PDF الأوراق المعتمد)، وصفحات التقارير بـ `printOfficialView`، ومعاينة الاستوديو بـ `brand/lh-top|bottom|strip.png`، وملفات Word من `letterhead.js`.
-- الموقع العام `/marketing`: الهوية 3.0 في آخر `site.css` (خطوط `marketing/fonts/*.woff2`، شعارات `marketing/brand/`، `pattern.svg` أسهم)، وأُلغي مجسّم النجمة ثلاثي الأبعاد (#fx) واستُبدلت مواضعه (`.slot`) بأعمدة أسهم متحركة `.chev3`.
+- الموقع العام `/marketing` (اعتمده إياد 17 أكتوبر 2026): الهوية 3.0 في آخر `site.css` (خطوط `marketing/fonts/*.woff2`، شعارات `marketing/brand/`، `pattern.svg` أسهم)، وأُلغي مجسّم النجمة ثلاثي الأبعاد (#fx) واستُبدلت مواضعه (`.slot`) بأعمدة أسهم متحركة `.chev3`.
 
 ### الخادم
 - `[[path]].js` يوجّه كل `/marketing/hub/api/*`. المخطط في `_lib/schema.js` (`SCHEMA_VERSION` + `MIGRATIONS` تُطبَّق آلياً عند أول طلب). البيانات الأولية في `_lib/seed.js`.
