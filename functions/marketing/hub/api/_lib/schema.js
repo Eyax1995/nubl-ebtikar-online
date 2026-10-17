@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 9;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -110,6 +110,23 @@ export const DDL = [
     created_by INTEGER, created_at TEXT DEFAULT (datetime('now')))`,
   `CREATE INDEX IF NOT EXISTS ix_rem_due ON reminders(status, remind_at)`,
   `CREATE INDEX IF NOT EXISTS ix_rem_ent ON reminders(entity, entity_id)`,
+  // v8: المناديب الخارجيون بنظام العمولة — انظر _lib/reps.js
+  `CREATE TABLE IF NOT EXISTS reps (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT, email TEXT, city TEXT,
+    rate REAL DEFAULT 10, months INTEGER DEFAULT 12, base TEXT DEFAULT 'net', bank_name TEXT, iban TEXT, status TEXT DEFAULT 'نشط', notes TEXT,
+    portal_hash TEXT, portal_prefix TEXT, created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS commissions (id INTEGER PRIMARY KEY AUTOINCREMENT, rep_id INTEGER NOT NULL, client_id INTEGER, contract_id INTEGER,
+    invoice_id INTEGER, payment_id INTEGER UNIQUE, base_amount REAL DEFAULT 0, rate REAL DEFAULT 0, amount REAL DEFAULT 0, status TEXT DEFAULT 'مستحقة',
+    payout_id INTEGER, note TEXT, earned_at TEXT, approved_by INTEGER, approved_at TEXT, created_at TEXT DEFAULT (datetime('now')))`,
+  `CREATE INDEX IF NOT EXISTS ix_comm_rep ON commissions(rep_id, status)`,
+  `CREATE INDEX IF NOT EXISTS ix_comm_client ON commissions(client_id)`,
+  `CREATE TABLE IF NOT EXISTS rep_payouts (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT, rep_id INTEGER NOT NULL, total REAL DEFAULT 0, count INTEGER DEFAULT 0,
+    method TEXT, ref TEXT, paid_at TEXT, notes TEXT, created_by INTEGER, created_at TEXT DEFAULT (datetime('now')))`,
+  `CREATE INDEX IF NOT EXISTS ix_rpo_rep ON rep_payouts(rep_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS ix_reps_portal ON reps(portal_hash)`,
+  // v9: استوديو الذكاء — الخطط التسويقية للعملاء (انظر _lib/studio.js)
+  `CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id INTEGER NOT NULL, title TEXT, start_date TEXT, months INTEGER DEFAULT 3,
+    goals TEXT, budget TEXT, status TEXT DEFAULT 'مسودة', doc TEXT, engine TEXT, notes TEXT, created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  `CREATE INDEX IF NOT EXISTS ix_plans_client ON plans(client_id)`,
 ];
 
 // ترحيلات تُطبّق مرة واحدة على قواعد قائمة (فشل أي سطر = العمود موجود مسبقاً)
@@ -126,6 +143,26 @@ export const MIGRATIONS = [
   'ALTER TABLE users ADD COLUMN notify_tg INTEGER DEFAULT 1',
   // v5: طلب القطاع الآخر مرتبط بعرض السعر في «عروض الأسعار» (ترقيمها وقالبها)
   'ALTER TABLE xq_requests ADD COLUMN quote_id INTEGER',
+  // v8: ربط المندوب بالعميل المحتمل والصفقة والعميل + نهاية مدة استحقاقه
+  'ALTER TABLE leads ADD COLUMN rep_id INTEGER',
+  'ALTER TABLE deals ADD COLUMN rep_id INTEGER',
+  'ALTER TABLE clients ADD COLUMN rep_id INTEGER',
+  'ALTER TABLE clients ADD COLUMN rep_until TEXT',
+  'CREATE INDEX IF NOT EXISTS ix_clients_rep ON clients(rep_id)',
+  'CREATE INDEX IF NOT EXISTS ix_leads_rep ON leads(rep_id)',
+  // v9: مستندات الذكاء (عرض BBR) واعتماد الأسعار، والعقد الذكي، وحقول المنشور الجاهز للجدولة
+  'ALTER TABLE quotes ADD COLUMN doc TEXT',
+  'ALTER TABLE quotes ADD COLUMN price_review INTEGER DEFAULT 0',
+  'ALTER TABLE quotes ADD COLUMN approved_by INTEGER',
+  'ALTER TABLE quotes ADD COLUMN approved_at TEXT',
+  'ALTER TABLE quotes ADD COLUMN ai_engine TEXT',
+  'ALTER TABLE contracts ADD COLUMN doc TEXT',
+  'ALTER TABLE content ADD COLUMN publish_time TEXT',
+  'ALTER TABLE content ADD COLUMN hashtags TEXT',
+  'ALTER TABLE content ADD COLUMN cta TEXT',
+  'ALTER TABLE content ADD COLUMN brief TEXT',
+  'ALTER TABLE content ADD COLUMN plan_id INTEGER',
+  "ALTER TABLE content ADD COLUMN source TEXT DEFAULT 'المنصة'",
 ];
 
 // إعدادات سرية لا تُرسل للواجهة أبداً
@@ -147,12 +184,12 @@ export const ROLES = {
 const ALL = { admin: 'rwd', manager: 'rwd', executive: 'r' };
 export const ENTITIES = {
   leads: {
-    cols: ['name', 'company', 'phone', 'email', 'city', 'sector', 'segment', 'source', 'status', 'score', 'owner_id', 'next_followup', 'interest', 'notes', 'client_id'],
+    cols: ['name', 'company', 'phone', 'email', 'city', 'sector', 'segment', 'source', 'status', 'score', 'owner_id', 'next_followup', 'interest', 'notes', 'client_id', 'rep_id'],
     search: ['name', 'company', 'phone', 'email', 'city', 'notes'],
     perms: { ...ALL, sales: 'rw', account: 'rw', finance: 'r' }, own: { sales: 'owner_id' }, ownOrNull: true, order: 'id DESC',
   },
   deals: {
-    cols: ['title', 'lead_id', 'client_id', 'stage', 'value', 'probability', 'expected_close', 'owner_id', 'sector', 'package', 'loss_reason', 'notes', 'closed_at'],
+    cols: ['title', 'lead_id', 'client_id', 'stage', 'value', 'probability', 'expected_close', 'owner_id', 'sector', 'package', 'loss_reason', 'notes', 'closed_at', 'rep_id'],
     search: ['title', 'notes', 'package'],
     perms: { ...ALL, sales: 'rw', account: 'r', finance: 'r' }, own: { sales: 'owner_id' }, order: 'id DESC',
   },
@@ -168,7 +205,7 @@ export const ENTITIES = {
   },
   clients: {
     cols: ['name', 'brand', 'sector', 'contact_name', 'phone', 'email', 'city', 'cr_number', 'vat_number', 'national_address', 'status',
-      'account_manager_id', 'package', 'start_date', 'renewal_date', 'health', 'report_day', 'socials', 'drive_link', 'notes', 'lead_id'],
+      'account_manager_id', 'package', 'start_date', 'renewal_date', 'health', 'report_day', 'socials', 'drive_link', 'notes', 'lead_id', 'rep_id', 'rep_until'],
     search: ['name', 'brand', 'contact_name', 'phone', 'email', 'city'],
     perms: { ...ALL, sales: 'r', account: 'rw', designer: 'r', finance: 'rw' }, order: 'name',
   },
@@ -216,7 +253,7 @@ export const ENTITIES = {
     own: { designer: 'assignee_id', sales: 'assignee_id', finance: 'assignee_id' }, ownAlsoCreator: true, order: 'due_date IS NULL, due_date, id DESC',
   },
   content: {
-    cols: ['client_id', 'publish_date', 'platform', 'format', 'pillar', 'title', 'caption', 'status', 'assignee_id', 'designer_id', 'revisions', 'asset_link', 'notes'],
+    cols: ['client_id', 'publish_date', 'publish_time', 'platform', 'format', 'pillar', 'title', 'caption', 'hashtags', 'cta', 'brief', 'status', 'assignee_id', 'designer_id', 'revisions', 'asset_link', 'notes', 'plan_id', 'source'],
     search: ['title', 'caption', 'pillar'],
     perms: { ...ALL, account: 'rw', designer: 'rw' }, order: 'publish_date, id',
   },
@@ -236,6 +273,16 @@ export const ENTITIES = {
     search: ['title', 'body', 'category'],
     perms: { ...ALL, sales: 'r', account: 'rw', designer: 'r', finance: 'r' }, order: 'category, title',
   },
+  plans: {
+    cols: ['client_id', 'title', 'start_date', 'months', 'goals', 'budget', 'status', 'notes'],
+    search: ['title', 'goals', 'notes'],
+    perms: { ...ALL, account: 'rw', sales: 'r', designer: 'r', finance: 'r' }, order: 'id DESC',
+  },
+  reps: {
+    cols: ['name', 'phone', 'email', 'city', 'rate', 'months', 'base', 'bank_name', 'iban', 'status', 'notes'],
+    search: ['name', 'phone', 'email', 'city'],
+    perms: { ...ALL, finance: 'rw', sales: 'r', account: 'r' }, order: "status = 'نشط' DESC, name",
+  },
   users: {
     cols: ['name', 'email', 'phone', 'role', 'title', 'active', 'commission_rate'],
     search: ['name', 'email', 'phone'],
@@ -245,7 +292,9 @@ export const ENTITIES = {
 
 // أعمدة تُخفى عن أدوار معيّنة (حماية الأرقام المالية)
 export const HIDDEN = {
-  designer: ['value', 'monthly_value', 'total_value', 'subtotal', 'vat', 'total', 'paid', 'price', 'monthly', 'commission_rate'],
+  designer: ['value', 'monthly_value', 'total_value', 'subtotal', 'vat', 'total', 'paid', 'price', 'monthly', 'commission_rate', 'rate', 'iban', 'bank_name', 'rep_until'],
+  sales: ['iban', 'bank_name'],
+  account: ['iban', 'bank_name'],
 };
 
 export const DEFAULT_SETTINGS = {
@@ -265,4 +314,9 @@ export const DEFAULT_SETTINGS = {
   lead_notify_roles: 'admin,manager,sales',
   xq_peer_url: 'https://nubl-ebtikar.com/AJAX/xq_bridge.php',
   xq_handler_roles: 'admin,manager',
+  // تظهر في عروض الأسعار والعقود المولّدة (من نموذج عرض BBR المعتمد)
+  legal_name: 'مؤسسة نبل وابتكار للأعمال التجارية',
+  bank_line: 'البنك الأهلي السعودي — باسم مؤسسة نبل وابتكار للأعمال التجارية — الآيبان SA7510000075500002249706 · الرقم الضريبي 302024915400003 · س.ت 4030598563',
+  sign_name: 'إياد المغيرة',
+  sign_title: 'مدير قطاع التسويق',
 };

@@ -14,6 +14,8 @@ import { xqBridge, xqRoute } from './_lib/xq.js';
 import { waInboxRoute } from './_lib/wainbox.js';
 import { opsRoute } from './_lib/ops.js';
 import { bearerOf, tokenUser, tokenBlocked, tokensRoute, mcpHandle } from './_lib/agent.js';
+import { studioRoute } from './_lib/studio.js';
+import { accrueForPayment, voidForPayment, refreshForPayment, syncClient, publicRep, commissionsRoute } from './_lib/reps.js';
 
 export async function onRequest(ctx) {
   const { request, env, params } = ctx;
@@ -29,6 +31,7 @@ export async function onRequest(ctx) {
       return json({ ok: true, db: 'ok', schema: SCHEMA_VERSION, active_users: n, time: new Date().toISOString() });
     }
     if (parts[0] === 'public' && parts[1] === 'lead' && method === 'POST') return await publicLead(db, request, env);
+    if (parts[0] === 'public' && parts[1] === 'rep' && method === 'GET') return await publicRep(db, request); // كشف حساب المندوب برابطه الخاص
     if (parts[0] === 'hook') return await hookRoute(db, env, request, parts[1]);
     if (parts[0] === 'xq' && parts[1] === 'bridge') return await xqBridge(db, env, request, ctx); // من منصة الدعاية والإعلان — موقّع HMAC
     if (parts[0] === 'auth' && parts[1] === 'login' && method === 'POST') return await login(db, request);
@@ -98,6 +101,14 @@ async function dispatch(db, env, request, user, parts) {
       case 'users': return usersRoute(db, request, user, parts[1], parts[2]);
       case 'notifications': return notificationsRoute(db, env, request, user, parts[1]);
       case 'tokens': return tokensRoute(db, request, user, parts[1]);
+      case 'commissions': return commissionsRoute(db, env, request, user, parts[1], parts[2]);
+      case 'studio': return studioRoute(db, env, request, user, parts, {
+        need, inScope,
+        toContract: async (qid) => {
+          const r = await quoteAction(db, new Request(request.url, { method: 'POST' }), user, qid, 'to-contract');
+          const j = await r.json(); if (!r.ok) throw new HttpError(r.status, j.error || 'تعذّر إنشاء العقد'); return j.contract_id;
+        },
+      });
       case 'leads': return leadAction(db, request, user, parts[1], parts[2]);
       case 'quotes': return quoteAction(db, request, user, parts[1], parts[2]);
       case 'contracts': return contractAction(db, request, user, parts[1], parts[2], env);
@@ -137,6 +148,7 @@ const can = (user, entity, op) => (ENTITIES[entity]?.perms[user.role] || '').inc
 function need(user, entity, op) { if (!can(user, entity, op)) throw new HttpError(403, 'لا تملك صلاحية لهذا الإجراء'); }
 const isBoss = (u) => u.role === 'admin' || u.role === 'manager';
 function strip(user, row) {
+  if (row) { delete row.portal_hash; }
   const h = HIDDEN[user.role]; if (!h || !row) return row;
   for (const k of h) delete row[k]; return row;
 }
@@ -253,6 +265,7 @@ async function entityRoute(db, request, user, entity, id, env) {
     if (entity === 'quotes' && !rec.number) rec.number = await nextNumber(db, 'quotes', 'Q');
     if (entity === 'contracts' && !rec.number) rec.number = await nextNumber(db, 'contracts', 'C');
     if (entity === 'invoices' && !rec.number) rec.number = await nextNumber(db, 'invoices', 'INV');
+    repGuard(user, entity, rec);
     await beforeSave(db, entity, rec, null);
     const keys = Object.keys(rec);
     if (!keys.length) return bad('لا توجد بيانات');
@@ -277,6 +290,7 @@ async function entityRoute(db, request, user, entity, id, env) {
     if (ownField && ownField !== 'created_by' && !def.ownAlsoCreator && !def.ownOrNull) delete rec[ownField];
     if (def.ownOrNull && ownField && rec[ownField] != null && rec[ownField] != user.id) delete rec[ownField];
     if (entity === 'users' && Number(id) === user.id) { delete rec.role; delete rec.active; }
+    repGuard(user, entity, rec);
     await beforeSave(db, entity, rec, before);
     if (cols.has('updated_at')) rec.updated_at = new Date().toISOString().replace('T', ' ').slice(0, 19);
     const keys = Object.keys(rec);
@@ -294,8 +308,11 @@ async function entityRoute(db, request, user, entity, id, env) {
     need(user, entity, 'd');
     if (entity === 'users') return bad('عطّل المستخدم بدل حذفه');
     const before = await inScope(db, user, entity, id);
+    if (entity === 'reps' && await db.prepare("SELECT 1 FROM commissions WHERE rep_id = ? AND status != 'ملغاة' LIMIT 1").bind(id).first()) return bad('للمندوب عمولات مسجلة — غيّر حالته إلى «موقوف» بدل حذفه');
     await db.prepare(`DELETE FROM ${entity} WHERE id = ?`).bind(id).run();
     if (entity === 'payments' && before.invoice_id) await recalcInvoice(db, before.invoice_id);
+    if (entity === 'payments') await voidForPayment(db, Number(id), user);
+    if (entity === 'reps') await db.batch(['leads', 'deals', 'clients'].map((t) => db.prepare(`UPDATE ${t} SET rep_id = NULL WHERE rep_id = ?`).bind(id)));
     await audit(db, user, 'delete', entity, id, before.title || before.name || before.number);
     return json({ ok: true });
   }
@@ -361,6 +378,36 @@ async function afterSave(db, user, entity, id, rec, before, env) {
     await db.prepare("UPDATE deals SET updated_at = datetime('now') WHERE id = ?").bind(rec.deal_id).run();
   }
   try { await saveNotices(db, env, user, entity, id, rec, before); } catch (e) { console.warn('notices', e.message); }
+  try { await repHooks(db, env, user, entity, id, rec, before); } catch (e) { console.warn('reps', e.message); }
+}
+
+// ---------- المناديب والعمولات: ربط آلي ----------
+const REP_ADMIN = ['admin', 'manager', 'finance'];
+function repGuard(user, entity, rec) {
+  if (entity === 'clients' && !REP_ADMIN.includes(user.role)) { delete rec.rep_id; delete rec.rep_until; }
+  if (entity === 'clients' && 'rep_until' in rec && user.role !== 'admin' && user.role !== 'finance') delete rec.rep_until;
+  if (entity === 'deals' && !REP_ADMIN.includes(user.role) && user.role !== 'sales') delete rec.rep_id;
+}
+async function repHooks(db, env, user, entity, id, rec, before) {
+  if (entity === 'payments') { // دفعة جديدة أو معدّلة ← عمولة المندوب تُحتسب آلياً
+    if (!before) await accrueForPayment(db, env, id);
+    else if (['amount', 'client_id', 'paid_at'].some((k) => k in rec)) await refreshForPayment(db, env, id);
+    return;
+  }
+  if (entity === 'clients' && 'rep_id' in rec && String(rec.rep_id ?? '') !== String(before?.rep_id ?? '')) {
+    // مندوب جديد للعميل: تبدأ مدته من جديد وتُحتسب الدفعات السابقة غير المحتسبة
+    if (!('rep_until' in rec)) await db.prepare('UPDATE clients SET rep_until = NULL WHERE id = ?').bind(id).run();
+    if (rec.rep_id) await syncClient(db, env, id);
+    return;
+  }
+  // عميل محتمل أو صفقة لمندوب ← يُنسب العميل المرتبط للمندوب إن لم يكن له مندوب
+  if ((entity === 'leads' || entity === 'deals') && (rec.rep_id || rec.client_id)) {
+    const row = await db.prepare(`SELECT rep_id, client_id FROM ${entity} WHERE id = ?`).bind(id).first();
+    if (row?.rep_id && row.client_id) {
+      const r = await db.prepare('UPDATE clients SET rep_id = ?, rep_until = NULL WHERE id = ? AND rep_id IS NULL').bind(row.rep_id, row.client_id).run();
+      if (r.meta.changes) await syncClient(db, env, row.client_id);
+    }
+  }
 }
 
 // ---------- إشعارات الأحداث (إسناد، ملاحظات الإدارة، المالية) ----------
@@ -411,9 +458,9 @@ async function leadAction(db, request, user, id, action) {
     need(user, 'clients', 'w') ; need(user, 'leads', 'r');
     const lead = await inScope(db, user, 'leads', id);
     if (lead.client_id) return json({ client_id: lead.client_id });
-    const r = await db.prepare(`INSERT INTO clients (name, brand, sector, contact_name, phone, email, city, lead_id, account_manager_id, created_by, start_date)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(lead.company || lead.name, lead.company, lead.sector, lead.name, lead.phone, lead.email, lead.city,
-      lead.id, null, user.id, today()).run();
+    const r = await db.prepare(`INSERT INTO clients (name, brand, sector, contact_name, phone, email, city, lead_id, account_manager_id, created_by, start_date, rep_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(lead.company || lead.name, lead.company, lead.sector, lead.name, lead.phone, lead.email, lead.city,
+      lead.id, null, user.id, today(), lead.rep_id || null).run();
     const cid = r.meta.last_row_id;
     await db.batch([
       db.prepare("UPDATE leads SET client_id = ?, status = 'محوّل لعميل', updated_at = datetime('now') WHERE id = ?").bind(cid, lead.id),
@@ -535,13 +582,14 @@ async function invoiceAction(db, request, user, id, action, env) {
     const d = await body(request);
     const amount = round2(d.amount ?? (inv.total - inv.paid));
     if (!(amount > 0)) return bad('أدخل مبلغاً صحيحاً');
-    await db.prepare('INSERT INTO payments (invoice_id, client_id, amount, method, ref, paid_at, notes, user_id) VALUES (?,?,?,?,?,?,?,?)')
+    const pr = await db.prepare('INSERT INTO payments (invoice_id, client_id, amount, method, ref, paid_at, notes, user_id) VALUES (?,?,?,?,?,?,?,?)')
       .bind(inv.id, inv.client_id, amount, d.method || 'تحويل بنكي', d.ref || null, d.paid_at || today(), d.notes || null, user.id).run();
     await recalcInvoice(db, inv.id);
+    const comm = await accrueForPayment(db, env, pr.meta.last_row_id); // عمولة المندوب (إن وُجد) تُستحق آلياً مع التحصيل
     await audit(db, user, 'pay', 'invoices', inv.id, amount);
     const cl = await db.prepare('SELECT name FROM clients WHERE id = ?').bind(inv.client_id).first('name');
     await notifyRoles(db, env, ['finance', 'admin'], `💰 سُجّل سداد ${amount.toLocaleString('en-US')} ر.س للفاتورة <b>${hx(inv.number)}</b>${cl ? ' — ' + hx(cl) : ''}\nبواسطة ${hx(user.name)}`, { kind: 'finance', link: `#invoice/${inv.id}` }, user.id);
-    return json({ ok: true });
+    return json({ ok: true, commission: comm?.amount || 0 });
   }
   return bad('إجراء غير معروف', 404);
 }
@@ -810,6 +858,7 @@ async function exportAll(db, user) {
     if (t === 'files') continue;
     out[t] = (await db.prepare(`SELECT ${sel} FROM ${t}`).all()).results;
   }
+  for (const t of ['commissions', 'rep_payouts']) out[t] = (await db.prepare(`SELECT * FROM ${t}`).all()).results;
   out.settings = await publicSettings(db);
   return json(out, 200, { 'content-disposition': `attachment; filename="nubl-hub-backup-${today()}.json"` });
 }

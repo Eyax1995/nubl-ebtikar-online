@@ -42,6 +42,7 @@ export function tokenBlocked(user, parts, method) {
   const p = parts[0];
   if (['auth', 'tokens', 'users', 'settings', 'export', 'import', 'telegram'].includes(p)) return 'هذا المسار متاح من داخل المنصة فقط';
   if (p === 'notifications' && ['prefs', 'bridge', 'bridge-test', 'test'].includes(parts[1])) return 'هذا المسار متاح من داخل المنصة فقط';
+  if (p === 'commissions' && method !== 'GET') return 'اعتماد العمولات وصرفها وروابط المناديب من داخل المنصة فقط';
   if (user.scope !== 'write' && method !== 'GET' && !(p === 'notifications' && parts[1] === 'read')) return 'المفتاح للقراءة فقط';
   return null;
 }
@@ -111,6 +112,11 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
   { name: 'hub_report', title: 'تقرير الأداء', description: 'تقرير المبيعات والتحويل والإيراد لفترة (للإدارة والمالية فقط).',
     inputSchema: { type: 'object', properties: { from: { type: 'string', description: 'YYYY-MM-DD' }, to: { type: 'string', description: 'YYYY-MM-DD' } } }, annotations: { readOnlyHint: true } },
+  { name: 'hub_commissions', title: 'المناديب والعمولات', description: 'ملخص المناديب الخارجيين (المستحق/المعتمد/المصروف) وآخر العمولات والصرفيات، أو كشف حساب مندوب محدد بـ rep_id (للإدارة والمالية).',
+    inputSchema: { type: 'object', properties: { rep_id: { type: 'integer' }, status: { type: 'string', enum: ['مستحقة', 'معتمدة', 'مصروفة'] } } }, annotations: { readOnlyHint: true } },
+  { name: 'hub_studio', title: 'استوديو الذكاء (عروض/عقود/خطط/منشورات)', description: 'يولّد بذكاء نُبل داخل المنصة ويحفظ في قاعدة البيانات: quote (عرض سعر بنموذج الكيان من client_id أو lead_id + brief)، contract (عقد من quote_id بعد اعتماد أسعاره)، plan (خطة تسويقية لـ client_id بـ goals/months/budget)، posts (منشورات شهر month=YYYY-MM لـ client_id وتوزيعها على تقويم المحتوى). أسعار الكتالوج مقفلة. يتطلب مفتاح «قراءة وكتابة» واعرض على المستخدم ما ستنشئه قبل التنفيذ.',
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['quote', 'contract', 'plan', 'posts'] }, client_id: { type: 'integer' }, lead_id: { type: 'integer' }, deal_id: { type: 'integer' }, quote_id: { type: 'integer' }, brief: { type: 'string' }, goals: { type: 'string' }, budget: { type: 'string' }, months: { type: 'integer' }, month: { type: 'string', description: 'YYYY-MM' }, count: { type: 'integer' }, platforms: { type: 'array', items: { type: 'string' } }, notes: { type: 'string' } }, required: ['action'] },
+    annotations: { readOnlyHint: false, destructiveHint: false } },
   { name: 'hub_create', title: 'إنشاء سجل', description: 'ينشئ سجلاً جديداً (عميل محتمل، مهمة، تسجيل تواصل، صفقة…). يتطلب مفتاح «قراءة وكتابة». استخدم hub_describe لمعرفة الحقول.',
     inputSchema: { type: 'object', properties: { entity: entEnum, data: { type: 'object', description: 'الحقول والقيم' } }, required: ['entity', 'data'] },
     annotations: { readOnlyHint: false, destructiveHint: false } },
@@ -128,7 +134,7 @@ const TOOLS = [
       subject: { type: 'string' }, notes: { type: 'string' }, next_step: { type: 'string' }, next_date: { type: 'string', description: 'YYYY-MM-DD' } }, required: ['notes'] },
     annotations: { readOnlyHint: false, destructiveHint: false } },
 ];
-const WRITE_TOOLS = new Set(['hub_create', 'hub_update', 'hub_log_activity', 'hub_run_template']);
+const WRITE_TOOLS = new Set(['hub_create', 'hub_update', 'hub_log_activity', 'hub_run_template', 'hub_studio']);
 
 const rpcResult = (id, result) => ({ jsonrpc: '2.0', id, result });
 const rpcError = (id, code, message) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
@@ -232,6 +238,12 @@ async function runTool(db, env, user, name, a, call) {
     }
     case 'hub_notifications': return textOut(await must(call, 'GET', 'notifications'));
     case 'hub_report': return textOut(await must(call, 'GET', `reports?${qs({ from: a.from, to: a.to })}`));
+    case 'hub_commissions': return textOut(await must(call, 'GET', a.rep_id ? `commissions/statement/${Number(a.rep_id)}` : `commissions?${qs({ status: a.status })}`));
+    case 'hub_studio': {
+      const { action, quote_id, ...rest } = a;
+      const path = action === 'contract' ? `studio/contract/${Number(quote_id)}` : `studio/${action === 'posts' ? 'posts' : action === 'plan' ? 'plan' : 'quote'}`;
+      return textOut(await must(call, 'POST', path, rest));
+    }
     case 'hub_create': {
       checkEntity(a.entity);
       const d = await must(call, 'POST', `e/${a.entity}`, a.data || {});
