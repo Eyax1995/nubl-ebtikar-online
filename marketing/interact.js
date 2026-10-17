@@ -66,14 +66,30 @@
 
   // ---------- المؤشر وأزرار المغناطيس ----------
   let cur, dot, cx = -100, cy = -100, tx = -100, ty = -100;
+  // مؤشر الزاوية (^) فقط — يتبع الماوس، يميل مع الحركة، يتلوّن حسب خلفية القسم، ويتفاعل مع الروابط والبطاقات والضغط
   if (fine && !reduce) {
-    cur = document.createElement('div'); cur.className = 'gx-cur'; dot = document.createElement('div'); dot.className = 'gx-dot';
+    const ch = document.createElement('div'); ch.className = 'gx-chev'; ch.setAttribute('aria-hidden', 'true');
+    ch.innerHTML = '<svg viewBox="0 0 28 28"><polyline points="5,21 14,7 23,21"/></svg>';
+    let px = -100, py = -100, x = -100, y = -100, vx = 0, ang = -40, last = 0, on = false;
+    const mount = () => { if (!ch.isConnected) document.body.appendChild(ch); };
     addEventListener('pointermove', (e) => {
-      tx = e.clientX; ty = e.clientY; root.classList.add('gx-curon');
-      const t = e.target; root.classList.toggle('gx-link', !!(t.closest && t.closest('a,button,[role=button],input,select,textarea,label,.tab')) && !(t.closest && t.closest(CARDS)));
+      if (e.pointerType !== 'mouse') return; mount();
+      px = e.clientX; py = e.clientY; if (!on) { x = px; y = py; on = true; root.classList.add('gx-chevon'); }
+      const now = performance.now(); if (now - last < 90) return; last = now;
+      const t = e.target; const typing = !!(t.closest && t.closest('input,textarea,select,[contenteditable]'));
+      root.classList.toggle('gx-typing', typing);
+      root.classList.toggle('gx-link', !!(t.closest && t.closest('a,button,[role=button],label,summary,.tab,.btn,[data-tool]')) && !(t.closest && t.closest(CARDS)));
+      root.classList.toggle('gx-card', !!(t.closest && t.closest(CARDS)));
+      root.classList.toggle('gx-ondark', isDark(t));
     }, { passive: true });
-    document.addEventListener('pointerleave', () => root.classList.remove('gx-curon'));
+    document.addEventListener('pointerleave', () => { on = false; root.classList.remove('gx-chevon'); });
     addEventListener('pointerdown', () => root.classList.add('gx-down')); addEventListener('pointerup', () => root.classList.remove('gx-down'));
+    (function loop() {
+      requestAnimationFrame(loop); if (!on) return;
+      const dx = px - x; x += dx * 0.45; y += (py - y) * 0.45; vx += (dx - vx) * 0.2;
+      const target = -40 + Math.max(-28, Math.min(28, vx * 1.6)); ang += (target - ang) * 0.2;
+      ch.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) rotate(${ang.toFixed(1)}deg)`;
+    })();
   }
   function magnets(rootEl) {
     if (!fine || reduce) return;
