@@ -187,6 +187,7 @@ async function reviseQuote(db, env, user, id, d, h) {
   for (const g of ['setup', 'monthly', 'addons']) for (const i of arr(data.pricing?.[g]?.items)) if (!i.catalog_code && approved.has(i.name) && Number(approved.get(i.name)) === Number(i.price)) i.approved = true;
   const doc = normalizeQuoteDoc(data, cat, s.vat_rate || 15);
   await saveQuoteRecord(db, q, doc, s);
+  await db.prepare('UPDATE quotes SET ai_engine = ? WHERE id = ?').bind(engine, q.id).run();
   await audit(db, user, 'ai-revise', 'quotes', q.id, str(d.instruction, 200));
   return json({ ok: true, review: doc.totals.review, engine });
 }
