@@ -2,14 +2,14 @@
 'use strict';
 (function agentLink() {
   const css = `
-  .ak-row{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #E9EFF1}
+  .ak-row{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #F1EBE0}
   .ak-row:last-child{border-bottom:0}
   .ak-row .tx{flex:1;min-width:0}.ak-row .tx b{display:block;color:var(--deep)}
   .ak-row.off{opacity:.55}
   .ak-code{position:relative;margin:6px 0 12px}
-  .ak-code pre{background:#123F50;color:#E8EEF0;border-radius:10px;padding:12px 14px 12px 64px;font-size:12px;line-height:1.6;overflow:auto;direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,Consolas,monospace}
+  .ak-code pre{background:#0C2A35;color:#E9F3F5;border-radius:10px;padding:12px 14px 12px 64px;font-size:12px;line-height:1.6;overflow:auto;direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,Consolas,monospace}
   .ak-code button{position:absolute;top:6px;left:6px;background:#ffffff1f;color:#fff;border:0;border-radius:7px;padding:3px 9px;font-size:11.5px;cursor:pointer}
-  .ak-warn{background:#F3D8CA;color:#8A3A15;border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px}
+  .ak-warn{background:#FBEEE8;color:#8A3A15;border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px}
   .ak-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 4px}
   .ak-tabs button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:4px 12px;font-size:12.5px;cursor:pointer}
   .ak-tabs button.on{background:var(--navy);color:#fff;border-color:var(--navy)}`;

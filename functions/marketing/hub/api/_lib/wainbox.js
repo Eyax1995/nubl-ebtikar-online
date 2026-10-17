@@ -2,7 +2,8 @@
 // يقرأ المحادثات من قاعدة المساعد (WA_DB) ويرسل ردود الموظفين من رقم التسويق عبر Cloud API.
 // المسارات: GET wa/threads · GET wa/thread/<wa_id> · POST wa/send/<wa_id> {text} · POST wa/bot/<wa_id> {on}
 // GET wa/templates · POST wa/start {to,name,template,lang,params} · GET|POST wa/profile · POST wa/photo {data,type}
-// POST wa/upload (multipart file) · GET wa/media/<media_id> · POST wa/ai/<wa_id> {mode,draft,hint}
+// POST wa/upload (multipart file) · GET wa/media/<media_id>?name=&mime=&dl=1 (باسم الملف وصيغته الأصليين) · POST wa/ai/<wa_id> {mode,draft,hint}
+// POST wa/mark/<wa_id> {event_id,kind:pin|star,on} · GET wa/starred
 // wa/send يقبل: نص · وسائط (صورة/فيديو/صوت/ملف) · موقع · جهات اتصال · أزرار رد سريع · تفاعل (إيموجي) · رد على رسالة محددة
 import { json, bad } from './core.js';
 import { askAI } from '../../../../wa/_lib/engine.js';
@@ -33,6 +34,26 @@ const graph = (env, path, opts = {}) => fetch(`${GRAPH}/${path}`, {
   ...opts, headers: { authorization: 'Bearer ' + env.WA_TOKEN, ...(opts.body && typeof opts.body === 'string' ? { 'content-type': 'application/json' } : {}), ...(opts.headers || {}) },
 }).then(async (r) => ({ ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) }));
 const gErr = (r) => (r.data && r.data.error && (r.data.error.error_user_msg || r.data.error.message)) || `HTTP ${r.status}`;
+
+// اسم ملف سليم بامتداده الصحيح حسب نوعه
+const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4', 'video/3gpp': '3gp', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/amr': 'amr',
+  'application/pdf': 'pdf', 'application/msword': 'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx', 'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx', 'application/vnd.ms-powerpoint': 'ppt', 'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'text/plain': 'txt', 'text/csv': 'csv', 'application/zip': 'zip', 'application/x-rar-compressed': 'rar', 'application/vnd.rar': 'rar' };
+function fileName(name, mime, mid) {
+  const ext = EXT[mime] || (mime.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'bin';
+  let n = String(name || '').trim();
+  if (!n) n = `واتساب-${new Date().toISOString().slice(0, 10)}-${String(mid).slice(-6)}`;
+  if (!/\.[A-Za-z0-9]{2,5}$/.test(n)) n += '.' + ext;
+  return n;
+}
+let marksReady = false;
+async function ensureMarks(db) {
+  if (marksReady) return;
+  await db.prepare(`CREATE TABLE IF NOT EXISTS wa_marks (dept TEXT NOT NULL, wa_id TEXT NOT NULL, event_id INTEGER NOT NULL, kind TEXT NOT NULL, by_name TEXT, at TEXT, PRIMARY KEY (event_id, kind))`).run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS wa_marks_thread ON wa_marks (dept, wa_id)').run();
+  marksReady = true;
+}
 
 export async function waInboxRoute(env, request, user, sub, id) {
   if (!ROLES_OK.includes(user.role)) return bad('لا تملك صلاحية صندوق واتساب', 403);
@@ -163,13 +184,18 @@ export async function waInboxRoute(env, request, user, sub, id) {
 
   // ---------- عرض وسائط المحادثة (من R2 إن وُجدت، وإلا من Meta ثم تُحفظ) ----------
   if (sub === 'media' && method === 'GET') {
+    // يحافظ على اسم الملف وصيغته الأصليين، ويُنزَّل مباشرة عند ?dl=1
     const mid = String(id || '').replace(/[^\w.-]/g, '').slice(0, 64);
     if (!mid) return bad('معرّف غير صالح', 400);
-    const dl = new URL(request.url).searchParams.get('dl');
-    const hdrs = (type, name) => {
-      const h = { 'content-type': type || 'application/octet-stream', 'cache-control': 'private, max-age=86400' };
-      if (dl) h['content-disposition'] = `attachment; filename*=UTF-8''${encodeURIComponent(name || mid)}`;
-      return h;
+    const q = new URL(request.url).searchParams;
+    const dl = q.get('dl');
+    const wantName = String(q.get('name') || '').replace(/[\\/:*?"<>|\u0000-\u001F]+/g, ' ').trim().slice(0, 120);
+    const hdrs = (type, stored) => {
+      const mime = String(type || q.get('mime') || 'application/octet-stream').split(';')[0].trim();
+      const name = fileName(wantName || stored, mime, mid);
+      const ascii = name.replace(/[^\x20-\x7E]+/g, '_').replace(/"/g, '');
+      return { 'content-type': type || mime, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff',
+        'content-disposition': `${dl ? 'attachment' : 'inline'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}` };
     };
     if (env.FILES) {
       const o = await env.FILES.get('wa/' + mid);
@@ -181,8 +207,23 @@ export async function waInboxRoute(env, request, user, sub, id) {
     const f = await fetch(meta.data.url, { headers: { authorization: 'Bearer ' + env.WA_TOKEN } });
     if (!f.ok) return bad('تعذّر تنزيل الوسائط', 502);
     const buf = await f.arrayBuffer();
-    if (env.FILES) { try { await env.FILES.put('wa/' + mid, buf, { httpMetadata: { contentType: meta.data.mime_type || '' } }); } catch { /* */ } }
-    return new Response(buf, { headers: hdrs(meta.data.mime_type) });
+    const mt = meta.data.mime_type || f.headers.get('content-type') || '';
+    if (env.FILES) { try { await env.FILES.put('wa/' + mid, buf, { httpMetadata: { contentType: mt }, customMetadata: wantName ? { name: wantName } : {} }); } catch { /* */ } }
+    return new Response(buf, { headers: hdrs(mt) });
+  }
+
+  // الرسائل المميزة بنجمة في كل المحادثات
+  if (sub === 'starred' && method === 'GET') {
+    await ensureMarks(db);
+    const rows = (await db.prepare(
+      `SELECT k.event_id, k.wa_id, k.at AS marked_at, k.by_name, e.at, e.kind, e.text, e.reply, e.detail
+         FROM wa_marks k JOIN wa_events e ON e.id = k.event_id
+        WHERE k.dept = ? AND k.kind = 'star' ORDER BY k.at DESC LIMIT 200`).bind(DEPT).all()).results || [];
+    const names = {};
+    for (const r of rows) if (!(r.wa_id in names)) { const x = await db.prepare('SELECT customer_name FROM wa_sessions WHERE session_key = ?').bind(DEPT + ':' + r.wa_id).first(); names[r.wa_id] = (x && x.customer_name) || ''; }
+    return json({ items: rows.map((r) => { let dt = {}; try { dt = JSON.parse(r.detail || '{}') || {}; } catch { /* */ }
+      return { id: r.event_id, wa_id: r.wa_id, name: names[r.wa_id], at: r.at, marked_at: r.marked_at, by: r.by_name || '',
+        from: r.kind === 'message' ? 'customer' : r.kind === 'reply' ? 'bot' : 'staff', text: r.kind === 'reply' || r.kind === 'staff' ? (r.reply || r.text || '') : (r.text || ''), media: dt.m || null }; }) });
   }
 
   const waId = cleanId(id);
@@ -208,6 +249,10 @@ export async function waInboxRoute(env, request, user, sub, id) {
     });
     const byWamid = {}; msgs.forEach((m) => { if (m.msg_id) byWamid[m.msg_id] = m; });
     msgs.forEach((m) => { const c = m.media && m.media.ctx && byWamid[m.media.ctx]; if (c) m.quote = { from: c.from, text: String(c.text || '').slice(0, 140) }; });
+    await ensureMarks(db);
+    const mk = (await db.prepare('SELECT event_id, kind FROM wa_marks WHERE dept = ? AND wa_id = ?').bind(DEPT, waId).all()).results || [];
+    const pinned = new Set(mk.filter((x) => x.kind === 'pin').map((x) => x.event_id)); const starred = new Set(mk.filter((x) => x.kind === 'star').map((x) => x.event_id));
+    msgs.forEach((m) => { if (pinned.has(m.id)) m.pin = 1; if (starred.has(m.id)) m.star = 1; });
     const s = await db.prepare('SELECT customer_name, handoff_until FROM wa_sessions WHERE session_key = ?').bind(key).first();
     const lastIn = [...msgs].reverse().find((m) => m.from === 'customer');
     return json({
@@ -215,6 +260,24 @@ export async function waInboxRoute(env, request, user, sub, id) {
       window_open: !!(lastIn && Date.now() - Date.parse(lastIn.at.replace(' ', 'T') + 'Z') < 24 * 3600e3),
       messages: msgs,
     });
+  }
+
+  // تثبيت رسالة (حتى 3 لكل محادثة) أو تمييزها بنجمة — {event_id, kind:'pin'|'star', on}
+  if (sub === 'mark' && method === 'POST') {
+    await ensureMarks(db);
+    const b = await request.json().catch(() => ({}));
+    const eid = Number(b.event_id) || 0; const kind = b.kind === 'pin' ? 'pin' : b.kind === 'star' ? 'star' : '';
+    if (!eid || !kind) return bad('بيانات ناقصة', 400);
+    const ev = await db.prepare('SELECT id FROM wa_events WHERE id = ? AND dept = ? AND wa_id = ?').bind(eid, DEPT, waId).first();
+    if (!ev) return bad('الرسالة غير موجودة', 404);
+    if (b.on) {
+      if (kind === 'pin') {
+        const n = (await db.prepare("SELECT COUNT(*) AS n FROM wa_marks WHERE dept=? AND wa_id=? AND kind='pin'").bind(DEPT, waId).first()).n;
+        if (n >= 3) await db.prepare("DELETE FROM wa_marks WHERE rowid = (SELECT rowid FROM wa_marks WHERE dept=? AND wa_id=? AND kind='pin' ORDER BY at ASC LIMIT 1)").bind(DEPT, waId).run();
+      }
+      await db.prepare("INSERT OR REPLACE INTO wa_marks (dept, wa_id, event_id, kind, by_name, at) VALUES (?,?,?,?,?, datetime('now'))").bind(DEPT, waId, eid, kind, user.name || '').run();
+    } else await db.prepare('DELETE FROM wa_marks WHERE event_id = ? AND kind = ?').bind(eid, kind).run();
+    return json({ ok: true });
   }
 
   if (sub === 'send' && method === 'POST') {

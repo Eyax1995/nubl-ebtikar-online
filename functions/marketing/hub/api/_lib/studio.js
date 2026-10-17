@@ -6,7 +6,7 @@
 import { json, bad, HttpError, audit, getSettings, today, addDays, addMonths, round2, nextNumber } from './core.js';
 import { notifyRoles, notifyUser, h as hx } from './telegram.js';
 import { aiJSON, aiReady, aiPing, BRAND } from './ai.js';
-import { buildDocx } from './docx.js';
+import { buildDocx, renderHtml } from './docx.js';
 import { quoteBlocks, contractBlocks, planBlocks, quoteTotals } from './docs.js';
 
 const APPROVERS = ['admin', 'manager', 'finance'];
@@ -422,7 +422,7 @@ ${d.notes ? `توجيهات الفريق: ${str(d.notes, 1500)}` : ''}
 
 // ---------- ملفات Word ----------
 const fname = (s) => String(s || 'مستند').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 90);
-async function docFile(db, user, kind, id, h) {
+async function docFile(db, user, kind, id, h, format) {
   const s = await getSettings(db);
   const ctx = { settings: s, today: today(), signName: s.sign_name || 'إياد المغيرة', signTitle: s.sign_title || 'مدير قطاع التسويق' };
   let blocks, name;
@@ -452,6 +452,7 @@ async function docFile(db, user, kind, id, h) {
     ctx.clientName = cl?.name || '';
     blocks = planBlocks(p, parse(p.doc, {}), ctx); name = `الخطة التسويقية — ${cl?.name || ''}`;
   } else return bad('نوع غير معروف', 404);
+  if (format === 'html') { await audit(db, user, 'print', kind, id); return json({ title: name, html: renderHtml(blocks) }); }
   const bytes = await buildDocx(blocks, { title: name });
   await audit(db, user, 'docx', kind, id);
   return new Response(bytes, { headers: {
@@ -467,7 +468,7 @@ export async function studioRoute(db, env, request, user, parts, h) {
   const [, a, b, c] = parts; // studio/<a>/<b>/<c>
   if (a === 'status' && method === 'GET' && new URL(request.url).searchParams.get('test')) return json({ claude: await aiPing(env) });
   if (a === 'status' && method === 'GET') return json({ ai: aiReady(env), engines: { claude: !!env.ANTHROPIC_API_KEY, gemini: !!env.GEMINI_API_KEY, workers: !!env.AI }, can_approve: APPROVERS.includes(user.role) });
-  if (a === 'doc' && method === 'GET') return docFile(db, user, b, Number(c), h);
+  if (a === 'doc' && method === 'GET') return docFile(db, user, b, Number(c), h, new URL(request.url).searchParams.get('format'));
   if (user.via === 'token' && user.scope !== 'write') return bad('المفتاح للقراءة فقط', 403);
   const d = method === 'GET' ? {} : await readBody(request);
   // عمليات التوليد الطويلة تُبث كاستجابة متدفقة: نبضات كل 8 ثوانٍ تمنع مهلة Cloudflare (524 بعد 100 ثانية)

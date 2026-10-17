@@ -12,19 +12,19 @@
   const css = document.createElement('style');
   css.textContent = `
   .pops{position:fixed;bottom:18px;inset-inline-end:18px;z-index:120;display:flex;flex-direction:column-reverse;gap:10px;width:min(370px,calc(100vw - 24px));pointer-events:none}
-  .pop{pointer-events:auto;background:#fff;border:1px solid var(--line);border-inline-start:5px solid var(--gold,#DB9C47);border-radius:14px;box-shadow:0 14px 40px rgba(8,42,55,.22);
+  .pop{pointer-events:auto;background:#fff;border:1px solid var(--line);border-inline-start:5px solid var(--gold,#DC9C47);border-radius:14px;box-shadow:0 14px 40px rgba(8,42,55,.22);
     padding:12px 14px;display:flex;gap:10px;align-items:flex-start;animation:popIn .35s cubic-bezier(.2,.9,.3,1.2);cursor:pointer}
   .pop.out{animation:popOut .25s forwards}
   .pop .ic{font-size:22px;line-height:1}.pop .tx{flex:1;min-width:0}.pop b{display:block;color:var(--deep);font-size:13.5px}
   .pop p{margin:2px 0 0;font-size:12.5px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
   .pop .x{background:none;border:0;font-size:18px;color:var(--muted);cursor:pointer;line-height:1;padding:0 2px}
-  .pop.ask{border-inline-start-color:var(--teal,#338C89);cursor:default}.pop.ask .acts{display:flex;gap:6px;margin-top:8px}
-  .pop.k-finance{border-inline-start-color:var(--teal,#338C89)}.pop.k-reminder,.pop.k-system{border-inline-start-color:var(--terra,#D06429)}
+  .pop.ask{border-inline-start-color:var(--teal,#308D8B);cursor:default}.pop.ask .acts{display:flex;gap:6px;margin-top:8px}
+  .pop.k-finance{border-inline-start-color:var(--teal,#308D8B)}.pop.k-reminder,.pop.k-system{border-inline-start-color:var(--terra,#D2652A)}
   @keyframes popIn{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:none}}
   @keyframes popOut{to{opacity:0;transform:translateX(-30px)}}
-  .rp-cmd{background:var(--soft,#EEF3F4);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.9}
+  .rp-cmd{background:var(--soft,#F4EDE1);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.9}
   .rp-cmd code{background:#fff;border:1px solid var(--line);border-radius:6px;padding:0 6px;font-family:inherit}
-  .rp-prev{white-space:pre-wrap;background:#123F50;color:#E8EEF0;border-radius:10px;padding:12px;font-size:12.5px;max-height:260px;overflow:auto;margin-top:10px}
+  .rp-prev{white-space:pre-wrap;background:#0C2A35;color:#E9F3F5;border-radius:10px;padding:12px;font-size:12.5px;max-height:260px;overflow:auto;margin-top:10px}
   @media(max-width:700px){.pops{bottom:auto;top:62px;inset-inline-end:12px}}`;
   document.head.appendChild(css);
 

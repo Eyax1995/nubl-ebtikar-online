@@ -22,9 +22,11 @@ async function waView(id) {
   V().innerHTML = `<div class="wa-box ${id ? 'has-thread' : ''}"><div class="wa-list card"><div class="wa-lh"><div><b>${I.wa} محادثات رقم التسويق</b>
       <div class="small muted num" dir="ltr">0563413040</div></div>
       <div class="wa-acts">${WA_ADMIN.includes(me().role) ? '<button class="btn btn-g btn-s" id="wa-set" title="إعدادات واتساب">⚙︎ الإعدادات</button>' : ''}
+      <button class="btn btn-g btn-s" id="wa-starred" title="الرسائل المهمة المحفوظة">${WA_STAR}<span class="wa-hide-m"> المهمة</span></button>
       <button class="btn btn-wa btn-s" id="wa-new">+ محادثة جديدة</button></div></div><div id="wa-threads" class="wa-threads"><div class="empty">جارٍ التحميل…</div></div></div>
     <div class="wa-thread card" id="wa-thread">${id ? '<div class="empty">جارٍ التحميل…</div>' : '<div class="empty">اختر محادثة من القائمة</div>'}</div></div>`;
   $('#wa-new').onclick = () => waStartModal();
+  $('#wa-starred').onclick = () => waStarredModal();
   if ($('#wa-set')) $('#wa-set').onclick = () => waSettingsModal();
   await waLoadThreads(id);
   if (id) await waLoadThread(id);
@@ -49,7 +51,21 @@ async function waLoadThreads(active, quiet) {
 }
 
 // ---------- المحادثة: عرض الوسائط + أدوات الإرسال الكاملة + ذكاء نُبل ----------
-const WA_MEDIA = (mid, dl) => `${API}wa/media/${encodeURIComponent(mid)}${dl ? '?dl=1' : ''}`;
+const WA_MEDIA = (mid, dl, name, mime) => { const q = new URLSearchParams(); if (dl) q.set('dl', 1); if (name) q.set('name', name); if (mime) q.set('mime', mime); const t = q.toString(); return `${API}wa/media/${encodeURIComponent(mid)}${t ? '?' + t : ''}`; };
+// اسم الملف الأصلي، أو اسم واضح بالامتداد الصحيح للصور والفيديو والصوت
+const WA_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/3gpp': '3gp', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/amr': 'amr', 'application/pdf': 'pdf' };
+function waFileName(md, m) {
+  if (md.fn) return md.fn;
+  const mime = String(md.mime || '').split(';')[0].trim();
+  const ext = WA_EXT[mime] || (mime.split('/')[1] || '').replace(/[^a-z0-9]/gi, '').slice(0, 5) || ({ image: 'jpg', video: 'mp4', audio: 'ogg', sticker: 'webp' }[md.t] || 'bin');
+  const kind = { image: 'صورة', video: 'فيديو', audio: md.voice ? 'رسالة-صوتية' : 'صوت', sticker: 'ملصق', document: 'ملف' }[md.t] || 'مرفق';
+  const d = String((m && m.at) || '').slice(0, 16).replace(' ', '_').replace(':', '-');
+  return `${kind}-واتساب-${d || Date.now()}.${ext}`;
+}
+const WA_DL = (md, m) => WA_MEDIA(md.id, 1, waFileName(md, m), md.mime);
+const waDlBtn = (md, m) => md.id ? `<a class="wa-dl" href="${WA_DL(md, m)}" download="${esc(waFileName(md, m))}" title="تنزيل ${esc(waFileName(md, m))}">${WA_DLI}<span>تنزيل</span></a>` : '';
+const WA_URL_RE = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+const waLinkify = (t) => esc(t).replace(WA_URL_RE, (u) => `<a href="${u.startsWith('http') ? u : 'https://' + u}" target="_blank" rel="noopener">${u}</a>`);
 const WA_EMOJI = ['👍', '❤️', '😂', '😮', '🙏', '✅'];
 const WA_QUICK = [
   'حياك الله 🌷 معك فريق نُبل وابتكار للتسويق، كيف نقدر نخدمك؟',
@@ -64,6 +80,9 @@ const WA_AI_MODES = [
   ['friendly', 'لهجة ودودة', 'users'], ['formal', 'صياغة رسمية', 'doc'], ['english', 'بالإنجليزية', 'link'],
   ['followup', 'رسالة متابعة', 'clock'], ['close', 'دفع للقرار', 'star'], ['summary', 'لخّص المحادثة', 'book'],
 ];
+const WA_PIN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 6 4 3v2H6v-2l4-3z"/><path d="M12 15v6"/></svg>';
+const WA_STAR = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>';
+const WA_DLI = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
 const WA_ST = {}; // حالة كل محادثة: مسودة، مرفقات، رد على رسالة
 
 function waBubble(m) {
@@ -71,16 +90,16 @@ function waBubble(m) {
   let inner = '';
   if (m.quote) inner += `<div class="wa-q"><b>${m.quote.from === 'customer' ? 'العميل' : 'نحن'}</b>${esc(m.quote.text)}</div>`;
   if (md.t === 'image' || md.t === 'sticker') {
-    inner += md.id ? `<a class="wa-img" href="${WA_MEDIA(md.id)}" target="_blank" rel="noopener"><img loading="lazy" src="${WA_MEDIA(md.id)}" alt="صورة"></a>` : '';
-    if (md.cap) inner += `<div>${esc(md.cap)}</div>`;
+    inner += md.id ? `<a class="wa-img" href="${WA_MEDIA(md.id, 0, waFileName(md, m), md.mime)}" target="_blank" rel="noopener"><img loading="lazy" src="${WA_MEDIA(md.id)}" alt="صورة"></a>${waDlBtn(md, m)}` : '';
+    if (md.cap) inner += `<div>${waLinkify(md.cap)}</div>`;
   } else if (md.t === 'video') {
-    inner += md.id ? `<video controls preload="none" src="${WA_MEDIA(md.id)}"></video>` : '';
-    if (md.cap) inner += `<div>${esc(md.cap)}</div>`;
+    inner += md.id ? `<video controls preload="none" src="${WA_MEDIA(md.id)}"></video>${waDlBtn(md, m)}` : '';
+    if (md.cap) inner += `<div>${waLinkify(md.cap)}</div>`;
   } else if (md.t === 'audio') {
-    inner += md.id ? `<audio controls preload="none" src="${WA_MEDIA(md.id)}"></audio>` : '';
+    inner += md.id ? `<audio controls preload="none" src="${WA_MEDIA(md.id)}"></audio>${waDlBtn(md, m)}` : '';
   } else if (md.t === 'document') {
-    inner += `<a class="wa-doc" href="${md.id ? WA_MEDIA(md.id, 1) : '#'}" target="_blank" rel="noopener"><span class="ico">${I.doc}</span><span><b>${esc(md.fn || 'ملف')}</b><small>${esc((md.mime || '').split('/').pop().toUpperCase())} · تنزيل</small></span></a>`;
-    if (md.cap) inner += `<div>${esc(md.cap)}</div>`;
+    inner += `<a class="wa-doc" href="${md.id ? WA_DL(md, m) : '#'}" ${md.id ? `download="${esc(waFileName(md, m))}"` : ''}><span class="ico">${I.doc}</span><span><b>${esc(waFileName(md, m))}</b><small>${esc((waFileName(md, m).split('.').pop() || '').toUpperCase())} · تنزيل مباشر</small></span></a>`;
+    if (md.cap) inner += `<div>${waLinkify(md.cap)}</div>`;
   } else if (md.t === 'location' && md.loc) {
     const u = `https://www.google.com/maps?q=${md.loc.lat},${md.loc.lng}`;
     inner += `<a class="wa-loc" href="${u}" target="_blank" rel="noopener"><span class="ico">${I.pin}</span><span><b>${esc(md.loc.name || 'موقع')}</b><small>${esc(md.loc.addr || `${Number(md.loc.lat).toFixed(5)}, ${Number(md.loc.lng).toFixed(5)}`)}</small><small class="lnk">فتح في الخرائط ↗</small></span></a>`;
@@ -88,12 +107,61 @@ function waBubble(m) {
     inner += md.ct.map((c) => `<div class="wa-ct"><span class="ico">${I.team}</span><span><b>${esc(c.n)}</b><small class="num" dir="ltr">${esc(c.p)}</small></span>
       ${m.from === 'customer' && (c.w || c.p) ? `<span class="wa-ct-a"><a class="btn btn-g btn-s" href="#/wa/${esc(String(c.w || c.p).replace(/\D/g, ''))}">محادثة</a><button type="button" class="btn btn-g btn-s" data-lead="${esc(c.n)}|${esc(c.p)}">عميل محتمل</button></span>` : ''}</div>`).join('');
   } else {
-    inner += `<div>${esc(m.text).replace(/\n/g, '<br>')}</div>`;
+    inner += `<div>${waLinkify(m.text).replace(/\n/g, '<br>')}</div>`;
     if (md.t === 'buttons' && md.btns) inner = `<div>${esc(String(m.text).split('\n[أزرار')[0]).replace(/\n/g, '<br>')}</div><div class="wa-pbtns">${md.btns.map((x) => `<span>${esc(x)}</span>`).join('')}</div>`;
   }
-  const acts = m.msg_id ? `<div class="wa-ma"><button type="button" data-rep="${esc(m.msg_id)}" title="رد على هذه الرسالة">↩︎</button>${m.from === 'customer' ? `<button type="button" data-rx="${esc(m.msg_id)}" title="تفاعل">☺︎</button>` : ''}<button type="button" data-cp title="نسخ">⧉</button></div>` : '';
-  return `<div class="wa-m ${m.from}" data-mid="${esc(m.msg_id || '')}"><div class="wa-b">${inner}${m.react ? `<span class="wa-rx">${esc(m.react)}</span>` : ''}${acts}</div>
-    <div class="wa-meta small muted">${m.from === 'bot' ? '🤖 الرد الآلي · ' : m.from === 'staff' ? `👤 ${esc(m.by || 'موظف')} · ` : ''}${waTime(m.at)}${m.status === 'send_failed' ? ' · <b style="color:var(--red)">لم يُرسل</b>' : ''}</div></div>`;
+  const acts = `<div class="wa-ma">${m.msg_id ? `<button type="button" data-rep="${esc(m.msg_id)}" title="رد على هذه الرسالة">↩︎</button>` : ''}${m.msg_id && m.from === 'customer' ? `<button type="button" data-rx="${esc(m.msg_id)}" title="تفاعل">☺︎</button>` : ''}<button type="button" data-cp title="نسخ">⧉</button>${m.id ? `<button type="button" data-pin="${m.id}" class="${m.pin ? 'on' : ''}" title="${m.pin ? 'إلغاء التثبيت' : 'تثبيت في أعلى المحادثة'}">${WA_PIN}</button><button type="button" data-star="${m.id}" class="${m.star ? 'on' : ''}" title="${m.star ? 'إزالة من الرسائل المهمة' : 'حفظ في الرسائل المهمة'}">${WA_STAR}</button>` : ''}</div>`;
+  return `<div class="wa-m ${m.from}${m.pin ? ' pinned' : ''}${m.star ? ' starred' : ''}" data-mid="${esc(m.msg_id || '')}" data-eid="${m.id || ''}"><div class="wa-b">${inner}${m.react ? `<span class="wa-rx">${esc(m.react)}</span>` : ''}${acts}</div>
+    <div class="wa-meta small muted">${m.from === 'bot' ? '🤖 الرد الآلي · ' : m.from === 'staff' ? `👤 ${esc(m.by || 'موظف')} · ` : ''}${m.star ? '<span class="wa-flag s">'+WA_STAR+'</span>' : ''}${m.pin ? '<span class="wa-flag p">'+WA_PIN+'</span>' : ''}${waTime(m.at)}${m.status === 'send_failed' ? ' · <b style="color:var(--red)">لم يُرسل</b>' : ''}</div></div>`;
+}
+
+// ملخص سطر واحد لأي رسالة (للتثبيت والقوائم)
+function waBrief(m) {
+  const md = m.media || {};
+  const kinds = { image: '📷 صورة', video: '🎬 فيديو', audio: '🎙️ صوت', document: '📄 ' + (md.fn || 'ملف'), sticker: 'ملصق', location: '📍 موقع', contacts: '👤 جهة اتصال' };
+  const t = String(md.cap || m.text || '').replace(/\[أرسل[^\]]*\]/, '').trim();
+  return (kinds[md.t] ? kinds[md.t] + (t ? ' — ' : '') : '') + t.slice(0, 120);
+}
+function waJump(eid) {
+  const el = document.querySelector(`.wa-m[data-eid="${eid}"]`); if (!el) return toast('الرسالة أقدم من آخر 300 رسالة معروضة', 1);
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+}
+// لوحة المرفقات: الوسائط · الملفات · الروابط · المهمة والمثبتة
+function waMediaPanel(id) {
+  const st = WA_ST[id] || {}; const msgs = st.msgs || [];
+  const who = (m) => (m.from === 'customer' ? (st.name || 'العميل') : m.from === 'bot' ? 'الرد الآلي' : (m.by || 'فريقنا'));
+  const media = msgs.filter((m) => m.media && m.media.id && ['image', 'video', 'sticker'].includes(m.media.t)).reverse();
+  const files = msgs.filter((m) => m.media && m.media.id && ['document', 'audio'].includes(m.media.t)).reverse();
+  const links = []; msgs.slice().reverse().forEach((m) => { const t = String((m.media && m.media.cap) || m.text || ''); (t.match(WA_URL_RE) || []).forEach((u) => links.push({ u, m })); });
+  const marked = msgs.filter((m) => m.star || m.pin).reverse();
+  const tabs = [['media', 'الوسائط', media.length], ['files', 'الملفات', files.length], ['links', 'الروابط', links.length], ['marked', 'المهمة والمثبتة', marked.length]];
+  const first = (tabs.find((t) => t[2]) || tabs[0])[0];
+  const body = {
+    media: media.length ? `<div class="wa-gal">${media.map((m) => { const md = m.media; return `<div class="wa-gi">${md.t === 'video' ? `<video preload="metadata" src="${WA_MEDIA(md.id)}#t=0.5" muted></video><span class="wa-gi-v">▶</span>` : `<img loading="lazy" src="${WA_MEDIA(md.id)}" alt="">`}
+        <div class="wa-gi-a"><a href="${WA_MEDIA(md.id, 0, waFileName(md, m), md.mime)}" target="_blank" rel="noopener" title="فتح">⤢</a><a href="${WA_DL(md, m)}" download="${esc(waFileName(md, m))}" title="تنزيل">${WA_DLI}</a><button type="button" data-go="${m.id}" title="عرض في المحادثة">↩︎</button></div>
+        <small>${esc(who(m))} · ${waTime(m.at)}</small></div>`; }).join('')}</div>` : '<div class="empty">لا صور أو فيديو في هذه المحادثة</div>',
+    files: files.length ? files.map((m) => { const md = m.media; const fn = waFileName(md, m); return `<div class="wa-fl"><span class="ico">${md.t === 'audio' ? I.chat : I.doc}</span><div class="g"><b>${esc(fn)}</b><small>${esc((fn.split('.').pop() || '').toUpperCase())} · ${esc(who(m))} · ${waTime(m.at)}</small></div>
+        ${md.t === 'audio' ? `<audio controls preload="none" src="${WA_MEDIA(md.id)}"></audio>` : ''}<a class="btn btn-g btn-s" href="${WA_DL(md, m)}" download="${esc(fn)}">${WA_DLI} تنزيل</a><button type="button" class="btn btn-g btn-s" data-go="${m.id}">↩︎</button></div>`; }).join('') : '<div class="empty">لا ملفات أو رسائل صوتية</div>',
+    links: links.length ? links.map(({ u, m }) => { const href = u.startsWith('http') ? u : 'https://' + u; let host = u; try { host = new URL(href).hostname.replace(/^www\./, ''); } catch { /* */ } return `<div class="wa-fl"><span class="ico">${I.link}</span><div class="g"><a href="${esc(href)}" target="_blank" rel="noopener"><b>${esc(host)}</b></a><small class="num" dir="ltr">${esc(u.slice(0, 90))}</small><small>${esc(who(m))} · ${waTime(m.at)}</small></div><button type="button" class="btn btn-g btn-s" data-copy="${esc(href)}">نسخ</button><button type="button" class="btn btn-g btn-s" data-go="${m.id}">↩︎</button></div>`; }).join('') : '<div class="empty">لا روابط في هذه المحادثة</div>',
+    marked: marked.length ? marked.map((m) => `<div class="wa-fl"><span class="ico">${m.pin ? WA_PIN : WA_STAR}</span><div class="g"><b>${esc(who(m))}</b><span>${esc(waBrief(m))}</span><small>${waTime(m.at)}${m.pin ? ' · مثبتة' : ''}${m.star ? ' · مهمة' : ''}</small></div><button type="button" class="btn btn-g btn-s" data-go="${m.id}">عرض</button></div>`).join('') : '<div class="empty">ثبّت رسالة أو احفظها بالنجمة من قائمة أفعال الرسالة</div>',
+  };
+  const m = modal({ title: `المرفقات — ${esc(st.name || waPhone(id))}`, wide: true, body: `<div class="wa-tabs">${tabs.map(([k, l, n]) => `<button type="button" data-t="${k}" class="${k === first ? 'on' : ''}">${l}<em class="num">${n}</em></button>`).join('')}</div><div class="wa-tabb" id="wa-tabb">${body[first]}</div>` });
+  m.el.classList.add('wa-mp');
+  $$('[data-t]', m.el).forEach((b) => b.onclick = () => { $$('[data-t]', m.el).forEach((x) => x.classList.toggle('on', x === b)); $('#wa-tabb', m.el).innerHTML = body[b.dataset.t]; });
+  m.el.addEventListener('click', (e) => {
+    const g = e.target.closest('[data-go]'); if (g) { m.close(); setTimeout(() => waJump(+g.dataset.go), 250); }
+    const c = e.target.closest('[data-copy]'); if (c) { navigator.clipboard?.writeText(c.dataset.copy); toast('نُسخ الرابط'); }
+  });
+}
+// الرسائل المهمة في كل المحادثات
+async function waStarredModal() {
+  const m = modal({ title: 'الرسائل المهمة', wide: true, body: '<div class="empty">جارٍ التحميل…</div>' });
+  try {
+    const d = await api('wa/starred');
+    const host = $('.modal-b', m.el);
+    host.innerHTML = d.items.length ? d.items.map((x) => `<a class="wa-fl" href="#/wa/${esc(x.wa_id)}" data-eid="${x.id}"><span class="ico">${WA_STAR}</span><div class="g"><b>${esc(x.name || waPhone(x.wa_id))}</b><span>${esc(waBrief(x))}</span><small>${x.from === 'customer' ? 'من العميل' : 'منّا'} · ${waTime(x.at)}${x.by ? ` · حفظها ${esc(x.by)}` : ''}</small></div></a>`).join('') : '<div class="empty">لا رسائل محفوظة بعد — اضغط النجمة على أي رسالة لحفظها هنا</div>';
+    $$('a.wa-fl', host).forEach((a) => a.onclick = () => { m.close(); const eid = +a.dataset.eid; setTimeout(() => { const t = setInterval(() => { if (document.querySelector(`.wa-m[data-eid="${eid}"]`)) { clearInterval(t); waJump(eid); } }, 300); setTimeout(() => clearInterval(t), 8000); }, 200); });
+  } catch (e) { toast(e.message, 1); m.close(); }
 }
 
 async function waLoadThread(id, quiet) {
@@ -108,10 +176,12 @@ async function waLoadThread(id, quiet) {
   el.innerHTML = `<div class="wa-th"><a class="btn btn-g btn-s wa-back" href="#/wa" title="المحادثات">→</a>
       <div class="wa-av">${esc((d.name || '؟').trim().charAt(0))}</div>
       <div class="wa-who"><b>${esc(d.name || waPhone(d.wa_id))}</b><div class="small muted num" dir="ltr">${esc(waPhone(d.wa_id))}</div></div><span class="sp"></span>
+      <button class="btn btn-s btn-g" id="wa-media" title="المرفقات والوسائط والروابط والرسائل المهمة">${I.clip}<span class="wa-hide-m"> المرفقات</span>${(() => { const n = d.messages.filter((m) => m.media && m.media.id).length; return n ? `<em class="wa-cnt">${n}</em>` : ''; })()}</button>
       <button class="btn btn-s btn-g" id="wa-sum" title="ملخص المحادثة بذكاء نُبل">${I.ai}<span class="wa-hide-m"> ملخص</span></button>
       <button class="btn btn-s ${on ? 'btn-g' : 'btn-p'}" id="wa-bot" title="${on ? 'إيقاف الرد الآلي' : 'تشغيل الرد الآلي'}">🤖<span class="wa-hide-m"> ${on ? 'إيقاف الرد الآلي' : 'تشغيل الرد الآلي'}</span></button>
       <a class="btn btn-wa btn-s" href="tel:${esc(waPhone(d.wa_id))}" title="اتصال">${I.phone}</a></div>
     <div class="wa-bar small ${on ? 'muted' : 'off'}">${on ? 'الرد الآلي يعمل لهذه المحادثة.' : `الرد الآلي متوقف حتى ${waTime(d.bot_paused_until)} — أنت من يرد.`}${d.window_open ? ` · <span class="wa-win">${I.clock} نافذة الرد الحر مفتوحة</span>` : ''}</div>
+    ${(() => { const pins = d.messages.filter((m) => m.pin).reverse(); return pins.length ? `<button type="button" class="wa-pinbar" id="wa-pinbar" data-i="0"><span class="wa-pin-ic">${WA_PIN}</span><span class="wa-pin-t"><b>رسالة مثبتة${pins.length > 1 ? ` <small class="num">(1 من ${pins.length})</small>` : ''}</b><span>${esc(waBrief(pins[0]))}</span></span></button>` : ''; })()}
     <div class="wa-msgs" id="wa-msgs">${d.messages.map(waBubble).join('') || '<div class="empty">لا رسائل</div>'}</div>
     ${d.window_open ? `<div class="wa-aip" id="wa-aip" hidden></div><div class="wa-rep" id="wa-rep" hidden></div><div class="wa-files" id="wa-files" hidden></div>
       <form class="wa-compose" id="wa-form">
@@ -147,10 +217,27 @@ async function waLoadThread(id, quiet) {
   };
   const sumBtn = () => waSummary(id);
   $('#wa-sum').onclick = sumBtn; if ($('#wa-sum2')) $('#wa-sum2').onclick = sumBtn;
+  $('#wa-media').onclick = () => waMediaPanel(id);
+  const pb = $('#wa-pinbar');
+  if (pb) pb.onclick = () => {
+    const pins = st.msgs.filter((m) => m.pin).reverse(); const i = +pb.dataset.i || 0; const m = pins[i % pins.length];
+    waJump(m.id); const n = (i + 1) % pins.length; pb.dataset.i = n;
+    if (pins.length > 1) { const nx = pins[n]; $('.wa-pin-t', pb).innerHTML = `<b>رسالة مثبتة <small class="num">(${n + 1} من ${pins.length})</small></b><span>${esc(waBrief(nx))}</span>`; }
+  };
 
   // أفعال الرسائل: رد، تفاعل، نسخ، حفظ جهة الاتصال
   box && box.addEventListener('click', async (e) => {
     const rep = e.target.closest('[data-rep]'); const rx = e.target.closest('[data-rx]'); const cp = e.target.closest('[data-cp]'); const ld = e.target.closest('[data-lead]');
+    const mk = e.target.closest('[data-pin],[data-star]');
+    if (mk) {
+      const kind = mk.dataset.pin ? 'pin' : 'star'; const on = !mk.classList.contains('on');
+      try {
+        await api('wa/mark/' + encodeURIComponent(id), { method: 'POST', body: { event_id: +(mk.dataset.pin || mk.dataset.star), kind, on } });
+        toast(kind === 'pin' ? (on ? 'ثُبّتت الرسالة أعلى المحادثة' : 'أُلغي التثبيت') : (on ? 'حُفظت في الرسائل المهمة ✓' : 'أُزيلت من الرسائل المهمة'));
+        waLoadThread(id);
+      } catch (err) { toast(err.message, 1); }
+      return;
+    }
     if (rep) { const m = st.msgs.find((x) => x.msg_id === rep.dataset.rep); st.reply = m ? { id: m.msg_id, text: m.text, from: m.from } : null; drawReply(); $('#wa-text')?.focus(); }
     if (cp) { const b = cp.closest('.wa-b'); navigator.clipboard?.writeText(b.innerText.replace(/[↩︎☺︎⧉]/g, '').trim()); toast('نُسخ النص'); }
     if (ld) { const [n, p] = ld.dataset.lead.split('|'); openForm('leads', null, { name: n, phone: p, source: 'واتساب' }); }
@@ -475,7 +562,7 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-lh svg{width:16px;height:16px;color:#1FA855;vertical-align:-3px}
   .wa-threads{overflow:auto;flex:1}
   .wa-ti{display:block;padding:10px 14px;border-bottom:1px solid var(--line);color:inherit}
-  .wa-ti:hover{background:var(--soft)}.wa-ti.on{background:#CCE2E2}
+  .wa-ti:hover{background:var(--soft)}.wa-ti.on{background:#E3F2F1}
   .wa-tn,.wa-tf{display:flex;justify-content:space-between;align-items:center;gap:8px}
   .wa-tp{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:2px 0}
   .wa-th{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
@@ -488,10 +575,10 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-meta{padding:2px 6px}
   .wa-compose{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line);align-items:flex-end}
   .wa-compose textarea{flex:1;resize:vertical;min-height:44px}
-  .wa-closed{padding:12px 14px;border-top:1px solid var(--line);background:#F3D8CA;color:#A8501F;display:flex;gap:12px;align-items:center;justify-content:space-between}
+  .wa-closed{padding:12px 14px;border-top:1px solid var(--line);background:#FBEEE8;color:#A04A1F;display:flex;gap:12px;align-items:center;justify-content:space-between}
   .wa-acts{display:flex;gap:6px}
   .wa-prev{margin-top:6px;padding:12px 14px;border-radius:12px;background:#DCF5E3;line-height:1.8;max-width:520px}
-  .wa-ph{color:#A8501F;background:#F3D8CA;border-radius:4px;padding:0 3px}
+  .wa-ph{color:#A04A1F;background:#FBEEE8;border-radius:4px;padding:0 3px}
   .wa-pbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.wa-pbtns span{background:#fff;border-radius:8px;padding:4px 10px;font-size:.85em;color:#1F8A4C}
   .wa-note{padding:14px;background:var(--soft);border-radius:10px;line-height:1.9}
   .wa-prof{display:flex;gap:18px;align-items:flex-start;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
@@ -500,7 +587,7 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-avatar img{width:100%;height:100%;object-fit:cover}.wa-avatar svg{width:44px;height:44px;color:#1FA855}
   @media(max-width:860px){.wa-prof{flex-direction:column;align-items:center}.wa-closed{flex-direction:column;align-items:stretch}.wa-box{grid-template-columns:1fr;height:auto}.wa-box.has-thread .wa-list{display:none}
     .wa-box:not(.has-thread) .wa-thread{display:none}.wa-back{display:inline-flex}.wa-msgs{max-height:60vh}}
-  .wa-th{gap:10px}.wa-av{width:40px;height:40px;border-radius:14px;background:var(--g-brand,#18566D);color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
+  .wa-th{gap:10px}.wa-av{width:40px;height:40px;border-radius:14px;background:var(--g-brand,#15556B);color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
   .wa-who{min-width:0}.wa-who b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .wa-th .btn .ai,.wa-th .btn svg{width:17px;height:17px}
   .wa-bar{padding:6px 14px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;align-items:center}.wa-bar.off{color:var(--terra)}
@@ -519,15 +606,35 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-rx{position:absolute;bottom:-12px;inset-inline-start:8px;background:#fff;border-radius:99px;padding:0 5px;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,.15)}
   .wa-ma{position:absolute;top:-14px;inset-inline-end:6px;display:none;gap:2px;background:#fff;border-radius:99px;padding:2px 4px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
   .wa-m:hover .wa-ma,.wa-m:focus-within .wa-ma{display:flex}
+  .wa-dl{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:4px 10px;border-radius:6px;background:rgba(24,86,109,.08);color:var(--navy);font-size:12px;font-weight:700}.wa-dl:hover{background:var(--navy);color:#fff}
+  .wa-ma button.on{color:var(--terra)}.wa-ma button[data-star].on{color:var(--gold)}.wa-ma button svg{vertical-align:-2px}
+  .wa-flag{display:inline-flex;vertical-align:-2px;margin-inline-end:4px}.wa-flag.s{color:var(--gold)}.wa-flag.p{color:var(--terra)}
+  .wa-m.starred .wa-b{box-shadow:inset 3px 0 0 var(--gold)}.wa-m.pinned .wa-b{outline:1px dashed rgba(208,100,41,.5)}
+  @keyframes wa-flash{0%,60%{background:rgba(219,156,71,.28)}100%{background:transparent}}.wa-m.flash{animation:wa-flash 1.8s ease-out;border-radius:6px}
+  .wa-pinbar{display:flex;align-items:center;gap:10px;width:100%;text-align:start;border:0;border-bottom:1px solid var(--line);background:#FBF1E1;padding:7px 14px;cursor:pointer;font:inherit;color:var(--ink)}
+  .wa-pinbar:hover{background:#F0DDB8}.wa-pin-ic{color:var(--terra);display:inline-flex}.wa-pin-t{display:flex;flex-direction:column;min-width:0;line-height:1.45}.wa-pin-t b{font-size:12px;color:var(--navy)}.wa-pin-t span{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wa-cnt{font-style:normal;background:var(--terra);color:#fff;border-radius:99px;font-size:11px;padding:0 6px;margin-inline-start:4px;font-family:"DG Agnadeen",sans-serif}
+  .wa-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:10px}
+  .wa-tabs button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit;font-weight:700;color:var(--muted)}.wa-tabs button.on{background:var(--navy);border-color:var(--navy);color:#fff}
+  .wa-tabs em{font-style:normal;margin-inline-start:6px;opacity:.8;font-size:12px}
+  .wa-tabb{max-height:62vh;overflow:auto}
+  .wa-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+  .wa-gi{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#F1F5F6}.wa-gi img,.wa-gi video{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+  .wa-gi small{display:block;padding:5px 8px;font-size:11px;color:var(--muted)}.wa-gi-v{position:absolute;top:8px;inset-inline-start:8px;background:rgba(24,86,109,.85);color:#fff;border-radius:6px;padding:0 6px;font-size:11px}
+  .wa-gi-a{position:absolute;top:6px;inset-inline-end:6px;display:flex;gap:4px;opacity:0;transition:opacity .2s}.wa-gi:hover .wa-gi-a,.wa-gi:focus-within .wa-gi-a{opacity:1}
+  .wa-gi-a a,.wa-gi-a button{display:grid;place-items:center;width:28px;height:28px;border-radius:6px;border:0;background:#fff;color:var(--navy);cursor:pointer}
+  .wa-fl{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line);color:inherit}.wa-fl .g{flex:1;min-width:0;display:flex;flex-direction:column}.wa-fl .g b,.wa-fl .g span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wa-fl small{color:var(--muted);font-size:11.5px}.wa-fl .ico{color:var(--navy)}.wa-fl audio{max-width:200px;height:32px}a.wa-fl:hover{background:#F1F5F6}
+  @media(max-width:860px){.wa-gi-a{opacity:1}.wa-fl audio{display:none}.wa-gal{grid-template-columns:repeat(3,1fr)}}
   .wa-ma button{border:0;background:none;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:14px;color:var(--navy)}.wa-ma button:hover{background:var(--soft)}
   .wa-rxp{position:absolute;top:-46px;inset-inline-start:0;display:flex;gap:2px;background:#fff;border-radius:99px;padding:4px 6px;box-shadow:0 10px 24px rgba(0,0,0,.2);z-index:5;animation:mpop .3s var(--spring,ease) both}
   .wa-rxp button{border:0;background:none;font-size:20px;width:34px;height:34px;border-radius:50%;cursor:pointer;transition:transform .2s}.wa-rxp button:hover{transform:scale(1.25)}
   .wa-compose{align-items:flex-end;gap:8px;padding:10px 12px;background:#fff}
   .wa-compose textarea.inp{min-height:46px;max-height:180px;resize:none;border-radius:16px;line-height:1.6;padding-top:11px}
   .wa-tools{display:flex;gap:6px}
-  .wa-tb{width:44px;height:46px;border-radius:14px;border:1.5px solid var(--line-2,#C5D5DA);background:#fff;color:var(--navy);display:grid;place-items:center;cursor:pointer;transition:transform .25s}
+  .wa-tb{width:44px;height:46px;border-radius:14px;border:1.5px solid var(--line-2,#D8CCB6);background:#fff;color:var(--navy);display:grid;place-items:center;cursor:pointer;transition:transform .25s}
   .wa-tb:hover{transform:translateY(-2px)}.wa-tb .ai{width:22px;height:22px}
-  .wa-tb.aib{background:linear-gradient(135deg,#124354,#338C89);color:#fff;border:0;--ic-a:#E4B575;--ic-b:#CCE2E2}
+  .wa-tb.aib{background:linear-gradient(135deg,#0C3B4C,#308D8B);color:#fff;border:0;--ic-a:#F2B562;--ic-b:#E3F2F1}
   .wa-menu{position:relative}
   .wa-pop{position:absolute;bottom:calc(100% + 8px);inset-inline-start:0;z-index:20;width:250px;background:#fff;border-radius:18px;padding:8px;box-shadow:0 24px 50px -16px rgba(8,42,55,.5);border:1px solid var(--line);animation:mpop .3s var(--spring,ease) both}
   .wa-pop button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:9px 10px;border-radius:12px;cursor:pointer;font:inherit;color:var(--ink);text-align:start}
@@ -547,8 +654,8 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-fi-b .inp{min-height:36px;margin-top:4px;font-size:13px;padding:6px 10px}
   .wa-fi.err{border-color:#E2A496;background:#FFF6F3}
   .wa-fi-x{border:0;background:var(--soft);width:36px;height:36px;border-radius:10px;cursor:pointer;color:var(--red);display:grid;place-items:center}.wa-fi-x .ai{width:18px;height:18px}
-  .wa-aip{background:linear-gradient(135deg,#124354,#18566D);color:#E8EEF0;border:0}
-  .wa-aih{display:flex;align-items:center;gap:8px;margin-bottom:8px}.wa-aih .ai{width:18px;height:18px;--ic-a:#E4B575;--ic-b:#CCE2E2}.wa-aih .sp{flex:1}.wa-aih button{color:#CFE5EA}
+  .wa-aip{background:linear-gradient(135deg,#0C3B4C,#15556B);color:#E6EFF3;border:0}
+  .wa-aih{display:flex;align-items:center;gap:8px;margin-bottom:8px}.wa-aih .ai{width:18px;height:18px;--ic-a:#F2B562;--ic-b:#E3F2F1}.wa-aih .sp{flex:1}.wa-aih button{color:#CFE5EA}
   .wa-aip textarea.wa-ait{background:rgba(255,255,255,.96);color:var(--ink);min-height:90px}
   .wa-aia{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}.wa-aia .muted{color:#BFD9DF!important}
   .shimmer{background:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,.4),rgba(255,255,255,.15));background-size:200% 100%;animation:shim 1.2s linear infinite;border-radius:10px;padding:14px;color:#fff}

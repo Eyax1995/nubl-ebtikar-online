@@ -50,7 +50,7 @@ function debtsRender() {
   V().innerHTML = `<div class="toolbar"><div class="search">${I.search}<input class="inp" id="dq" style="padding-inline-start:34px" placeholder="ابحث باسم العميل أو الجوال…" value="${esc(st.q)}"></div>
       <select class="inp" id="db" style="max-width:190px"><option value="">كل الأعمار</option>${DEBT_BUCKETS.map((b) => `<option value="${b.k}" ${st.b === b.k ? 'selected' : ''}>${b.l}</option>`).join('')}</select>
       <span class="sp"></span><span class="small muted">محدّث حتى ${fdate(d.today)}</span>
-      <button class="btn btn-g btn-s" id="csv">${I.upload} تصدير Excel</button><button class="btn btn-g btn-s" onclick="print()">${I.print} طباعة</button></div>
+      <button class="btn btn-g btn-s" id="csv">${I.upload} تصدير Excel</button><button class="btn btn-g btn-s" onclick="printOfficialView('تقرير أعمار الديون')">${I.print} طباعة / PDF</button></div>
     <div class="grid g4">${kpi('إجمالي الديون القائمة', `${n0(tot.bal)}<small>ر.س</small>`, `${n0(d.invoices.length)} فاتورة`)}
       ${kpi('المتأخر عن الاستحقاق', `${n0(tot.over)}<small>ر.س</small>`, tot.bal ? `${Math.round((tot.over / tot.bal) * 100)}% من الإجمالي` : '', tot.over ? 'warn' : 'good')}
       ${kpi('عملاء عليهم مستحقات', n0(tot.n))}${kpi('أقدم تأخير', tot.maxDays > 0 ? `${n0(tot.maxDays)}<small>يوماً</small>` : '—', '', tot.maxDays > 60 ? 'warn' : '')}</div>

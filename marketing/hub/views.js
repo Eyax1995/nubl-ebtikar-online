@@ -23,7 +23,7 @@ async function dashboardView() {
   const winRate = d.deals && (d.deals.won90 + d.deals.lost90) ? Math.round(d.deals.won90 * 100 / (d.deals.won90 + d.deals.lost90)) + '%' : '—';
   const k = [];
   if (d.leads) k.push(kpi('عملاء محتملون', n0(d.leads.total), `${n0(d.leads.month)} جديد هذا الشهر`), kpi('متابعات مستحقة', n0(d.leads.due), 'اليوم وما قبله', d.leads.due ? 'warn' : ''));
-  if (d.deals) k.push(kpi('قيمة خط المبيعات', n0(d.deals.open_value) + '<small>ر.س</small>', `المرجّح ${moneyTxt(d.deals.weighted)} ر.س`), kpi('مكسوب هذا الشهر', n0(d.deals.won_month_value) + '<small>ر.س</small>', `${d.deals.won_month} صفقة · نسبة الفوز (90 يوماً) ${winRate}`, 'good'));
+  if (d.deals) k.push(kpi('قيمة خط المبيعات', n0(d.deals.open_value) + '<small>ر.س</small>', `المرجّح ${moneyTxt(d.deals.weighted)} ر.س`), kpi('مكسوب هذا الشهر', n0(d.deals.won_month_value) + '<small>ر.س</small>', `${d.deals.won_month || 0} صفقة · نسبة الفوز (90 يوماً) ${winRate}`, 'good'));
   if (d.contracts) k.push(kpi('الإيراد الشهري المتكرر', n0(d.contracts.mrr) + '<small>ر.س</small>', `${d.contracts.active} عقد نشط`));
   if (d.money) k.push(kpi('المستحقات', n0(d.money.receivable) + '<small>ر.س</small>', `متأخر ${moneyTxt(d.money.overdue)} ر.س (${d.money.overdue_n || 0})`, d.money.overdue ? 'warn' : ''),
     kpi('المحصّل هذا الشهر', n0(d.collected.s) + '<small>ر.س</small>', `مصروفات ${moneyTxt(d.expensesMonth.s)} ر.س`, 'good'));
@@ -374,22 +374,53 @@ async function catalogPicker(onPick) {
 }
 
 /* ====================== الطباعة الرسمية ====================== */
-function docShell(title, inner) {
-  const s = S.meta.settings;
+function docShell(title, inner, opt = {}) {
+  // كل المستندات المطبوعة تخرج على الأوراق الرسمية 3.0 (الترويسة والتذييل وشريط الأسهم في كل صفحة)
+  const s = S.meta.settings; const O = location.origin + '/marketing/hub/';
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title>
-  <style>@font-face{font-family:'The Year of Handicrafts';src:url(${location.origin}/marketing/hub/fonts/TheYearofHandicrafts-Bold.woff2) format('woff2');font-weight:700}@font-face{font-family:'DG Agnadeen';src:url(${location.origin}/marketing/hub/fonts/DGAgnadeen-Regular.woff2) format('woff2');font-weight:400}@font-face{font-family:'DG Agnadeen';src:url(${location.origin}/marketing/hub/fonts/DGAgnadeen-Bold.woff2) format('woff2');font-weight:700}h1,h2,h3{font-family:'The Year of Handicrafts','DG Agnadeen',Tajawal,sans-serif}</style>
-  <style>@page{size:A4;margin:16mm 14mm}*{box-sizing:border-box}body{font-family:'DG Agnadeen',Tajawal,sans-serif;color:#1E3E4A;font-size:13.5px;line-height:1.7;margin:0}
-  .hd{display:flex;align-items:center;gap:16px;border-bottom:3px solid #18566D;padding-bottom:12px;margin-bottom:18px}.hd img{height:70px}.hd .c{flex:1}.hd b{font-size:18px;color:#123F50}
-  .hd .m{font-size:11.5px;color:#3E5A66}.ttl{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px}.ttl h1{font-size:22px;margin:0;color:#123F50}
-  .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;background:#F3F6F7;border-radius:10px;padding:12px 16px;margin-bottom:16px}
-  table{width:100%;border-collapse:collapse;margin:8px 0}th{background:#18566D;color:#fff;padding:8px 10px;text-align:start;font-weight:500}td{padding:8px 10px;border-bottom:1px solid #DCE5E8;vertical-align:top}
-  .n{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}.tot{width:300px;margin-inline-start:auto}.tot div{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #DCE5E8}
-  .tot .g{font-weight:800;font-size:16px;border:0;color:#123F50}h3{color:#18566D;font-size:15px;margin:18px 0 6px}ul{margin:4px 0;padding-inline-start:20px}
-  .ft{margin-top:26px;border-top:1px solid #DCE5E8;padding-top:10px;font-size:11px;color:#3E5A66;text-align:center}.sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:34px}
-  .sig div{border-top:1px solid #1E3E4A;padding-top:6px;text-align:center}.strip{height:5px;background:repeating-linear-gradient(90deg,#18566D 0 16px,#fff 16px 20px,#D06429 20px 36px,#fff 36px 40px,#DB9C47 40px 56px,#fff 56px 60px,#338C89 60px 76px,#fff 76px 80px);margin-top:8px}
-  @media screen{body{max-width:820px;margin:20px auto;padding:20px;box-shadow:0 0 30px rgba(0,0,0,.1)}}</style></head><body>
-  <div class="hd"><img src="${location.origin}/marketing/hub/brand/logo-h-color.svg" alt=""><div class="c"><b>${esc(s.company_name)}</b><div class="m">${esc(s.company_city)} · س.ت ${esc(s.cr_number)} · الرقم الضريبي ${esc(s.vat_number)} · ${esc(s.sales_phone || '')}</div></div></div>
-  ${inner}<div class="ft">نتعامل بنُبل… ونحلّ بابتكار<div class="strip"></div></div><script>window.onload=()=>setTimeout(()=>print(),400)<\/script></body></html>`;
+  <style>@font-face{font-family:'The Year of Handicrafts';src:url(${O}fonts/TheYearofHandicrafts-Bold.woff2) format('woff2');font-weight:700}@font-face{font-family:'DG Agnadeen';src:url(${O}fonts/DGAgnadeen-Regular.woff2) format('woff2');font-weight:400}@font-face{font-family:'DG Agnadeen';src:url(${O}fonts/DGAgnadeen-Bold.woff2) format('woff2');font-weight:700}
+  @page{size:A4;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  html,body{margin:0}body{font-family:'DG Agnadeen',Tajawal,sans-serif;color:#1E3E4A;font-size:13px;line-height:1.7}
+  h1,h2,h3{font-family:'The Year of Handicrafts','DG Agnadeen',Tajawal,sans-serif}
+  .lh{position:fixed;top:0;left:0;width:210mm;height:297mm;z-index:0}
+  table.pg{width:210mm;border-collapse:collapse;position:relative;z-index:1}table.pg>thead>tr>td{height:52mm;padding:0}table.pg>tfoot>tr>td{height:30mm;padding:0}
+  table.pg>tbody>tr>td{padding:0 24mm 0 20mm;vertical-align:top}
+  .reg{font-size:10.5px;color:#3E5A66;margin:0 0 4mm}
+  .ttl{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px;border-bottom:2px solid #D06429;padding-bottom:6px}.ttl h1{font-size:22px;margin:0;color:#18566D}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;background:#CCE2E2;border-radius:6px;padding:12px 16px;margin-bottom:16px}
+  .doc table{width:100%;border-collapse:collapse;margin:8px 0}.doc th{background:#18566D;color:#fff;padding:7px 10px;text-align:start;font-weight:700}.doc td{padding:7px 10px;border-bottom:1px solid #C5D5DA;vertical-align:top}.doc tbody tr:nth-child(even) td{background:#E8EEF0}
+  .n{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}.tot{width:300px;margin-inline-start:auto}.tot div{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #C5D5DA}
+  .tot .g{font-weight:700;font-size:16px;border:0;color:#18566D}h3{color:#D06429;font-size:15px;margin:18px 0 6px}ul{margin:4px 0;padding-inline-start:20px}
+  .sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:34px;break-inside:avoid}.sig div{border-top:1px solid #18566D;padding-top:6px;text-align:center}
+  .close{margin-top:22px;text-align:center;color:#18566D;font-weight:700}
+  .d-date{color:#3E5A66;font-size:12px;margin:0 0 10px}.d-title{text-align:center;color:#18566D;font-size:24px;margin:2px 0}.d-sub{text-align:center;color:#D06429;font-weight:700;font-size:15px;margin:0 0 10px}
+  .d-meta{margin:0 0 6px;font-size:12.5px}.d-meta.sh{background:#CCE2E2;padding:5px 10px;border-radius:6px;font-size:13.5px}.d-meta.sh b{color:#D06429}
+  .d-p{margin:0 0 8px}.d-h1{color:#18566D;font-size:16.5px;border-bottom:2px solid #D06429;padding-bottom:3px;margin:16px 0 8px;break-after:avoid}.d-h2{color:#D06429;font-size:14px;margin:12px 0 5px;break-after:avoid}
+  table.dt{width:100%;border-collapse:collapse;margin:6px 0 10px;font-size:12px}table.dt th{background:#18566D;color:#fff;padding:6px 8px;font-weight:700}table.dt td{border:1px solid #C5D5DA;padding:5px 8px;vertical-align:top}
+  table.dt td.k{color:#18566D}table.dt td small{display:block;color:#3E5A66;font-size:11px}table.dt tr.tt td,table.dt tr.sh td{background:#E8EEF0}table.dt tr{break-inside:avoid}
+  .d-call{background:#CCE2E2;border-inline-start:5px solid #D06429;padding:7px 12px;margin:6px 0 10px;font-size:12.5px;break-inside:avoid}
+  .d-ul{margin:4px 0 8px;padding-inline-start:20px}.d-ul li{margin-bottom:3px}.d-ul li::marker{color:#D06429}.d-small{font-size:11.5px;color:#3E5A66;margin:0 0 8px}
+  .d-close{text-align:center;color:#18566D;font-weight:700;margin:18px 0 26px}.d-sign{text-align:center;margin:0;color:#3E5A66}.d-sign b{color:#18566D;font-size:15px}
+  .d-sigs{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px;break-inside:avoid}.d-sigs div{border:1px solid #C5D5DA;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:3px;text-align:center}
+  .d-sigs b{background:#18566D;color:#fff;margin:-10px -10px 6px;padding:6px;border-radius:6px 6px 0 0}.d-sigs i{display:block;height:34px;border-bottom:1px dotted #8CAAB6}.d-sigs small{color:#3E5A66;font-size:11px}
+  .d-pb{break-after:page}
+  .doc .grid{display:grid;gap:8px;margin-bottom:10px}.doc .g2{grid-template-columns:1fr 1fr}.doc .g3{grid-template-columns:repeat(3,1fr)}.doc .g4{grid-template-columns:repeat(4,1fr)}
+  .doc .kpi{border:1px solid #C5D5DA;border-top:3px solid #18566D;border-radius:6px;padding:7px 9px;break-inside:avoid}.doc .kpi .l{font-size:11px;color:#3E5A66}.doc .kpi .v{font-size:17px;font-weight:700;color:#18566D}.doc .kpi .h{font-size:10.5px;color:#3E5A66}.doc .kpi .ki,.doc .kpi svg{display:none}
+  .doc .card{border:1px solid #DCE5E8;border-radius:6px;padding:8px 10px;break-inside:avoid;margin-bottom:8px}.doc .card h3{font-size:13px;margin:0 0 6px;color:#18566D}.doc .card h3 svg,.doc h3 .ico{display:none}
+  .doc .bar{display:grid;grid-template-columns:110px 1fr 70px;gap:8px;align-items:center;font-size:11px;margin-bottom:3px}.doc .bar .tr{background:#E8EEF0;border-radius:4px;height:8px;overflow:hidden}.doc .bar .fl{height:100%;background:#18566D}.doc .bar .val{text-align:end}
+  .doc .pill{display:inline-block;padding:0 7px;border-radius:99px;background:#E8EEF0;font-size:10.5px}.doc .empty{color:#3E5A66;font-size:11px}.doc .small{font-size:11px}.doc .muted{color:#3E5A66}.doc a{color:inherit;text-decoration:none}
+  .doc .btn,.doc button,.doc input,.doc select,.doc .toolbar,.doc .no-print,.doc .dbt-acts{display:none!important}.doc table.t{font-size:11px}
+  @media screen{body{background:#C5D5DA}table.pg{margin:20px auto;background:#fff url(${O}brand/letterhead-a4.png) top center/210mm auto no-repeat;min-height:297mm}.lh{display:none}}</style></head><body>
+  <img class="lh" src="${O}brand/letterhead-a4.png" alt="">
+  <table class="pg"><thead><tr><td></td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td><div class="doc">
+  ${opt.official ? '' : `<div class="reg">${[s.company_name, s.cr_number ? 'س.ت ' + esc(s.cr_number) : '', s.vat_number ? 'الرقم الضريبي ' + esc(s.vat_number) : ''].filter(Boolean).map((x, i) => i ? x : esc(x)).join(' · ')}</div>`}
+  ${inner}</div></td></tr></tbody></table><script>window.onload=()=>setTimeout(()=>print(),600)<\/script></body></html>`;
+}
+// طباعة أي صفحة تقارير على الأوراق الرسمية: تُنسخ محتويات الصفحة الحالية دون الأزرار وأدوات التصفية
+function printOfficialView(title, sub) {
+  const v = $('#view'); if (!v) return;
+  const c = v.cloneNode(true); c.querySelectorAll('.toolbar,.btn,button,input,select,script,.hero3').forEach((x) => x.remove());
+  openDoc(docShell(title, `<div class="ttl"><h1>${esc(title)}</h1><div class="n">${esc(sub || todayStr())}</div></div>${c.innerHTML}<p class="close">وتفضلوا بقبول فائق الود والتقدير</p><p style="text-align:center;margin:0"><b>${esc(S.meta.settings.sign_name || 'إياد المغيرة')}</b><br>${esc(S.meta.settings.sign_title || 'مدير قطاع التسويق')}</p>`));
 }
 function openDoc(html) { const w = window.open('', '_blank'); if (!w) return toast('اسمح بالنوافذ المنبثقة للطباعة', 1); w.document.open(); w.document.write(html); w.document.close(); }
 function partyName(q) { return q.client_id ? refLabel('clients', q.client_id) : q.lead_id ? refLabel('leads', q.lead_id) : ''; }
@@ -429,7 +460,7 @@ function printContract(c, client) {
   <li>تختص محاكم جدة بالنظر في أي نزاع ينشأ عن هذا العقد.</li></ul>
   ${c.notes ? `<h3>4. ملاحظات</h3><p style="white-space:pre-wrap">${esc(c.notes)}</p>` : ''}
   <div class="sig"><div>الطرف الأول<br>${esc(s.company_name)}</div><div>الطرف الثاني<br>${esc(client?.name || '')}</div></div>
-  <p style="font-size:11px;color:#3E5A66;margin-top:18px">نموذج تشغيلي — يُراجع قانونياً قبل اعتماده كصيغة نهائية.</p>`));
+  <p style="font-size:11px;color:#5D7581;margin-top:18px">نموذج تشغيلي — يُراجع قانونياً قبل اعتماده كصيغة نهائية.</p>`));
 }
 function printInvoice(inv, client) {
   const s = S.meta.settings;
@@ -439,7 +470,7 @@ function printInvoice(inv, client) {
   <table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody><tr><td>${esc(inv.description || '')}</td><td class="n">${moneyTxt(inv.subtotal)}</td></tr></tbody></table>
   <div class="tot"><div><span>المبلغ قبل الضريبة</span><span class="n">${moneyTxt(inv.subtotal)}</span></div><div><span>ضريبة القيمة المضافة ${s.vat_rate}%</span><span class="n">${moneyTxt(inv.vat)}</span></div>
   <div class="g"><span>الإجمالي (ر.س)</span><span class="n">${moneyTxt(inv.total)}</span></div>${inv.paid ? `<div><span>المدفوع</span><span class="n">${moneyTxt(inv.paid)}</span></div><div class="g"><span>المتبقي</span><span class="n">${moneyTxt(inv.total - inv.paid)}</span></div>` : ''}</div>
-  <p style="font-size:12px;color:#3E5A66">${inv.tax_ref ? `الفاتورة الضريبية الرسمية رقم <b>${esc(inv.tax_ref)}</b> صادرة من النظام المحاسبي.` : 'هذه مطالبة مالية؛ تصدر الفاتورة الضريبية الإلكترونية الرسمية من النظام المحاسبي المعتمد.'}</p>`));
+  <p style="font-size:12px;color:#5D7581">${inv.tax_ref ? `الفاتورة الضريبية الرسمية رقم <b>${esc(inv.tax_ref)}</b> صادرة من النظام المحاسبي.` : 'هذه مطالبة مالية؛ تصدر الفاتورة الضريبية الإلكترونية الرسمية من النظام المحاسبي المعتمد.'}</p>`));
 }
 
 /* ====================== العقد والفاتورة ====================== */
@@ -496,7 +527,7 @@ async function reportsView() {
   const d = await api(`reports?from=${st.from}&to=${st.to}`);
   const f = d.funnel; const conv = (a, b) => (b ? Math.round((a / b) * 100) + '%' : '—');
   V().innerHTML = `<div class="toolbar"><label class="small">من <input class="inp" type="date" id="rf" value="${st.from}"></label><label class="small">إلى <input class="inp" type="date" id="rt" value="${st.to}"></label>
-    <button class="btn btn-n btn-s" id="go">تحديث</button><span class="sp"></span><button class="btn btn-g btn-s" onclick="print()">${I.print} طباعة</button></div>
+    <button class="btn btn-n btn-s" id="go">تحديث</button><span class="sp"></span><button class="btn btn-g btn-s" id="prv">${I.print} طباعة / PDF</button></div>
     <div class="grid g4">${kpi('عملاء محتملون جدد', n0(f.leads))}${kpi('تم التواصل معهم', n0(f.contacted), conv(f.contacted, f.leads))}${kpi('عروض أسعار', n0(f.quotes))}${kpi('صفقات مكسوبة', n0(f.won), `${moneyTxt(f.won_value)} ر.س · خاسرة ${f.lost}`, 'good')}</div>
     <div class="grid g2" style="margin-top:14px">
       <div class="card"><h3>قمع المبيعات</h3>${bars([{ k: 'عملاء محتملون', n: f.leads }, { k: 'تم التواصل', n: f.contacted }, { k: 'صفقات', n: f.deals }, { k: 'عروض', n: f.quotes }, { k: 'مكسوبة', n: f.won }])}</div>
@@ -511,6 +542,7 @@ async function reportsView() {
     <tbody>${d.team.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(S.meta.roles[r.role] || r.role)}</td><td class="num">${r.activities}</td><td class="num">${r.visits}</td><td class="num">${r.won}</td><td>${money(r.won_value)}</td><td>${money(r.commission)}</td><td class="num">${r.tasks_done}</td><td class="num">${conv(r.tasks_ontime, r.tasks_done)}</td><td class="num">${r.avg_rev ?? '—'}</td></tr>`).join('')}</tbody></table></div>
     <p class="small muted" style="margin-top:8px">العمولة = قيمة الصفقات المكسوبة × نسبة العضو (أو نسب المندوب الافتراضية من الإعدادات). رقم تقديري للمراجعة قبل الصرف.</p></div>`;
   $('#go').onclick = () => { st.from = $('#rf').value; st.to = $('#rt').value; reportsView(); };
+  $('#prv').onclick = () => printOfficialView('تقرير الأداء', `من ${st.from} إلى ${st.to}`);
 }
 
 /* ====================== الفريق والإعدادات والاستيراد ====================== */

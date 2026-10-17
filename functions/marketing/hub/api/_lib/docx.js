@@ -106,3 +106,42 @@ export async function buildDocx(blocks, { title = '', subject = '' } = {}) {
   for (const [name, b64] of Object.entries(LETTERHEAD)) if (name !== '[Content_Types].xml') files.push({ name, data: b64ToU8(b64) });
   return zip(files);
 }
+
+// ---------- نسخة HTML مطابقة لملف Word (للطباعة وحفظ PDF على الأوراق الرسمية) ----------
+const h = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const hr = (s) => h(s).split(/(\*\*[^*]+\*\*)/g).map((p) => (p.startsWith('**') && p.endsWith('**') ? `<b>${p.slice(2, -2)}</b>` : p)).join('').replace(/\n/g, '<br>');
+function htable(b) {
+  const head = `<tr>${b.cols.map((c) => `<th style="text-align:${c.align === 'center' ? 'center' : 'start'}">${h(c.label)}</th>`).join('')}</tr>`;
+  const body = (b.rows || []).map((row) => {
+    const r = Array.isArray(row) ? { cells: row } : row;
+    return `<tr class="${r.total ? 'tt' : r.shade ? 'sh' : ''}">${r.cells.map((cell, i) => {
+      const c = cell && typeof cell === 'object' ? cell : { text: cell };
+      const al = c.align || b.cols[i]?.align; const bold = c.bold ?? (i === 0 || r.total);
+      return `<td class="${i === 0 ? 'k' : ''}" style="text-align:${al === 'center' ? 'center' : al === 'left' ? 'left' : 'start'}">${bold ? `<b>${hr(c.text)}</b>` : hr(c.text)}${c.sub ? `<small>${hr(c.sub)}</small>` : ''}</td>`;
+    }).join('')}</tr>`;
+  }).join('');
+  return `<table class="dt"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+export function renderHtml(blocks) {
+  return blocks.filter(Boolean).map((b) => {
+    switch (b.t) {
+      case 'date': return `<p class="d-date">${h(b.text)}</p>`;
+      case 'title': return `<h1 class="d-title">${h(b.text)}</h1>`;
+      case 'subtitle': return `<p class="d-sub">${h(b.text)}</p>`;
+      case 'meta': return `<p class="d-meta${b.shade ? ' sh' : ''}"><b>${h(b.label)}:</b> ${h(b.text)}</p>`;
+      case 'p': return `<p class="d-p" style="text-align:${b.jc === 'center' ? 'center' : 'justify'}">${hr(b.text)}</p>`;
+      case 'h1': return `<h2 class="d-h1">${h(b.text)}</h2>`;
+      case 'h2': return `<h3 class="d-h2">${h(b.text)}</h3>`;
+      case 'table': return htable(b);
+      case 'callout': return `<div class="d-call">${b.label ? `<b>${h(b.label)}:</b> ` : ''}${hr(b.text)}</div>`;
+      case 'bullets': return `<ul class="d-ul">${(b.items || []).map((it) => { const o = typeof it === 'string' ? { text: it } : it; return `<li>${o.lead ? `<b>${h(o.lead)}:</b> ` : ''}${hr(o.text)}</li>`; }).join('')}</ul>`;
+      case 'small': return `<p class="d-small" style="text-align:${b.jc === 'center' ? 'center' : 'justify'}">${hr(b.text)}</p>`;
+      case 'closing': return '<p class="d-close">وتفضلوا بقبول فائق الود والتقدير</p>';
+      case 'sign': return `<p class="d-sign"><b>${h(b.name || 'إياد المغيرة')}</b><br>${h(b.title || 'مدير قطاع التسويق')}<br>${h(b.org || 'نُبل وابتكار للخدمات التسويقية')}</p>`;
+      case 'signatures': return `<div class="d-sigs"><div><b>${h(b.left || 'الطرف الأول')}</b><span>${h(b.leftName || '')}</span><small>الاسم والصفة</small><i></i><small>التوقيع</small><i></i><small>الختم والتاريخ</small></div><div><b>${h(b.right || 'الطرف الثاني')}</b><span>${h(b.rightName || '')}</span><small>الاسم والصفة</small><i></i><small>التوقيع</small><i></i><small>الختم والتاريخ</small></div></div>`;
+      case 'pagebreak': return '<div class="d-pb"></div>';
+      case 'spacer': return '<div style="height:8px"></div>';
+      default: return '';
+    }
+  }).join('');
+}

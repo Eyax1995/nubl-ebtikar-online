@@ -61,7 +61,7 @@ const I = {
   folder: P('<path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>'),
   check: P('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/>'),
   cal: P('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
-  star: P('<path d="M6 11l6-6 6 6M6 19l6-6 6 6"/>'),
+  star: P('<path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z"/>'),
   book: P('<path d="M4 4h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4zM20 4h-6a3 3 0 0 0-3 3"/><path d="M20 4v14h-7"/>'),
   chart: P('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
   team: P('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>'),
@@ -578,7 +578,7 @@ window.addEventListener('hashchange', () => S.meta && rerender());
 /* ---------- الدخول ---------- */
 function renderLogin() {
   $('#root').innerHTML = `<div class="login"><form class="login-card" id="lf">
-    <img src="brand/logo-v-color.svg" alt="نُبل وابتكار للخدمات التسويقية"><h1>منصة نُبل وابتكار للتسويق</h1>
+    <img src="../logo.png" alt="نُبل وابتكار"><h1>منصة نُبل وابتكار للتسويق</h1>
     <p class="sub">الإدارة · العملاء · العقود · التشغيل</p>
     <label class="f"><span>البريد الإلكتروني</span><input class="inp" name="email" type="email" dir="ltr" autocomplete="username" required></label>
     <label class="f"><span>كلمة المرور</span><input class="inp" name="password" type="password" dir="ltr" autocomplete="current-password" required></label>
@@ -593,7 +593,7 @@ function renderLogin() {
 }
 function renderForcePassword() {
   $('#root').innerHTML = `<div class="login"><form class="login-card" id="pf">
-    <img src="brand/logo-v-color.svg" alt=""><h1>تعيين كلمة مرور جديدة</h1>
+    <img src="../logo.png" alt=""><h1>تعيين كلمة مرور جديدة</h1>
     <p class="sub">كلمة المرور الحالية مؤقتة — اختر كلمة خاصة بك (8 أحرف على الأقل).</p>
     <label class="f"><span>كلمة المرور المؤقتة</span><input class="inp" name="current" type="password" dir="ltr" required></label>
     <label class="f"><span>كلمة المرور الجديدة</span><input class="inp" name="next" type="password" dir="ltr" minlength="8" autocomplete="new-password" required></label>
@@ -632,7 +632,7 @@ function driveNav() {
 function renderShell() {
   const u = me();
   $('#root').innerHTML = `<div class="app"><aside class="side">
-    <div class="brand"><img class="lg" src="brand/logo-h-dark.svg" alt="نُبل وابتكار للخدمات التسويقية — المنصة"></div>
+    <div class="brand"><img src="../logo-white.png" alt=""><div><b>نُبل وابتكار</b><span>منصة الخدمات التسويقية</span></div></div>
     ${NAV.map(([g, items]) => { const its = items.filter((i) => navAllowed(i[3])); return its.length ? `<div class="nav-g"><h6>${g}</h6>${its.map(([r, l, ic, , alt]) =>
       `<a class="nav-a" href="#/${r}" data-r="${r}" data-alt="${alt || ''}">${I[ic]}<span>${l}</span></a>`).join('')}</div>` : ''; }).join('')}
     ${driveNav()}

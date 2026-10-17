@@ -13,9 +13,9 @@
   .npanel header b{flex:1;color:var(--deep)}
   .npanel header button{background:none;border:0;color:var(--navy);cursor:pointer;font-size:12.5px}
   .npanel .nl{overflow:auto;flex:1}
-  .ni{display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid #E9EFF1;cursor:pointer;align-items:flex-start}
+  .ni{display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid #F1EBE0;cursor:pointer;align-items:flex-start}
   .ni:hover{background:var(--paper)}
-  .ni.u{background:#F7FAFA}
+  .ni.u{background:#FFFBF4}
   .ni .dot{width:8px;height:8px;border-radius:50%;margin-top:8px;flex:none;background:transparent}
   .ni.u .dot{background:var(--terra)}
   .ni .tx{flex:1;min-width:0}
@@ -24,7 +24,7 @@
   .ni .tm{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;gap:6px;align-items:center}
   .ni .ch{display:inline-flex;gap:3px}.ni .ch svg{width:12px;height:12px}
   .npanel .empty{padding:36px 16px;text-align:center;color:var(--muted)}
-  .sw{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #E9EFF1}
+  .sw{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #F1EBE0}
   .sw:last-of-type{border-bottom:0}
   .sw input{width:20px;height:20px;accent-color:var(--navy)}
   .sw svg,.card h3 svg.wai{width:18px;height:18px;vertical-align:-4px;margin-inline-end:4px;color:var(--teal)}

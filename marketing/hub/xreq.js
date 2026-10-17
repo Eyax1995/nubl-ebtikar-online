@@ -163,7 +163,7 @@ async function xreqDetail(id) {
       ${by._g ? `<h3>المرفقات</h3><div>${by._g.map(xqFile).join('<br>')}</div>` : ''}
       ${xreqQuoteBox(r)}
       <div class="toolbar" style="margin-top:12px">${r.can.map((c) => B[c] || '').join('')}</div></div>
-    <div class="card" style="margin-top:14px"><h3>${I.clock || ''} سجل الطلب</h3>${r.events.map((e) => `<div style="padding:4px 0;border-bottom:1px dashed var(--line, #DCE5E8)${e.side === 'peer' ? ';color:var(--terra)' : ''}">
+    <div class="card" style="margin-top:14px"><h3>${I.clock || ''} سجل الطلب</h3>${r.events.map((e) => `<div style="padding:4px 0;border-bottom:1px dashed var(--line, #E3D9C9)${e.side === 'peer' ? ';color:var(--terra)' : ''}">
       <span class="small muted">${xqDt(e.created_at)}</span> — <b>${esc(e.by_name || '')}</b> ${esc(d.event_label[e.event] || e.event)}${e.note ? `: <span style="white-space:pre-wrap">${esc(e.note)}</span>` : ''}</div>`).join('')}</div>`;
   $$('[data-ev]').forEach((b) => b.onclick = () => (b.dataset.ev === 'issue_quote' ? xreqIssue(r) : b.dataset.ev === 'send_quote' ? (b.disabled = true, xreqSendQuote(r.id)) : xreqAct(r, b.dataset.ev)));
   const qp = $('[data-qprint]'); if (qp) qp.onclick = async () => { try { const { row } = await api(`e/quotes/${r.quote.id}`); await Promise.all([refs('clients').catch(() => []), refs('leads').catch(() => [])]); printQuote(row); } catch (e) { toast(e.message, 1); } };
