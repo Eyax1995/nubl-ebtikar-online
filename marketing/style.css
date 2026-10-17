@@ -1,4 +1,5 @@
-@font-face{font-family:"The Year of Handicrafts";src:url(/marketing/fonts/TheYearofHandicrafts-Regular.woff2) format("woff2");font-weight:400;font-display:swap}@font-face{font-family:"The Year of Handicrafts";src:url(/marketing/fonts/TheYearofHandicrafts-Bold.woff2) format("woff2");font-weight:700;font-display:swap}@font-face{font-family:"DG Agnadeen";src:url(/marketing/fonts/DGAgnadeen-Regular.woff2) format("woff2");font-weight:400;font-display:swap}@font-face{font-family:"DG Agnadeen";src:url(/marketing/fonts/DGAgnadeen-Bold.woff2) format("woff2");font-weight:700;font-display:swap}
+@font-face{font-family:Tajawal;src:url(/marketing/fonts/Tajawal-Regular.woff2) format("woff2");font-weight:400;font-display:swap}@font-face{font-family:Tajawal;src:url(/marketing/fonts/Tajawal-Bold.woff2) format("woff2");font-weight:700;font-display:swap}
+@font-face{font-family:"DG Agnadeen";src:url(/marketing/fonts/DGAgnadeen-Regular.woff2) format("woff2");font-weight:400;font-display:swap}@font-face{font-family:"DG Agnadeen";src:url(/marketing/fonts/DGAgnadeen-Bold.woff2) format("woff2");font-weight:700;font-display:swap}
 :root{
   --navy:#18566D;--navy-d:#124354;--deep:#123F50;--ink:#1E3E4A;--muted:#3E5A66;
   --gold:#DB9C47;--terra:#D06429;--teal:#338C89;
@@ -10,11 +11,11 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
-body{font-family:"DG Agnadeen",Tajawal,system-ui,sans-serif;font-size:var(--fs);line-height:1.8;color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body{font-family:Tajawal,system-ui,sans-serif;font-size:var(--fs);line-height:1.8;color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 img{max-width:100%;display:block}
 a{color:inherit;text-decoration:none}
 ul{list-style:none}
-.num{font-family:"DG Agnadeen",Tajawal,system-ui,sans-serif;direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
+.num{font-family:Tajawal,system-ui,sans-serif;direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
 .wrap{width:var(--wrap);margin-inline:auto}
 h1,h2,h3,h4{line-height:1.3;color:var(--deep);font-weight:700}
 h1{font-size:clamp(30px,4.2vw,54px);font-weight:800}
@@ -110,7 +111,7 @@ section{padding:clamp(56px,6vw,96px) 0}
 /* why list */
 .why-list{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
 .why-item{display:grid;grid-template-columns:56px 1fr;gap:16px;padding:26px;background:#fff;border:1px solid var(--line);border-radius:var(--r)}
-.why-item b{font-size:32px;color:var(--gold);font-family:"DG Agnadeen",Tajawal,system-ui,sans-serif;line-height:1}
+.why-item b{font-size:32px;color:var(--gold);font-family:Tajawal,system-ui,sans-serif;line-height:1}
 .why-item h3{margin-bottom:8px}.why-item p{color:var(--muted);font-size:15px}
 
 /* about */
@@ -212,7 +213,7 @@ table.t{width:100%;border-collapse:collapse;font-size:14.5px;background:#fff;bor
 /* steps */
 .steps{display:grid;grid-template-columns:repeat(7,1fr);gap:12px}
 .step{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:20px 16px;position:relative}
-.step-n{width:34px;height:34px;border-radius:50%;background:var(--deep);color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;margin-bottom:12px;font-family:"DG Agnadeen",Tajawal,system-ui,sans-serif}
+.step-n{width:34px;height:34px;border-radius:50%;background:var(--deep);color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;margin-bottom:12px;font-family:Tajawal,system-ui,sans-serif}
 .step h4{margin-bottom:6px}.step p{font-size:13.5px;color:var(--muted);line-height:1.55}
 .step em{display:block;margin-top:10px;font-style:normal;color:var(--terra);font-size:12.5px;font-weight:700}
 .commit{margin-top:34px;background:var(--deep);color:#fff;border-radius:var(--r);padding:28px}
@@ -238,7 +239,7 @@ table.t{width:100%;border-collapse:collapse;font-size:14.5px;background:#fff;bor
 .pilc li:last-child{border-bottom:none}.pilc li b{color:var(--navy);white-space:nowrap}
 .rules{counter-reset:r;display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 .rule{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:var(--r);padding:22px 22px 22px 22px;display:grid;grid-template-columns:44px 1fr;gap:14px;align-items:start}
-.rule::before{counter-increment:r;content:counter(r,decimal-leading-zero);font-family:"DG Agnadeen",Tajawal,system-ui,sans-serif;font-size:26px;color:var(--gold);font-weight:700;line-height:1}
+.rule::before{counter-increment:r;content:counter(r,decimal-leading-zero);font-family:Tajawal,system-ui,sans-serif;font-size:26px;color:var(--gold);font-weight:700;line-height:1}
 .rule p{color:rgba(255,255,255,.85);font-size:15px}
 
 /* work */
@@ -309,7 +310,7 @@ details .a{padding:0 22px 20px;color:var(--muted);font-size:15px}
 .score{display:grid;grid-template-columns:150px 1fr;gap:26px;align-items:center;margin-bottom:24px}
 .ring{width:150px;height:150px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--terra) calc(var(--v)*1%),var(--cream) 0);position:relative}
 .ring::after{content:"";position:absolute;inset:12px;border-radius:50%;background:#fff}
-.ring b{position:relative;font-size:38px;color:var(--deep);font-family:"DG Agnadeen",Tajawal,system-ui,sans-serif}
+.ring b{position:relative;font-size:38px;color:var(--deep);font-family:Tajawal,system-ui,sans-serif}
 .ring b small{font-size:14px;color:var(--muted)}
 .rec{background:var(--cream);border-radius:var(--r);padding:22px;margin-bottom:14px}
 .rec h3{margin-bottom:6px}.rec .pr{font-size:26px;color:var(--navy);font-weight:800}
@@ -318,7 +319,7 @@ details .a{padding:0 22px 20px;color:var(--muted);font-size:15px}
 .tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
 .tile{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:28px;display:flex;flex-direction:column;gap:10px;transition:.2s}
 .tile:hover{transform:translateY(-3px);box-shadow:none}
-.tile .n{font-family:"DG Agnadeen",Tajawal,system-ui,sans-serif;font-size:13px;color:var(--terra);font-weight:700}
+.tile .n{font-family:Tajawal,system-ui,sans-serif;font-size:13px;color:var(--terra);font-weight:700}
 .tile p{color:var(--muted);flex:1}
 
 /* contact */
@@ -392,4 +393,4 @@ footer .brand p{max-width:40ch;font-size:14px}
   .score{text-align:center;justify-items:center}
   .wa-float{bottom:16px;inset-inline-start:16px;width:52px;height:52px}
 }
-body{font-family:"DG Agnadeen",Tajawal,sans-serif}h1,h2,h3{font-family:"The Year of Handicrafts","DG Agnadeen",Tajawal,sans-serif}
+body{font-family:Tajawal,sans-serif}h1,h2{font-family:"DG Agnadeen",Tajawal,sans-serif}
