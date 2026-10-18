@@ -13,6 +13,13 @@ function waTime(at) {
   const hm = ksa.toISOString().slice(11, 16);
   return same ? `<span class="num">${hm}</span>` : `${fdate(ksa.toISOString().slice(0, 10))} <span class="num">${hm}</span>`;
 }
+// إشعار بزر تراجع (10 ثوانٍ)
+function waUndo(msg, fn) {
+  const el = document.createElement('div'); el.className = 'toast wa-undo';
+  el.innerHTML = `<span>${msg}</span><button type="button">تراجع</button>`;
+  $('#toast').appendChild(el); const t = setTimeout(() => el.remove(), 10000);
+  el.querySelector('button').onclick = async () => { clearTimeout(t); el.remove(); try { await fn(); toast('تم الاسترجاع ✓'); } catch (err) { toast(err.message, 1); } };
+}
 const waPhone = (id) => (String(id).startsWith('966') ? '0' + String(id).slice(3) : '+' + id);
 const waBotOn = (until) => !until || Date.parse(until) <= Date.now();
 
@@ -110,7 +117,7 @@ function waBubble(m) {
     inner += `<div>${waLinkify(m.text).replace(/\n/g, '<br>')}</div>`;
     if (md.t === 'buttons' && md.btns) inner = `<div>${esc(String(m.text).split('\n[أزرار')[0]).replace(/\n/g, '<br>')}</div><div class="wa-pbtns">${md.btns.map((x) => `<span>${esc(x)}</span>`).join('')}</div>`;
   }
-  const acts = `<div class="wa-ma">${m.msg_id ? `<button type="button" data-rep="${esc(m.msg_id)}" title="رد على هذه الرسالة">↩︎</button>` : ''}${m.msg_id && m.from === 'customer' ? `<button type="button" data-rx="${esc(m.msg_id)}" title="تفاعل">☺︎</button>` : ''}<button type="button" data-cp title="نسخ">⧉</button>${m.id ? `<button type="button" data-pin="${m.id}" class="${m.pin ? 'on' : ''}" title="${m.pin ? 'إلغاء التثبيت' : 'تثبيت في أعلى المحادثة'}">${WA_PIN}</button><button type="button" data-star="${m.id}" class="${m.star ? 'on' : ''}" title="${m.star ? 'إزالة من الرسائل المهمة' : 'حفظ في الرسائل المهمة'}">${WA_STAR}</button>` : ''}</div>`;
+  const acts = `<div class="wa-ma">${m.msg_id ? `<button type="button" data-rep="${esc(m.msg_id)}" title="رد على هذه الرسالة">↩︎</button>` : ''}${m.msg_id && m.from === 'customer' ? `<button type="button" data-rx="${esc(m.msg_id)}" title="تفاعل">☺︎</button>` : ''}<button type="button" data-cp title="نسخ">⧉</button>${m.id ? `<button type="button" data-pin="${m.id}" class="${m.pin ? 'on' : ''}" title="${m.pin ? 'إلغاء التثبيت' : 'تثبيت في أعلى المحادثة'}">${WA_PIN}</button><button type="button" data-star="${m.id}" class="${m.star ? 'on' : ''}" title="${m.star ? 'إزالة من الرسائل المهمة' : 'حفظ في الرسائل المهمة'}">${WA_STAR}</button>` : ''}${m.id && m.del_ok ? `<button type="button" data-del="${m.id}" class="wa-del" title="حذف الرسالة من المنصة">${I.trash}</button>` : ''}</div>`;
   return `<div class="wa-m ${m.from}${m.pin ? ' pinned' : ''}${m.star ? ' starred' : ''}" data-mid="${esc(m.msg_id || '')}" data-eid="${m.id || ''}"><div class="wa-b">${inner}${m.react ? `<span class="wa-rx">${esc(m.react)}</span>` : ''}${acts}</div>
     <div class="wa-meta small muted">${m.from === 'bot' ? '🤖 الرد الآلي · ' : m.from === 'staff' ? `👤 ${esc(m.by || 'موظف')} · ` : ''}${m.star ? '<span class="wa-flag s">'+WA_STAR+'</span>' : ''}${m.pin ? '<span class="wa-flag p">'+WA_PIN+'</span>' : ''}${waTime(m.at)}${m.status === 'send_failed' ? ' · <b style="color:var(--red)">لم يُرسل</b>' : ''}</div></div>`;
 }
@@ -179,6 +186,7 @@ async function waLoadThread(id, quiet) {
       <button class="btn btn-s btn-g" id="wa-media" title="المرفقات والوسائط والروابط والرسائل المهمة">${I.clip}<span class="wa-hide-m"> المرفقات</span>${(() => { const n = d.messages.filter((m) => m.media && m.media.id).length; return n ? `<em class="wa-cnt">${n}</em>` : ''; })()}</button>
       <button class="btn btn-s btn-g" id="wa-sum" title="ملخص المحادثة بذكاء نُبل">${I.ai}<span class="wa-hide-m"> ملخص</span></button>
       <button class="btn btn-s ${on ? 'btn-g' : 'btn-p'}" id="wa-bot" title="${on ? 'إيقاف الرد الآلي' : 'تشغيل الرد الآلي'}">🤖<span class="wa-hide-m"> ${on ? 'إيقاف الرد الآلي' : 'تشغيل الرد الآلي'}</span></button>
+      ${d.can_clear ? `<button class="btn btn-s btn-g" id="wa-clr" title="حذف المحادثة من صندوق المنصة">${I.trash}<span class="wa-hide-m"> حذف المحادثة</span></button>` : ''}
       <a class="btn btn-wa btn-s" href="tel:${esc(waPhone(d.wa_id))}" title="اتصال">${I.phone}</a></div>
     <div class="wa-bar small ${on ? 'muted' : 'off'}">${on ? 'الرد الآلي يعمل لهذه المحادثة.' : `الرد الآلي متوقف حتى ${waTime(d.bot_paused_until)} — أنت من يرد.`}${d.window_open ? ` · <span class="wa-win">${I.clock} نافذة الرد الحر مفتوحة</span>` : ''}</div>
     ${(() => { const pins = d.messages.filter((m) => m.pin).reverse(); return pins.length ? `<button type="button" class="wa-pinbar" id="wa-pinbar" data-i="0"><span class="wa-pin-ic">${WA_PIN}</span><span class="wa-pin-t"><b>رسالة مثبتة${pins.length > 1 ? ` <small class="num">(1 من ${pins.length})</small>` : ''}</b><span>${esc(waBrief(pins[0]))}</span></span></button>` : ''; })()}
@@ -218,6 +226,15 @@ async function waLoadThread(id, quiet) {
   const sumBtn = () => waSummary(id);
   $('#wa-sum').onclick = sumBtn; if ($('#wa-sum2')) $('#wa-sum2').onclick = sumBtn;
   $('#wa-media').onclick = () => waMediaPanel(id);
+  const clr = $('#wa-clr');
+  if (clr) clr.onclick = async () => {
+    if (!(await confirmBox('حذف هذه المحادثة من صندوق المنصة؟<br><small>تختفي كل رسائلها الحالية من القائمة، وتعود المحادثة تلقائياً إذا راسلك العميل مجدداً. لا تُحذف من جوال العميل.</small>'))) return;
+    try {
+      await api('wa/mark/' + encodeURIComponent(id), { method: 'POST', body: { kind: 'clr', on: true } });
+      waUndo('حُذفت المحادثة', async () => { await api('wa/mark/' + encodeURIComponent(id), { method: 'POST', body: { kind: 'clr', on: false } }); location.hash = '#/wa/' + encodeURIComponent(id); });
+      location.hash = '#/wa';
+    } catch (err) { toast(err.message, 1); }
+  };
   const pb = $('#wa-pinbar');
   if (pb) pb.onclick = () => {
     const pins = st.msgs.filter((m) => m.pin).reverse(); const i = +pb.dataset.i || 0; const m = pins[i % pins.length];
@@ -228,6 +245,17 @@ async function waLoadThread(id, quiet) {
   // أفعال الرسائل: رد، تفاعل، نسخ، حفظ جهة الاتصال
   box && box.addEventListener('click', async (e) => {
     const rep = e.target.closest('[data-rep]'); const rx = e.target.closest('[data-rx]'); const cp = e.target.closest('[data-cp]'); const ld = e.target.closest('[data-lead]');
+    const dl = e.target.closest('[data-del]');
+    if (dl) {
+      if (!(await confirmBox('حذف هذه الرسالة من صندوق المنصة؟<br><small>تختفي من المحادثة والمرفقات والرسائل المهمة. لا تُحذف من جوال العميل — واتساب لا يتيح ذلك للأنظمة.</small>'))) return;
+      try {
+        const eid = +dl.dataset.del;
+        await api('wa/mark/' + encodeURIComponent(id), { method: 'POST', body: { event_id: eid, kind: 'del', on: true } });
+        waUndo('حُذفت الرسالة', async () => { await api('wa/mark/' + encodeURIComponent(id), { method: 'POST', body: { event_id: eid, kind: 'del', on: false } }); waLoadThread(id); });
+        waLoadThread(id);
+      } catch (err) { toast(err.message, 1); }
+      return;
+    }
     const mk = e.target.closest('[data-pin],[data-star]');
     if (mk) {
       const kind = mk.dataset.pin ? 'pin' : 'star'; const on = !mk.classList.contains('on');
@@ -607,7 +635,7 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-ma{position:absolute;top:-14px;inset-inline-end:6px;display:none;gap:2px;background:#fff;border-radius:99px;padding:2px 4px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
   .wa-m:hover .wa-ma,.wa-m:focus-within .wa-ma{display:flex}
   .wa-dl{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:4px 10px;border-radius:6px;background:rgba(24,86,109,.08);color:var(--navy);font-size:12px;font-weight:700}.wa-dl:hover{background:var(--navy);color:#fff}
-  .wa-ma button.on{color:var(--terra)}.wa-ma button[data-star].on{color:var(--gold)}.wa-ma button svg{vertical-align:-2px}
+  .wa-ma button.wa-del svg{width:15px;height:15px}.wa-ma button.wa-del:hover{color:var(--red,#c0392b)}.wa-undo{display:flex;align-items:center;gap:14px;pointer-events:auto}.wa-undo button{border:0;background:rgba(255,255,255,.18);color:inherit;font:inherit;font-weight:700;border-radius:8px;padding:3px 12px;cursor:pointer}.wa-ma button.on{color:var(--terra)}.wa-ma button[data-star].on{color:var(--gold)}.wa-ma button svg{vertical-align:-2px}
   .wa-flag{display:inline-flex;vertical-align:-2px;margin-inline-end:4px}.wa-flag.s{color:var(--gold)}.wa-flag.p{color:var(--terra)}
   .wa-m.starred .wa-b{box-shadow:inset 3px 0 0 var(--gold)}.wa-m.pinned .wa-b{outline:1px dashed rgba(208,100,41,.5)}
   @keyframes wa-flash{0%,60%{background:rgba(219,156,71,.28)}100%{background:transparent}}.wa-m.flash{animation:wa-flash 1.8s ease-out;border-radius:6px}

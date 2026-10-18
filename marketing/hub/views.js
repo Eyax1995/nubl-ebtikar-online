@@ -374,6 +374,103 @@ async function catalogPicker(onPick) {
 }
 
 /* ====================== الطباعة الرسمية ====================== */
+// أدوات نافذة المستند: طباعة · PDF (A4 على الأوراق الرسمية في كل صفحة) · Word، وضغط عرض السعر في صفحة واحدة متى أمكن
+function docTools(C) {
+  const mm = 96 / 25.4, PH = 215 * mm; // ارتفاع منطقة المحتوى في صفحة A4 بين الترويسة والتذييل
+  const D = document, doc = D.querySelector('.doc'), msg = (t) => { D.getElementById('dtb-m').textContent = t || ''; };
+  if (C.fit) { // عرض السعر: صفحة واحدة ما لم تكن البيانات كثيرة
+    const fit = () => { if (doc.scrollHeight <= PH) return; D.body.classList.add('fit1'); if (doc.scrollHeight <= PH) return; D.body.classList.remove('fit1'); D.body.classList.add('fit2'); if (doc.scrollHeight <= PH) return; if (doc.scrollHeight > PH * 1.25) D.body.classList.remove('fit2'); };
+    (D.fonts && D.fonts.ready ? D.fonts.ready : Promise.resolve()).then(fit);
+  }
+  const load = (src) => new Promise((ok, no) => { if (D.querySelector('script[src="' + src + '"]')) return ok(); const t = D.createElement('script'); t.src = src; t.onload = ok; t.onerror = () => no(new Error('تعذّر تحميل أداة PDF')); D.head.appendChild(t); });
+  const fname = (C.title || 'مستند').replace(/[\\/:*?"<>|]+/g, ' ').trim();
+  const save = (blob, name) => { const W = window.opener && !window.opener.closed ? window.opener : window; const a = W.document.createElement('a'); a.href = W.URL.createObjectURL(blob); a.download = name; W.document.body.appendChild(a); a.click(); setTimeout(() => { W.URL.revokeObjectURL(a.href); a.remove(); }, 2000); };
+  async function pdf() {
+    await load('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    await load('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    if (D.fonts && D.fonts.ready) await D.fonts.ready;
+    const host = D.createElement('div'); host.className = 'doc'; host.style.cssText = 'position:absolute;left:-12000px;top:0;width:' + (166 * mm) + 'px;background:transparent';
+    host.innerHTML = doc.innerHTML; D.body.appendChild(host);
+    try {
+      const t0 = host.getBoundingClientRect().top, H = host.scrollHeight, pts = new Set([0]), hard = [];
+      const AV = '.d-sigs,.sig,.kpi,.card,.d-call,.tot,.meta,.ttl';
+      host.querySelectorAll('*').forEach((el) => {
+        const box = el.parentElement && el.parentElement.closest(AV); if (box && host.contains(box)) return;
+        if (el.closest('thead')) return;
+        if (el.parentElement === host || el.matches('tr,li,p,h1,h2,h3,' + AV)) pts.add(Math.round(el.getBoundingClientRect().top - t0));
+        if (el.matches('.d-pb')) hard.push(Math.round(el.getBoundingClientRect().bottom - t0));
+      });
+      const P = [...pts].sort((a, b) => a - b), pages = []; let s = 0;
+      while (s < H - 2) {
+        const lim = s + PH; const hb = hard.find((h) => h > s + 5 && h <= lim); let e;
+        if (hb) e = hb; else if (lim >= H) e = H; else { const c = P.filter((p) => p > s + 40 && p <= lim).pop(); e = c || lim; }
+        pages.push([s, e]); s = e;
+      }
+      const cv = await html2canvas(host, { scale: 2, backgroundColor: null, useCORS: true, logging: false });
+      const k = cv.width / host.offsetWidth;
+      const lh = await new Promise((ok) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => ok(im); im.onerror = () => ok(null); im.src = C.O + 'brand/letterhead-a4.png'; });
+      const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      pages.forEach(([a, b], i) => {
+        if (i) pdf.addPage('a4');
+        if (lh) pdf.addImage(lh, 'PNG', 0, 0, 210, 297, 'lh', 'FAST');
+        const c = D.createElement('canvas'); c.width = cv.width; c.height = Math.max(1, Math.ceil((b - a) * k));
+        c.getContext('2d').drawImage(cv, 0, a * k, cv.width, (b - a) * k, 0, 0, cv.width, (b - a) * k);
+        pdf.addImage(c, 'PNG', 20, 52, 166, (b - a) / mm, undefined, 'FAST');
+      });
+      save(pdf.output('blob'), fname + '.pdf');
+    } finally { host.remove(); }
+  }
+  // تحويل مستند الطباعة إلى كتل Word (نفس بنية مستندات المنصة الرسمية)
+  function blocks() {
+    const out = [], T = (el) => (el.innerText || '').replace(/[ \t]+/g, ' ').trim();
+    const tbl = (t) => {
+      const hr = t.querySelector('thead tr') || t.querySelector('tr'); if (!hr) return;
+      const cols = [...hr.children].map((c) => ({ label: T(c) }));
+      const rows = [...t.querySelectorAll('tbody tr')].filter((r) => r !== hr).map((r) => ({ total: r.classList.contains('tt'), cells: [...r.children].map((c) => { const sm = c.querySelector('small'); const sub = sm ? T(sm) : ''; let tx = T(c); if (sub) tx = tx.replace(sub, '').trim(); return { text: tx, sub }; }) }));
+      if (cols.length) out.push({ t: 'table', cols, rows });
+    };
+    const walk = (el) => {
+      for (const n of el.children) {
+        if (n.matches('script,style,.dtb')) continue;
+        const tx = T(n);
+        if (n.matches('.reg')) out.push({ t: 'small', text: tx });
+        else if (n.matches('.ttl')) { const h = n.querySelector('h1'); out.push({ t: 'title', text: h ? T(h) : tx }); const d = n.querySelector('.n'); if (d && T(d)) out.push({ t: 'subtitle', text: T(d) }); }
+        else if (n.matches('.d-date')) out.push({ t: 'date', text: tx });
+        else if (n.matches('.d-title,h1')) out.push({ t: 'title', text: tx });
+        else if (n.matches('.d-sub')) out.push({ t: 'subtitle', text: tx });
+        else if (n.matches('.d-meta')) { const i = tx.indexOf(':'); out.push({ t: 'meta', label: i > 0 ? tx.slice(0, i) : '', text: i > 0 ? tx.slice(i + 1).trim() : tx, shade: n.classList.contains('sh') }); }
+        else if (n.matches('.meta')) [...n.children].forEach((c) => { const t = T(c); const i = t.indexOf(':'); if (t) out.push({ t: 'meta', label: i > 0 ? t.slice(0, i) : '', text: i > 0 ? t.slice(i + 1).trim() : t }); });
+        else if (n.matches('.d-h1,h2')) out.push({ t: 'h1', text: tx });
+        else if (n.matches('.d-h2,h3,h4')) out.push({ t: 'h2', text: tx });
+        else if (n.matches('table')) tbl(n);
+        else if (n.matches('ul,ol')) out.push({ t: 'bullets', items: [...n.children].map(T).filter(Boolean) });
+        else if (n.matches('.d-call')) out.push({ t: 'callout', text: tx });
+        else if (n.matches('.tot')) out.push({ t: 'table', cols: [{ label: 'البيان' }, { label: 'القيمة', align: 'center' }], rows: [...n.children].map((r) => ({ total: r.classList.contains('g'), cells: [...r.children].map((c) => ({ text: T(c) })) })) });
+        else if (n.matches('.sig,.d-sigs')) { const k = [...n.children].map(T); out.push({ t: 'signatures', left: (k[0] || 'الطرف الأول').split('\n')[0], right: (k[1] || 'الطرف الثاني').split('\n')[0], leftName: (k[0] || '').split('\n').slice(1).join(' '), rightName: (k[1] || '').split('\n').slice(1).join(' ') }); }
+        else if (n.matches('.d-pb')) out.push({ t: 'pagebreak' });
+        else if (n.matches('.d-close,.close')) out.push({ t: 'closing' });
+        else if (n.matches('.kpi')) out.push({ t: 'p', text: tx.replace(/\n+/g, ' · ') });
+        else if (n.matches('p,.d-p,.d-small,small,span,b,a')) { if (tx) out.push({ t: n.matches('.d-small,small') ? 'small' : 'p', text: tx, jc: getComputedStyle(n).textAlign === 'center' ? 'center' : undefined }); }
+        else if (n.children.length) walk(n);
+        else if (tx) out.push({ t: 'p', text: tx });
+      }
+    };
+    walk(doc); return out;
+  }
+  async function word() {
+    let r;
+    if (C.docx) r = await fetch(C.docx, { credentials: 'include' });
+    else r = await fetch(C.api + 'studio/word', { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: C.title, blocks: blocks() }) });
+    if (!r.ok) { let e = ''; try { e = (await r.json()).error; } catch (_) { /* */ } throw new Error(e || 'تعذّر إنشاء ملف Word'); }
+    save(await r.blob(), fname + '.docx');
+  }
+  D.getElementById('dtb').addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-a]'); if (!b) return; const a = b.dataset.a;
+    if (a === 'print') return window.print();
+    b.disabled = true; msg(a === 'pdf' ? 'جارٍ تجهيز PDF بمقاس A4…' : 'جارٍ تجهيز ملف Word…');
+    try { await (a === 'pdf' ? pdf() : word()); msg('تم التنزيل ✓'); } catch (err) { msg(err.message || 'تعذّر التنزيل'); } finally { b.disabled = false; }
+  });
+}
 function docShell(title, inner, opt = {}) {
   // كل المستندات المطبوعة تخرج على الأوراق الرسمية 3.0 (الترويسة والتذييل وشريط الأسهم في كل صفحة)
   const s = S.meta.settings; const O = location.origin + '/marketing/hub/';
@@ -410,11 +507,18 @@ function docShell(title, inner, opt = {}) {
   .doc .bar{display:grid;grid-template-columns:110px 1fr 70px;gap:8px;align-items:center;font-size:11px;margin-bottom:3px}.doc .bar .tr{background:#E8EEF0;border-radius:4px;height:8px;overflow:hidden}.doc .bar .fl{height:100%;background:#18566D}.doc .bar .val{text-align:end}
   .doc .pill{display:inline-block;padding:0 7px;border-radius:99px;background:#E8EEF0;font-size:10.5px}.doc .empty{color:#3E5A66;font-size:11px}.doc .small{font-size:11px}.doc .muted{color:#3E5A66}.doc a{color:inherit;text-decoration:none}
   .doc .btn,.doc button,.doc input,.doc select,.doc .toolbar,.doc .no-print,.doc .dbt-acts{display:none!important}.doc table.t{font-size:11px}
-  @media screen{body{background:#C5D5DA}table.pg{margin:20px auto;background:#fff url(${O}brand/letterhead-a4.png) top center/210mm auto no-repeat;min-height:297mm}.lh{display:none}}</style></head><body>
+  .dtb{position:fixed;top:0;left:0;right:0;z-index:9;display:flex;align-items:center;gap:8px;padding:9px 16px;background:#18566D;color:#fff;font-family:'DG Agnadeen',Tajawal,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.2)}.dtb-t{font-weight:700;margin-inline-end:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dtb-s{font-size:11px;opacity:.75}
+  .dtb button{border:0;border-radius:8px;padding:7px 14px;font:700 13px 'DG Agnadeen',Tajawal,sans-serif;cursor:pointer;background:#fff;color:#18566D}.dtb button[data-a=pdf]{background:#D06429;color:#fff}.dtb button[disabled]{opacity:.55;cursor:wait}.dtb-m{font-size:12px;color:#EDCEA3}
+  .fit1 .doc{font-size:12px;line-height:1.55}.fit1 .doc td,.fit1 .doc th{padding:5px 8px}.fit1 h3{margin:12px 0 4px}.fit1 .meta{padding:8px 12px;margin-bottom:10px}.fit1 .ttl{margin-bottom:8px}.fit1 .sig{margin-top:22px}
+  .fit2 .doc{font-size:11px;line-height:1.45}.fit2 .doc td,.fit2 .doc th{padding:3px 6px}.fit2 h3{font-size:13px;margin:8px 0 3px}.fit2 .ttl h1{font-size:18px}.fit2 .meta{padding:6px 10px;margin-bottom:8px;gap:3px 18px}.fit2 .sig{margin-top:16px}.fit2 .d-h1{margin:10px 0 5px}.fit2 .d-p,.fit2 .d-ul{margin-bottom:5px}.fit2 table.dt{font-size:11px}
+  @media print{.dtb{display:none!important}}
+  @media screen{body{background:#C5D5DA;padding-top:46px}table.pg{margin:20px auto;background:#fff url(${O}brand/letterhead-a4.png) top center/210mm auto no-repeat;min-height:297mm}.lh{display:none}}</style></head><body>
   <img class="lh" src="${O}brand/letterhead-a4.png" alt="">
   <table class="pg"><thead><tr><td></td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td><div class="doc">
   ${opt.official ? '' : `<div class="reg">${[s.company_name, s.cr_number ? 'س.ت ' + esc(s.cr_number) : '', s.vat_number ? 'الرقم الضريبي ' + esc(s.vat_number) : ''].filter(Boolean).map((x, i) => i ? x : esc(x)).join(' · ')}</div>`}
-  ${inner}</div></td></tr></tbody></table><script>window.onload=()=>setTimeout(()=>print(),600)<\/script></body></html>`;
+  ${inner}</div></td></tr></tbody></table>
+  <div class="dtb" id="dtb"><span class="dtb-t">${esc(title)}</span><span class="dtb-s">A4 · الأوراق الرسمية</span><button type="button" data-a="print">طباعة</button><button type="button" data-a="pdf">تنزيل PDF</button><button type="button" data-a="word">تنزيل Word</button><span class="dtb-m" id="dtb-m"></span></div>
+  <script>(${docTools.toString()})(${JSON.stringify({ title, O, fit: !!opt.fit, docx: opt.docx ? (String(opt.docx).startsWith('/') ? location.origin + opt.docx : String(opt.docx)) : '', api: location.origin + '/marketing/hub/api/' }).replace(/</g, '\\u003c')})<\/script></body></html>`;
 }
 // طباعة أي صفحة تقارير على الأوراق الرسمية: تُنسخ محتويات الصفحة الحالية دون الأزرار وأدوات التصفية
 function printOfficialView(title, sub) {
@@ -437,7 +541,7 @@ function quoteDocHtml(q) {
   ${q.notes ? `<h3>ملاحظات</h3><p style="white-space:pre-wrap">${esc(q.notes)}</p>` : ''}
   <h3>ما لا يشمله العرض</h3><ul><li>ميزانية الإعلانات الممولة — تُصرف من حساب العميل مباشرة.</li><li>أي بند غير مذكور صراحة أعلاه.</li></ul>
   <h3>الشروط</h3><ul><li>الأسعار بالريال السعودي، والضريبة 15% مضافة كما هو موضح.</li><li>جولتا تعديل مشمولتان لكل عمل، والاعتماد حكمي بعد 3 أيام عمل دون ملاحظات.</li><li>لا نضمن نتائج لا نتحكم فيها (مبيعات، متابعين، ترتيب بحث) — نلتزم بالتنفيذ والقياس والشفافية.</li><li>التنفيذ يبدأ بعد توقيع العقد وسداد الدفعة الأولى.</li></ul>
-  <div class="sig"><div>${esc(s.company_name)}</div><div>اعتماد العميل</div></div>`));
+  <div class="sig"><div>${esc(s.company_name)}</div><div>اعتماد العميل</div></div>`, { fit: true, docx: q.id ? API + 'studio/doc/quote/' + q.id : '' }));
 }
 function printContract(c, client) {
   const s = S.meta.settings;
@@ -460,7 +564,7 @@ function printContract(c, client) {
   <li>تختص محاكم جدة بالنظر في أي نزاع ينشأ عن هذا العقد.</li></ul>
   ${c.notes ? `<h3>4. ملاحظات</h3><p style="white-space:pre-wrap">${esc(c.notes)}</p>` : ''}
   <div class="sig"><div>الطرف الأول<br>${esc(s.company_name)}</div><div>الطرف الثاني<br>${esc(client?.name || '')}</div></div>
-  <p style="font-size:11px;color:#5D7581;margin-top:18px">نموذج تشغيلي — يُراجع قانونياً قبل اعتماده كصيغة نهائية.</p>`));
+  <p style="font-size:11px;color:#5D7581;margin-top:18px">نموذج تشغيلي — يُراجع قانونياً قبل اعتماده كصيغة نهائية.</p>`, { docx: c.id ? API + 'studio/doc/contract/' + c.id : '' }));
 }
 function printInvoice(inv, client) {
   const s = S.meta.settings;

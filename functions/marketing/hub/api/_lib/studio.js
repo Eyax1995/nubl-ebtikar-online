@@ -468,6 +468,33 @@ export async function studioRoute(db, env, request, user, parts, h) {
   const [, a, b, c] = parts; // studio/<a>/<b>/<c>
   if (a === 'status' && method === 'GET' && new URL(request.url).searchParams.get('test')) return json({ claude: await aiPing(env) });
   if (a === 'status' && method === 'GET') return json({ ai: aiReady(env), engines: { claude: !!env.ANTHROPIC_API_KEY, gemini: !!env.GEMINI_API_KEY, workers: !!env.AI }, can_approve: APPROVERS.includes(user.role) });
+  // تصدير أي مستند مطبوع من المنصة إلى Word على الأوراق الرسمية A4 — الكتل تُستخرج في المتصفح من مستند الطباعة نفسه
+  if (a === 'word' && method === 'POST') {
+    const d = await readBody(request);
+    const OK = ['date', 'title', 'subtitle', 'meta', 'p', 'h1', 'h2', 'table', 'callout', 'bullets', 'small', 'closing', 'sign', 'signatures', 'pagebreak', 'spacer'];
+    const str = (v, n = 4000) => String(v ?? '').slice(0, n);
+    const blocks = (Array.isArray(d.blocks) ? d.blocks : []).slice(0, 1500).filter((b) => b && OK.includes(b.t)).map((b) => {
+      if (b.t === 'table') {
+        const cols = (b.cols || []).slice(0, 12).map((c) => ({ label: str(c.label, 200), align: ['center', 'left', 'right'].includes(c.align) ? c.align : undefined, w: Math.max(1, Math.min(8, Number(c.w) || 1)) }));
+        if (!cols.length) return null;
+        const rows = (b.rows || []).slice(0, 400).map((r) => ({ total: !!r.total, cells: (r.cells || []).slice(0, cols.length).map((c) => ({ text: str(c && c.text, 1500), sub: c && c.sub ? str(c.sub, 600) : undefined })) }))
+          .map((r) => { while (r.cells.length < cols.length) r.cells.push({ text: '' }); return r; });
+        return { t: 'table', cols, rows };
+      }
+      if (b.t === 'bullets') return { t: 'bullets', items: (b.items || []).slice(0, 200).map((x) => str(x, 1500)) };
+      if (b.t === 'meta') return { t: 'meta', label: str(b.label, 200), text: str(b.text, 1500), shade: !!b.shade };
+      if (b.t === 'signatures') return { t: 'signatures', left: str(b.left, 120), right: str(b.right, 120), leftName: str(b.leftName, 200), rightName: str(b.rightName, 200) };
+      if (b.t === 'sign') return { t: 'sign', name: str(b.name, 120) || undefined, title: str(b.title, 120) || undefined };
+      return { t: b.t, text: str(b.text), jc: b.jc === 'center' ? 'center' : undefined };
+    }).filter(Boolean);
+    if (!blocks.length) return bad('لا محتوى للتصدير', 400);
+    const name = str(d.title, 150) || 'مستند';
+    const bytes = await buildDocx(blocks, { title: name });
+    await audit(db, user, 'docx', 'doc', 0);
+    return new Response(bytes, { headers: {
+      'content-type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'content-disposition': `attachment; filename="document.docx"; filename*=UTF-8''${encodeURIComponent(fname(name))}.docx`, 'cache-control': 'no-store' } });
+  }
   if (a === 'doc' && method === 'GET') return docFile(db, user, b, Number(c), h, new URL(request.url).searchParams.get('format'));
   if (user.via === 'token' && user.scope !== 'write') return bad('المفتاح للقراءة فقط', 403);
   const d = method === 'GET' ? {} : await readBody(request);

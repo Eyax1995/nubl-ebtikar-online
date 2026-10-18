@@ -3,7 +3,9 @@
 // المسارات: GET wa/threads · GET wa/thread/<wa_id> · POST wa/send/<wa_id> {text} · POST wa/bot/<wa_id> {on}
 // GET wa/templates · POST wa/start {to,name,template,lang,params} · GET|POST wa/profile · POST wa/photo {data,type}
 // POST wa/upload (multipart file) · GET wa/media/<media_id>?name=&mime=&dl=1 (باسم الملف وصيغته الأصليين) · POST wa/ai/<wa_id> {mode,draft,hint}
-// POST wa/mark/<wa_id> {event_id,kind:pin|star,on} · GET wa/starred
+// POST wa/mark/<wa_id> {event_id,kind:pin|star|del|clr,on} · GET wa/starred
+// الحذف من صندوق المنصة فقط (إخفاء قابل للاسترجاع في wa_marks): del = رسالة، clr = كل المحادثة حتى رسالة معيّنة.
+// واتساب Cloud API لا يتيح حذف رسالة من جوال العميل.
 // wa/send يقبل: نص · وسائط (صورة/فيديو/صوت/ملف) · موقع · جهات اتصال · أزرار رد سريع · تفاعل (إيموجي) · رد على رسالة محددة
 import { json, bad } from './core.js';
 import { askAI } from '../../../../wa/_lib/engine.js';
@@ -55,6 +57,14 @@ async function ensureMarks(db) {
   marksReady = true;
 }
 
+async function hiddenOf(db, waId) {
+  await ensureMarks(db);
+  const rows = (await db.prepare("SELECT wa_id, event_id, kind FROM wa_marks WHERE dept = ? AND kind IN ('del','clr')" + (waId ? ' AND wa_id = ?' : '')).bind(...(waId ? [DEPT, waId] : [DEPT])).all()).results || [];
+  const del = new Set(); const clr = {};
+  rows.forEach((r) => { if (r.kind === 'del') del.add(r.event_id); else clr[r.wa_id] = Math.max(clr[r.wa_id] || 0, r.event_id); });
+  return { del, clr, hidden: (wa, id) => del.has(id) || id <= (clr[wa] || 0) };
+}
+
 export async function waInboxRoute(env, request, user, sub, id) {
   if (!ROLES_OK.includes(user.role)) return bad('لا تملك صلاحية صندوق واتساب', 403);
   if (!env.WA_DB) return bad('قاعدة واتساب غير مربوطة (WA_DB)', 503);
@@ -62,6 +72,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
   const method = request.method.toUpperCase();
 
   if (sub === 'threads' && method === 'GET') {
+    const H = await hiddenOf(db);
     const rows = (await db.prepare(
       `SELECT e.wa_id, MAX(e.id) AS last_id, MAX(e.at) AS last_at,
               SUM(CASE WHEN e.kind='message' THEN 1 ELSE 0 END) AS n_in
@@ -69,11 +80,15 @@ export async function waInboxRoute(env, request, user, sub, id) {
         GROUP BY e.wa_id ORDER BY last_id DESC LIMIT 200`).bind(DEPT).all()).results || [];
     const out = [];
     for (const r of rows) {
-      const last = await db.prepare('SELECT kind, text, reply FROM wa_events WHERE id = ?').bind(r.last_id).first();
+      const clr = H.clr[r.wa_id] || 0;
+      // آخر رسالة ظاهرة (بعد استبعاد المحذوف وما قبل مسح المحادثة)
+      const lastRows = (await db.prepare(`SELECT id, kind, text, reply, at FROM wa_events WHERE dept=? AND wa_id=? AND id > ? AND kind IN ('message','reply','staff','echo') ORDER BY id DESC LIMIT 25`).bind(DEPT, r.wa_id, clr).all()).results || [];
+      const last = lastRows.find((x) => !H.del.has(x.id));
+      if (clr && !last) continue; // محادثة ممسوحة بلا رسائل جديدة
       const s = await db.prepare('SELECT customer_name, handoff_until FROM wa_sessions WHERE session_key = ?').bind(DEPT + ':' + r.wa_id).first();
       const lastIn = await db.prepare(`SELECT at FROM wa_events WHERE dept=? AND wa_id=? AND kind='message' ORDER BY id DESC LIMIT 1`).bind(DEPT, r.wa_id).first();
       out.push({
-        wa_id: r.wa_id, name: (s && s.customer_name) || '', last_at: r.last_at, n_in: r.n_in,
+        wa_id: r.wa_id, name: (s && s.customer_name) || '', last_at: clr && last ? last.at : r.last_at, n_in: r.n_in,
         last_kind: last && last.kind, last_text: last ? (last.kind === 'reply' || last.kind === 'staff' ? (last.reply || last.text) : last.text) : '',
         last_customer_at: lastIn ? lastIn.at : null,
         bot_paused_until: (s && s.handoff_until) || '',
@@ -215,10 +230,11 @@ export async function waInboxRoute(env, request, user, sub, id) {
   // الرسائل المميزة بنجمة في كل المحادثات
   if (sub === 'starred' && method === 'GET') {
     await ensureMarks(db);
-    const rows = (await db.prepare(
+    let rows = (await db.prepare(
       `SELECT k.event_id, k.wa_id, k.at AS marked_at, k.by_name, e.at, e.kind, e.text, e.reply, e.detail
          FROM wa_marks k JOIN wa_events e ON e.id = k.event_id
         WHERE k.dept = ? AND k.kind = 'star' ORDER BY k.at DESC LIMIT 200`).bind(DEPT).all()).results || [];
+    const HS = await hiddenOf(db); rows = rows.filter((r) => !HS.hidden(r.wa_id, r.event_id));
     const names = {};
     for (const r of rows) if (!(r.wa_id in names)) { const x = await db.prepare('SELECT customer_name FROM wa_sessions WHERE session_key = ?').bind(DEPT + ':' + r.wa_id).first(); names[r.wa_id] = (x && x.customer_name) || ''; }
     return json({ items: rows.map((r) => { let dt = {}; try { dt = JSON.parse(r.detail || '{}') || {}; } catch { /* */ }
@@ -245,8 +261,11 @@ export async function waInboxRoute(env, request, user, sub, id) {
         text: e.kind === 'reply' || e.kind === 'staff' ? (e.reply || e.text || '') : (e.text || ''),
         status: e.status, by: e.kind === 'staff' ? (dt.by || '') : e.kind === 'echo' ? 'من تطبيق الجوال' : '',
         msg_id: e.msg_id || null, media: dt.m || null, react: (e.msg_id && reacts[e.msg_id]) || '',
+        del_ok: ROLES_ADMIN.includes(user.role) || (e.kind === 'staff' && dt.by === user.name) ? 1 : 0,
       };
     });
+    const HT = await hiddenOf(db, waId);
+    for (let i = msgs.length - 1; i >= 0; i--) if (HT.hidden(waId, msgs[i].id)) msgs.splice(i, 1);
     const byWamid = {}; msgs.forEach((m) => { if (m.msg_id) byWamid[m.msg_id] = m; });
     msgs.forEach((m) => { const c = m.media && m.media.ctx && byWamid[m.media.ctx]; if (c) m.quote = { from: c.from, text: String(c.text || '').slice(0, 140) }; });
     await ensureMarks(db);
@@ -258,6 +277,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
     return json({
       wa_id: waId, name: (s && s.customer_name) || '', bot_paused_until: (s && s.handoff_until) || '',
       window_open: !!(lastIn && Date.now() - Date.parse(lastIn.at.replace(' ', 'T') + 'Z') < 24 * 3600e3),
+      can_clear: ROLES_ADMIN.includes(user.role) ? 1 : 0,
       messages: msgs,
     });
   }
@@ -266,10 +286,21 @@ export async function waInboxRoute(env, request, user, sub, id) {
   if (sub === 'mark' && method === 'POST') {
     await ensureMarks(db);
     const b = await request.json().catch(() => ({}));
-    const eid = Number(b.event_id) || 0; const kind = b.kind === 'pin' ? 'pin' : b.kind === 'star' ? 'star' : '';
+    let eid = Number(b.event_id) || 0; const kind = ['pin', 'star', 'del', 'clr'].includes(b.kind) ? b.kind : '';
+    if (kind === 'clr') {
+      if (!ROLES_ADMIN.includes(user.role)) return bad('حذف المحادثة للمدير فقط', 403);
+      const mx = await db.prepare('SELECT MAX(id) AS m FROM wa_events WHERE dept = ? AND wa_id = ?').bind(DEPT, waId).first();
+      eid = (mx && mx.m) || 0;
+      if (!eid) return bad('لا رسائل في المحادثة', 404);
+      if (!b.on) { await db.prepare("DELETE FROM wa_marks WHERE dept=? AND wa_id=? AND kind='clr'").bind(DEPT, waId).run(); return json({ ok: true }); }
+    }
     if (!eid || !kind) return bad('بيانات ناقصة', 400);
-    const ev = await db.prepare('SELECT id FROM wa_events WHERE id = ? AND dept = ? AND wa_id = ?').bind(eid, DEPT, waId).first();
+    const ev = await db.prepare('SELECT id, kind, detail FROM wa_events WHERE id = ? AND dept = ? AND wa_id = ?').bind(eid, DEPT, waId).first();
     if (!ev) return bad('الرسالة غير موجودة', 404);
+    if (kind === 'del' && !ROLES_ADMIN.includes(user.role)) {
+      let dt = {}; try { dt = JSON.parse(ev.detail || '{}') || {}; } catch { /* */ }
+      if (!(ev.kind === 'staff' && dt.by === user.name)) return bad('يمكنك حذف رسائلك فقط؛ حذف رسائل العملاء والرد الآلي للمدير', 403);
+    }
     if (b.on) {
       if (kind === 'pin') {
         const n = (await db.prepare("SELECT COUNT(*) AS n FROM wa_marks WHERE dept=? AND wa_id=? AND kind='pin'").bind(DEPT, waId).first()).n;
