@@ -143,12 +143,23 @@ export async function audit(db, user, action, entity, id, detail) {
   } catch (_) { /* لا يوقف العملية */ }
 }
 
-export async function nextNumber(db, table, prefix) {
+// تسلسل مستقل لكل جهة (نُبل وابتكار / مروج الحجاز) في العروض والعقود والفواتير
+export async function nextNumber(db, table, prefix, org) {
   const y = new Date().getFullYear();
   const like = `${prefix}-${y}-%`;
-  const last = await db.prepare(`SELECT number FROM ${table} WHERE number LIKE ? ORDER BY id DESC LIMIT 1`).bind(like).first('number');
+  const byOrg = org && ['quotes', 'contracts', 'invoices'].includes(table);
+  const last = await db.prepare(`SELECT number FROM ${table} WHERE number LIKE ?${byOrg ? " AND COALESCE(org,'nubl') = ?" : ''} ORDER BY id DESC LIMIT 1`)
+    .bind(...(byOrg ? [like, org] : [like])).first('number');
   const n = last ? parseInt(String(last).split('-').pop(), 10) + 1 : 1;
   return `${prefix}-${y}-${String(n).padStart(4, '0')}`;
+}
+
+// جهة السجل من أبيه (العميل ثم العميل المحتمل ثم الصفقة ثم المشروع ثم الفاتورة)، وإلا الافتراضي
+export async function resolveOrg(db, rec, fallback = 'nubl') {
+  for (const [t, c] of [['clients', 'client_id'], ['leads', 'lead_id'], ['deals', 'deal_id'], ['projects', 'project_id'], ['invoices', 'invoice_id']]) {
+    if (rec[c]) { const o = await db.prepare(`SELECT org FROM ${t} WHERE id = ?`).bind(rec[c]).first('org').catch(() => null); if (o) return o; }
+  }
+  return fallback || 'nubl';
 }
 
 export const today = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10); // توقيت الرياض

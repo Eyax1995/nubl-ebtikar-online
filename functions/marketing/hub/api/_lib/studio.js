@@ -23,8 +23,8 @@ async function runAI(env, system, user, opts) {
 }
 
 // ---------- السياق ----------
-async function catalogRows(db) {
-  const { results } = await db.prepare('SELECT id, kind, sector, code, name, months, monthly, price, unit, plan, delivery, details FROM catalog WHERE active = 1 ORDER BY kind, sector, months, id').all();
+async function catalogRows(db, org = 'nubl') {
+  const { results } = await db.prepare("SELECT id, kind, sector, code, name, months, monthly, price, unit, plan, delivery, details FROM catalog WHERE active = 1 AND COALESCE(org,'nubl') = ? ORDER BY kind, sector, months, id").bind(org).all();
   return results;
 }
 const catalogBrief = (rows) => rows.map((r) => {
@@ -142,7 +142,7 @@ async function aiQuote(db, env, user, d, h) {
   if (!str(d.brief).trim()) return bad('اكتب وصف الاحتياج (ماذا يريد العميل وما هدفه)');
   const party = await partyContext(db, d);
   if (!party.client && !party.lead) return bad('اختر العميل أو العميل المحتمل');
-  const s = await getSettings(db); const cat = await catalogRows(db);
+  const s = await getSettings(db); const cat = await catalogRows(db, party.client?.org || party.lead?.org || 'nubl');
   const picked = arr(d.services).map(Number);
   const user_msg = `${partyText(party)}
 
@@ -159,8 +159,8 @@ ${QUOTE_SCHEMA}`;
   const { data, engine } = await runAI(env, `${BRAND}\n${QUOTE_RULES}`, user_msg, { max: 7000 });
   const doc = normalizeQuoteDoc(data, cat, s.vat_rate || 15);
   if (!doc.pricing.setup.items.length && !doc.pricing.monthly.items.length) throw new HttpError(422, 'لم يُنتج الذكاء بنوداً مسعّرة — أضف تفاصيل أكثر للاحتياج');
-  const number = await nextNumber(db, 'quotes', 'Q');
   const clientId = party.client?.id || null; const leadId = party.lead?.id || null;
+  const number = await nextNumber(db, 'quotes', 'Q', party.client?.org || party.lead?.org || 'nubl');
   const r = await db.prepare(`INSERT INTO quotes (number, client_id, lead_id, deal_id, title, status, valid_until, created_by, ai_engine) VALUES (?,?,?,?,?, 'مسودة', ?, ?, ?)`)
     .bind(number, clientId, leadId, party.deal?.id || null, doc.subject || 'عرض سعر', addDays(today(), doc.validity_days), user.id, engine).run();
   const q = { id: r.meta.last_row_id, title: doc.subject };
@@ -178,7 +178,7 @@ async function reviseQuote(db, env, user, id, d, h) {
   const q = await h.inScope(db, user, 'quotes', id);
   const doc0 = parse(q.doc, null); if (!doc0) return bad('هذا العرض لم يُنشأ بالذكاء — أنشئ عرضاً ذكياً جديداً');
   if (!str(d.instruction).trim()) return bad('اكتب التعديل المطلوب');
-  const s = await getSettings(db); const cat = await catalogRows(db);
+  const s = await getSettings(db); const cat = await catalogRows(db, q.org || 'nubl');
   const { totals, ...prev } = doc0;
   const { data, engine } = await runAI(env, `${BRAND}\n${QUOTE_RULES}\nأنت تعدّل عرضاً قائماً: نفّذ التعديل المطلوب فقط وحافظ على بقية المحتوى كما هو، وأعد العرض كاملاً بنفس البنية.`,
     `العرض الحالي:\n${JSON.stringify(prev)}\n\nالتعديل المطلوب:\n${str(d.instruction, 2000)}\n\nالكتالوج:\n${catalogBrief(cat)}`, { max: 7000 });
@@ -196,7 +196,7 @@ async function reviseQuote(db, env, user, id, d, h) {
 async function editQuote(db, env, user, id, d, h) {
   h.need(user, 'quotes', 'w');
   const q = await h.inScope(db, user, 'quotes', id);
-  const s = await getSettings(db); const cat = await catalogRows(db);
+  const s = await getSettings(db); const cat = await catalogRows(db, q.org || 'nubl');
   const old = parse(q.doc, null); if (!old || !d.doc) return bad('لا يوجد مستند');
   const approver = APPROVERS.includes(user.role);
   const oldPrice = new Map([...old.pricing.setup.items, ...old.pricing.monthly.items, ...old.pricing.addons.items].map((i) => [i.name, i]));
@@ -215,7 +215,7 @@ async function editQuote(db, env, user, id, d, h) {
 async function approveQuote(db, env, user, id, h) {
   if (!APPROVERS.includes(user.role)) return bad('اعتماد الأسعار للمدير العام والمدير والمالية', 403);
   const q = await h.inScope(db, user, 'quotes', id);
-  const s = await getSettings(db); const cat = await catalogRows(db);
+  const s = await getSettings(db); const cat = await catalogRows(db, q.org || 'nubl');
   const doc0 = parse(q.doc, null); if (!doc0) return bad('لا يوجد مستند ذكي لهذا العرض');
   for (const g of ['setup', 'monthly', 'addons']) for (const i of doc0.pricing[g].items) if (!i.locked) { if (i.price == null) return bad(`حدّد سعر «${i.name}» قبل الاعتماد`); i.approved = true; }
   const doc = normalizeQuoteDoc(doc0, cat, s.vat_rate || 15);
@@ -317,7 +317,7 @@ async function seasonsAhead(db, from, months) {
 }
 async function packageFor(db, client) {
   if (!client?.package) return null;
-  const { results } = await db.prepare("SELECT name, months, monthly, details FROM catalog WHERE kind = 'package' AND active = 1").all();
+  const { results } = await db.prepare("SELECT name, months, monthly, details FROM catalog WHERE kind = 'package' AND active = 1 AND COALESCE(org,'nubl') = ?").bind(client.org || 'nubl').all();
   const pk = String(client.package);
   return results.sort((x, y) => y.name.length - x.name.length).find((r) => pk.includes(r.name) || r.name.includes(pk)) || null;
 }

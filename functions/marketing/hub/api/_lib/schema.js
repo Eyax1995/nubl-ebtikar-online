@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -127,7 +127,17 @@ export const DDL = [
   `CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id INTEGER NOT NULL, title TEXT, start_date TEXT, months INTEGER DEFAULT 3,
     goals TEXT, budget TEXT, status TEXT DEFAULT 'مسودة', doc TEXT, engine TEXT, notes TEXT, created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
   `CREATE INDEX IF NOT EXISTS ix_plans_client ON plans(client_id)`,
+  // v10: دمج مروج الحجاز — أرشيف خام لكل سجل مستورد (المصدر، الكيان، المعرّف القديم ← الجديد)
+  `CREATE TABLE IF NOT EXISTS legacy_import (src TEXT NOT NULL, entity TEXT NOT NULL, old_id TEXT NOT NULL, new_id INTEGER, data TEXT,
+    at TEXT DEFAULT (datetime('now')), PRIMARY KEY (src, entity, old_id))`,
 ];
+
+// الجهات داخل المنصة (فصل الأعمال حسب طبيعة العملاء — الفريق والإدارة واحدة)
+export const ORGS = {
+  nubl: { name: 'نُبل وابتكار للتسويق', short: 'نُبل وابتكار', sector: 'القطاع الربحي' },
+  morooj: { name: 'مروج الحجاز للأعمال التجارية', short: 'مروج الحجاز', sector: 'القطاع غير الربحي' },
+};
+export const ORG_ENTITIES = ['leads', 'deals', 'activities', 'visits', 'clients', 'catalog', 'quotes', 'contracts', 'invoices', 'payments', 'expenses', 'projects', 'tasks', 'content', 'plans'];
 
 // ترحيلات تُطبّق مرة واحدة على قواعد قائمة (فشل أي سطر = العمود موجود مسبقاً)
 export const MIGRATIONS = [
@@ -163,7 +173,39 @@ export const MIGRATIONS = [
   'ALTER TABLE content ADD COLUMN brief TEXT',
   'ALTER TABLE content ADD COLUMN plan_id INTEGER',
   "ALTER TABLE content ADD COLUMN source TEXT DEFAULT 'المنصة'",
+  // v10: الجهة (نُبل وابتكار = القطاع الربحي · مروج الحجاز = القطاع غير الربحي) + وراثتها آلياً من العميل/العميل المحتمل
+  ...ORG_MIGRATIONS(),
 ];
+
+function ORG_MIGRATIONS() {
+  const out = [];
+  for (const t of ORG_ENTITIES) {
+    out.push(`ALTER TABLE ${t} ADD COLUMN org TEXT DEFAULT 'nubl'`);
+    out.push(`CREATE INDEX IF NOT EXISTS ix_${t}_org ON ${t}(org)`);
+  }
+  // مصادر الوراثة لكل جدول بالترتيب: أول أب موجود يحدد الجهة
+  const PARENTS = {
+    clients: [['leads', 'lead_id']],
+    deals: [['clients', 'client_id'], ['leads', 'lead_id']],
+    activities: [['clients', 'client_id'], ['leads', 'lead_id'], ['deals', 'deal_id']],
+    visits: [['clients', 'client_id'], ['leads', 'lead_id']],
+    quotes: [['clients', 'client_id'], ['leads', 'lead_id'], ['deals', 'deal_id']],
+    contracts: [['clients', 'client_id']], invoices: [['clients', 'client_id']],
+    payments: [['clients', 'client_id'], ['invoices', 'invoice_id']], expenses: [['clients', 'client_id']],
+    projects: [['clients', 'client_id']], tasks: [['clients', 'client_id'], ['projects', 'project_id']],
+    content: [['clients', 'client_id']], plans: [['clients', 'client_id']],
+  };
+  for (const [t, ps] of Object.entries(PARENTS)) {
+    const expr = `COALESCE(${ps.map(([pt, c]) => `(SELECT org FROM ${pt} WHERE id = NEW.${c})`).join(', ')}, org)`;
+    const when = ps.map(([, c]) => `NEW.${c} IS NOT NULL`).join(' OR ');
+    out.push(`CREATE TRIGGER IF NOT EXISTS tg_${t}_org_ins AFTER INSERT ON ${t} WHEN ${when} BEGIN UPDATE ${t} SET org = ${expr} WHERE id = NEW.id; END`);
+    out.push(`CREATE TRIGGER IF NOT EXISTS tg_${t}_org_upd AFTER UPDATE OF ${ps.map(([, c]) => c).join(', ')} ON ${t} WHEN ${when} BEGIN UPDATE ${t} SET org = ${expr} WHERE id = NEW.id; END`);
+  }
+  // نقل عميل بين الجهتين ينقل كل ما يخصه
+  const kids = ['deals', 'activities', 'visits', 'quotes', 'contracts', 'invoices', 'payments', 'expenses', 'projects', 'tasks', 'content', 'plans'];
+  out.push(`CREATE TRIGGER IF NOT EXISTS tg_clients_org_move AFTER UPDATE OF org ON clients WHEN NEW.org IS NOT OLD.org BEGIN ${kids.map((k) => `UPDATE ${k} SET org = NEW.org WHERE client_id = NEW.id;`).join(' ')} END`);
+  return out;
+}
 
 // إعدادات سرية لا تُرسل للواجهة أبداً
 export const SECRET_SETTINGS = ['tg_token', 'tg_secret', 'tg_cron_key', 'wa_bridge_token', 'hook_token', 'xq_secret'];
@@ -289,6 +331,8 @@ export const ENTITIES = {
     perms: { admin: 'rw', manager: 'r', sales: 'r', account: 'r', designer: 'r', finance: 'r', executive: 'r' }, order: 'active DESC, name',
   },
 };
+
+for (const t of ORG_ENTITIES) ENTITIES[t].cols.push('org');
 
 // أعمدة تُخفى عن أدوار معيّنة (حماية الأرقام المالية)
 export const HIDDEN = {

@@ -2,13 +2,18 @@
 // كل الطلبات تمر من هنا: /marketing/hub/api/...
 import {
   json, bad, HttpError, ensureDb, currentUser, createSession, sessionCookie, hashPassword, verifyPassword,
-  tempPassword, getSettings, publicSettings, tableCols, audit, nextNumber, today, addMonths, addDays, round2, randomToken,
+  tempPassword, getSettings, publicSettings, tableCols, audit, nextNumber, resolveOrg, today, addMonths, addDays, round2, randomToken,
 } from './_lib/core.js';
 import { SECRET_SETTINGS, SCHEMA_VERSION } from './_lib/schema.js';
 import { tgCall, tgToken, notifyUser, notifyRoles, waBridge, h as hx } from './_lib/telegram.js';
 import { handleUpdate, dailyDigest, newLinkCode } from './_lib/bot.js';
 import { loadTemplate, templatesFor, tplAllowed, runTemplate, taskChanged } from './_lib/engine.js';
-import { ENTITIES, HIDDEN, ROLES } from './_lib/schema.js';
+import { ENTITIES, HIDDEN, ROLES, ORGS } from './_lib/schema.js';
+import { importMorooj, orgSummary } from './_lib/morooj.js';
+
+// الجهة المعروضة حالياً (رأس X-Org من مبدّل الجهة في الواجهة) — null = كل الجهات
+const orgOf = (request) => { const v = (request.headers.get('x-org') || '').trim(); return ORGS[v] ? v : null; };
+const orgAnd = (org, col = 'org') => (org && ORGS[org] ? ` AND ${col} = '${org}'` : '');
 import { SECTORS } from './_lib/seed.js';
 import { xqBridge, xqRoute } from './_lib/xq.js';
 import { waInboxRoute } from './_lib/wainbox.js';
@@ -61,6 +66,7 @@ export async function onRequest(ctx) {
       if (parts[0] === 'mcp') return await mcpHandle(db, env, request, tu, call);
       const blocked = tokenBlocked(tu, parts, method);
       if (blocked) return bad(blocked, 403);
+      tu.org = orgOf(request);
       return await dispatch(db, env, request, tu, parts);
     }
 
@@ -79,6 +85,7 @@ export async function onRequest(ctx) {
     }
     if (user.must_change && !(parts[0] === 'meta')) return bad('يجب تغيير كلمة المرور المؤقتة أولاً', 428);
 
+    user.org = orgOf(request);
     return await dispatch(db, env, request, user, parts);
   } catch (e) {
     if (e instanceof HttpError) return bad(e.message, e.status);
@@ -90,6 +97,7 @@ export async function onRequest(ctx) {
 async function dispatch(db, env, request, user, parts) {
     switch (parts[0]) {
       case 'meta': return meta(db, user);
+      case 'orgs': return json(await orgSummary(db, user));
       case 'e': return entityRoute(db, request, user, parts[1], parts[2], env);
       case 'templates': return templatesRoute(db, env, request, user, parts[1], parts[2]);
       case 'telegram': return telegramRoute(db, env, request, user, parts[1]);
@@ -216,6 +224,7 @@ async function entityRoute(db, request, user, entity, id, env) {
     need(user, entity, 'r');
     const where = []; const args = [];
     const sc = scopeSql(user, entity); if (sc.sql) { where.push(sc.sql); args.push(...sc.args); }
+    if (def.cols.includes('org') && user.org && !url.searchParams.has('f_org')) { where.push('org = ?'); args.push(user.org); }
     const q = (url.searchParams.get('q') || '').trim();
     if (q) { where.push('(' + def.search.map((c) => `${c} LIKE ?`).join(' OR ') + ')'); def.search.forEach(() => args.push(`%${q}%`)); }
     for (const [k, v] of url.searchParams) {
@@ -263,9 +272,10 @@ async function entityRoute(db, request, user, entity, id, env) {
     if (cols.has('owner_id') && rec.owner_id == null && ['leads', 'deals', 'contracts', 'projects'].includes(entity)) rec.owner_id = user.id;
     if (cols.has('user_id') && rec.user_id == null) rec.user_id = user.id;
     if (cols.has('created_by')) rec.created_by = user.id;
-    if (entity === 'quotes' && !rec.number) rec.number = await nextNumber(db, 'quotes', 'Q');
-    if (entity === 'contracts' && !rec.number) rec.number = await nextNumber(db, 'contracts', 'C');
-    if (entity === 'invoices' && !rec.number) rec.number = await nextNumber(db, 'invoices', 'INV');
+    if (def.cols.includes('org')) rec.org = await resolveOrg(db, rec, ORGS[rec.org] ? rec.org : (user.org || 'nubl'));
+    if (entity === 'quotes' && !rec.number) rec.number = await nextNumber(db, 'quotes', 'Q', rec.org);
+    if (entity === 'contracts' && !rec.number) rec.number = await nextNumber(db, 'contracts', 'C', rec.org);
+    if (entity === 'invoices' && !rec.number) rec.number = await nextNumber(db, 'invoices', 'INV', rec.org);
     repGuard(user, entity, rec);
     await beforeSave(db, entity, rec, null);
     const keys = Object.keys(rec);
@@ -291,6 +301,7 @@ async function entityRoute(db, request, user, entity, id, env) {
     if (ownField && ownField !== 'created_by' && !def.ownAlsoCreator && !def.ownOrNull) delete rec[ownField];
     if (def.ownOrNull && ownField && rec[ownField] != null && rec[ownField] != user.id) delete rec[ownField];
     if (entity === 'users' && Number(id) === user.id) { delete rec.role; delete rec.active; }
+    if (rec.org !== undefined && (!ORGS[rec.org] || !isBoss(user))) delete rec.org; // نقل السجل بين الجهتين للإدارة فقط
     repGuard(user, entity, rec);
     await beforeSave(db, entity, rec, before);
     if (cols.has('updated_at')) rec.updated_at = new Date().toISOString().replace('T', ' ').slice(0, 19);
@@ -492,7 +503,7 @@ async function quoteAction(db, request, user, id, action) {
     const start = today();
     let items = []; try { items = JSON.parse(q.items || '[]'); } catch {}
     const pkg = items.map((i) => i.name).join(' + ').slice(0, 300);
-    const number = await nextNumber(db, 'contracts', 'C');
+    const number = await nextNumber(db, 'contracts', 'C', await resolveOrg(db, { client_id: clientId }));
     const r = await db.prepare(`INSERT INTO contracts (number, client_id, quote_id, title, package, start_date, end_date, months, monthly_value, total_value, plan, status, owner_id, created_by)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(number, clientId, q.id, q.title || pkg, pkg, start, addDays(addMonths(start, months), -1), months,
       round2(net / months), net, q.plan || (months > 1 ? 'monthly' : 'single'), 'مسودة', user.id, user.id).run();
@@ -531,7 +542,7 @@ async function contractAction(db, request, user, id, action, env) {
     const splits = planSplits(c.plan, c.months);
     let acc = 0; const stmts = [];
     const y = new Date().getFullYear();
-    const lastNo = await db.prepare('SELECT number FROM invoices WHERE number LIKE ? ORDER BY id DESC LIMIT 1').bind(`INV-${y}-%`).first('number');
+    const lastNo = await db.prepare("SELECT number FROM invoices WHERE number LIKE ? AND COALESCE(org,'nubl') = ? ORDER BY id DESC LIMIT 1").bind(`INV-${y}-%`, c.org || 'nubl').first('number');
     let n = lastNo ? parseInt(lastNo.split('-').pop(), 10) : 0;
     splits.forEach((sp, i) => {
       const sub = i === splits.length - 1 ? round2(c.total_value - acc) : round2(c.total_value * sp.pct);
@@ -553,7 +564,7 @@ async function contractAction(db, request, user, id, action, env) {
     if (!c) return bad('العقد غير موجود', 404);
     const s = await getSettings(db); const up = 1 + (Number(s.renewal_uplift || 0) / 100);
     const start = c.end_date ? addDays(c.end_date, 1) : today();
-    const number = await nextNumber(db, 'contracts', 'C');
+    const number = await nextNumber(db, 'contracts', 'C', c.org || 'nubl');
     const monthly = round2(c.monthly_value * up);
     const r = await db.prepare(`INSERT INTO contracts (number, client_id, title, package, start_date, end_date, months, monthly_value, total_value, plan, auto_renew, notice_days, status, owner_id, notes, created_by)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(number, c.client_id, c.title, c.package, start, addDays(addMonths(start, c.months), -1), c.months,
@@ -603,17 +614,18 @@ async function dashboard(db, user) {
   const one = (sql, ...a) => db.prepare(sql).bind(...a).first();
   const all = async (sql, ...a) => (await db.prepare(sql).bind(...a).all()).results;
   const finance = can(user, 'invoices', 'r');
+  const og = orgAnd(user.org);
   const out = {};
   if (can(user, 'leads', 'r')) {
     out.leads = await one(`SELECT COUNT(*) AS total,
       SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS month,
       SUM(CASE WHEN next_followup IS NOT NULL AND next_followup <= ? AND status NOT IN ('محوّل لعميل','غير مهتم','غير صالح') THEN 1 ELSE 0 END) AS due
-      FROM leads WHERE 1=1${sales ? ` AND (owner_id = ${Number(user.id)} OR owner_id IS NULL)` : ''}`, m0, t);
-    out.leadSources = await all(`SELECT COALESCE(source,'غير محدد') AS k, COUNT(*) AS n FROM leads WHERE 1=1${own('owner_id')} GROUP BY k ORDER BY n DESC LIMIT 8`);
-    out.leadStatus = await all(`SELECT status AS k, COUNT(*) AS n FROM leads WHERE 1=1${own('owner_id')} GROUP BY status`);
+      FROM leads WHERE 1=1${og}${sales ? ` AND (owner_id = ${Number(user.id)} OR owner_id IS NULL)` : ''}`, m0, t);
+    out.leadSources = await all(`SELECT COALESCE(source,'غير محدد') AS k, COUNT(*) AS n FROM leads WHERE 1=1${og}${own('owner_id')} GROUP BY k ORDER BY n DESC LIMIT 8`);
+    out.leadStatus = await all(`SELECT status AS k, COUNT(*) AS n FROM leads WHERE 1=1${og}${own('owner_id')} GROUP BY status`);
   }
   if (can(user, 'deals', 'r')) {
-    out.pipeline = await all(`SELECT stage AS k, COUNT(*) AS n, COALESCE(SUM(value),0) AS v FROM deals WHERE 1=1${own('owner_id')} GROUP BY stage`);
+    out.pipeline = await all(`SELECT stage AS k, COUNT(*) AS n, COALESCE(SUM(value),0) AS v FROM deals WHERE 1=1${og}${own('owner_id')} GROUP BY stage`);
     out.deals = await one(`SELECT
       COALESCE(SUM(CASE WHEN stage NOT IN ('مكسوبة','خاسرة') THEN value END),0) AS open_value,
       COALESCE(SUM(CASE WHEN stage NOT IN ('مكسوبة','خاسرة') THEN value*probability/100.0 END),0) AS weighted,
@@ -621,25 +633,25 @@ async function dashboard(db, user) {
       COALESCE(SUM(CASE WHEN stage = 'مكسوبة' AND closed_at >= ? THEN value END),0) AS won_month_value,
       SUM(CASE WHEN stage = 'مكسوبة' AND closed_at >= ? THEN 1 ELSE 0 END) AS won90,
       SUM(CASE WHEN stage = 'خاسرة' AND closed_at >= ? THEN 1 ELSE 0 END) AS lost90
-      FROM deals WHERE 1=1${own('owner_id')}`, m0, m0, addDays(t, -90), addDays(t, -90));
+      FROM deals WHERE 1=1${og}${own('owner_id')}`, m0, m0, addDays(t, -90), addDays(t, -90));
     const st = (await getSettings(db)).stale_days || 7;
     out.stale = await all(`SELECT id, title, stage, value, updated_at FROM deals WHERE stage NOT IN ('مكسوبة','خاسرة')
-      AND COALESCE(updated_at, created_at) < datetime('now', ?)${own('owner_id')} ORDER BY COALESCE(updated_at, created_at) LIMIT 8`, `-${Number(st)} days`);
+      AND COALESCE(updated_at, created_at) < datetime('now', ?)${og}${own('owner_id')} ORDER BY COALESCE(updated_at, created_at) LIMIT 8`, `-${Number(st)} days`);
   }
   if (can(user, 'contracts', 'r')) {
-    out.contracts = await one(`SELECT COUNT(*) AS active, COALESCE(SUM(monthly_value),0) AS mrr FROM contracts WHERE status IN ('نشط','موقّع')${own('owner_id')}`);
+    out.contracts = await one(`SELECT COUNT(*) AS active, COALESCE(SUM(monthly_value),0) AS mrr FROM contracts WHERE status IN ('نشط','موقّع')${og}${own('owner_id')}`);
     out.renewals = await all(`SELECT c.id, c.number, c.end_date, c.monthly_value, cl.name AS client FROM contracts c LEFT JOIN clients cl ON cl.id = c.client_id
-      WHERE c.status IN ('نشط','موقّع') AND c.end_date BETWEEN ? AND ?${sales ? ` AND c.owner_id = ${Number(user.id)}` : ''} ORDER BY c.end_date LIMIT 8`, t, in30);
+      WHERE c.status IN ('نشط','موقّع') AND c.end_date BETWEEN ? AND ?${orgAnd(user.org, 'c.org')}${sales ? ` AND c.owner_id = ${Number(user.id)}` : ''} ORDER BY c.end_date LIMIT 8`, t, in30);
   }
   if (finance) {
     out.money = await one(`SELECT
       COALESCE(SUM(CASE WHEN status IN ('مصدرة','مدفوعة جزئياً','متأخرة') THEN total - paid END),0) AS receivable,
       COALESCE(SUM(CASE WHEN status IN ('مصدرة','مدفوعة جزئياً','متأخرة') AND due_date < ? THEN total - paid END),0) AS overdue,
       SUM(CASE WHEN status IN ('مصدرة','مدفوعة جزئياً','متأخرة') AND due_date < ? THEN 1 ELSE 0 END) AS overdue_n
-      FROM invoices`, t, t);
-    out.collected = await one('SELECT COALESCE(SUM(amount),0) AS s FROM payments WHERE paid_at >= ?', m0);
-    out.expensesMonth = await one('SELECT COALESCE(SUM(amount),0) AS s FROM expenses WHERE date >= ?', m0);
-    out.revenue = await all(`SELECT substr(paid_at,1,7) AS k, SUM(amount) AS v FROM payments WHERE paid_at >= ? GROUP BY k ORDER BY k`, addMonths(m0, -5));
+      FROM invoices WHERE 1=1${og}`, t, t);
+    out.collected = await one('SELECT COALESCE(SUM(amount),0) AS s FROM payments WHERE paid_at >= ?' + og, m0);
+    out.expensesMonth = await one('SELECT COALESCE(SUM(amount),0) AS s FROM expenses WHERE date >= ?' + og, m0);
+    out.revenue = await all(`SELECT substr(paid_at,1,7) AS k, SUM(amount) AS v FROM payments WHERE paid_at >= ?${og} GROUP BY k ORDER BY k`, addMonths(m0, -5));
   }
   if (can(user, 'tasks', 'r')) {
     const tw = user.role === 'designer' || user.role === 'sales' || user.role === 'finance' ? ` AND assignee_id = ${Number(user.id)}` : '';
@@ -648,39 +660,39 @@ async function dashboard(db, user) {
       SUM(CASE WHEN status != 'منجزة' AND due_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS week,
       SUM(CASE WHEN status = 'منجزة' AND done_at >= ? THEN 1 ELSE 0 END) AS done_month,
       SUM(CASE WHEN status = 'منجزة' AND done_at >= ? AND (due_date IS NULL OR done_at <= due_date) THEN 1 ELSE 0 END) AS ontime_month
-      FROM tasks WHERE 1=1${tw}`, t, t, wk, m0, m0);
+      FROM tasks WHERE 1=1${og}${tw}`, t, t, wk, m0, m0);
   }
   if (can(user, 'content', 'r')) {
     out.content = await one(`SELECT SUM(CASE WHEN publish_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS week,
       SUM(CASE WHEN status IN ('بانتظار اعتماد العميل','مراجعة') THEN 1 ELSE 0 END) AS approval,
       SUM(CASE WHEN publish_date < ? AND status NOT IN ('منشور','ملغي') THEN 1 ELSE 0 END) AS late
-      FROM content`, t, wk, t);
+      FROM content WHERE 1=1${og}`, t, wk, t);
   }
   out.seasons = await all(`SELECT id, name, date, plan_days, print_days, sectors FROM seasons WHERE date >= ? ORDER BY date LIMIT 5`, t);
-  out.today = t;
+  out.today = t; out.org = user.org;
   return json(out);
 }
 
 async function myDay(db, user) {
   const t = today(); const tomorrow = addDays(t, 1); const in3 = addDays(t, 3);
   const all = async (sql, ...a) => (await db.prepare(sql).bind(...a).all()).results;
-  const out = {};
+  const out = {}; const og = orgAnd(user.org);
   out.tasks = await all(`SELECT t.*, c.name AS client FROM tasks t LEFT JOIN clients c ON c.id = t.client_id
-    WHERE t.assignee_id = ? AND t.status != 'منجزة' AND (t.due_date IS NULL OR t.due_date <= ?) ORDER BY t.due_date IS NULL, t.due_date LIMIT 50`, user.id, tomorrow);
+    WHERE t.assignee_id = ? AND t.status != 'منجزة' AND (t.due_date IS NULL OR t.due_date <= ?)${orgAnd(user.org, 't.org')} ORDER BY t.due_date IS NULL, t.due_date LIMIT 50`, user.id, tomorrow);
   if (can(user, 'leads', 'r')) {
     out.followups = await all(`SELECT id, name, company, phone, status, next_followup, sector FROM leads
-      WHERE next_followup IS NOT NULL AND next_followup <= ? AND status NOT IN ('محوّل لعميل','غير مهتم','غير صالح')
+      WHERE next_followup IS NOT NULL AND next_followup <= ? AND status NOT IN ('محوّل لعميل','غير مهتم','غير صالح')${og}
       ${isBoss(user) ? '' : 'AND owner_id = ' + Number(user.id)} ORDER BY next_followup LIMIT 50`, t);
   }
   out.content = await all(`SELECT ct.*, c.name AS client FROM content ct LEFT JOIN clients c ON c.id = ct.client_id
-    WHERE (ct.assignee_id = ? OR ct.designer_id = ?) AND ct.status NOT IN ('منشور','ملغي') AND ct.publish_date <= ? ORDER BY ct.publish_date LIMIT 50`, user.id, user.id, in3);
+    WHERE (ct.assignee_id = ? OR ct.designer_id = ?) AND ct.status NOT IN ('منشور','ملغي') AND ct.publish_date <= ?${orgAnd(user.org, 'ct.org')} ORDER BY ct.publish_date LIMIT 50`, user.id, user.id, in3);
   if (can(user, 'invoices', 'r')) {
     out.invoices = await all(`SELECT i.id, i.number, i.due_date, i.total, i.paid, c.name AS client FROM invoices i LEFT JOIN clients c ON c.id = i.client_id
-      WHERE i.status IN ('مصدرة','مدفوعة جزئياً','متأخرة') AND i.due_date <= ? ORDER BY i.due_date LIMIT 30`, t);
+      WHERE i.status IN ('مصدرة','مدفوعة جزئياً','متأخرة') AND i.due_date <= ?${orgAnd(user.org, 'i.org')} ORDER BY i.due_date LIMIT 30`, t);
   }
   if (can(user, 'clients', 'r') && ['admin', 'manager', 'account'].includes(user.role)) {
     const dom = Number(t.slice(8, 10));
-    out.reports = await all(`SELECT id, name, report_day FROM clients WHERE status = 'نشط' AND report_day BETWEEN ? AND ?
+    out.reports = await all(`SELECT id, name, report_day FROM clients WHERE status = 'نشط' AND report_day BETWEEN ? AND ?${og}
       ${user.role === 'account' ? 'AND account_manager_id = ' + Number(user.id) : ''} ORDER BY report_day`, dom, dom + 2);
   }
   out.seasons = await all(`SELECT id, name, date, plan_days, print_days FROM seasons
@@ -693,7 +705,7 @@ async function myDay(db, user) {
 // تقرير أعمار الديون — متاح لكل المستخدمين المسجّلين (اطلاع ومتابعة تحصيل)
 async function debts(db, user) {
   const t = today();
-  const OPEN = `status IN ('مصدرة','مدفوعة جزئياً','متأخرة') AND total - COALESCE(paid,0) > 0.009`;
+  const OPEN = `status IN ('مصدرة','مدفوعة جزئياً','متأخرة') AND total - COALESCE(paid,0) > 0.009${orgAnd(user.org)}`;
   const invoices = (await db.prepare(`SELECT id, number, client_id, contract_id, description, issue_date, due_date, total, COALESCE(paid,0) AS paid,
       ROUND(total - COALESCE(paid,0), 2) AS balance, status, CAST(julianday(?1) - julianday(COALESCE(due_date, issue_date, ?1)) AS INTEGER) AS days
       FROM invoices WHERE ${OPEN} ORDER BY due_date`).bind(t).all()).results;
@@ -706,7 +718,7 @@ async function debts(db, user) {
       FROM clients c LEFT JOIN users u ON u.id = c.account_manager_id
       WHERE c.id IN (SELECT client_id FROM invoices WHERE ${OPEN})`).all()).results;
   const pending = (await db.prepare(`SELECT i.id, i.number, i.description, i.due_date, i.total, cl.name AS client_name
-      FROM invoices i LEFT JOIN clients cl ON cl.id = i.client_id WHERE i.status = 'مسودة' AND i.due_date <= ? ORDER BY i.due_date LIMIT 50`).bind(t).all()).results;
+      FROM invoices i LEFT JOIN clients cl ON cl.id = i.client_id WHERE i.status = 'مسودة' AND i.due_date <= ?${orgAnd(user.org, 'i.org')} ORDER BY i.due_date LIMIT 50`).bind(t).all()).results;
   return json({ today: t, invoices, clients, pending });
 }
 
@@ -719,38 +731,38 @@ async function reports(db, request, user) {
   const all = async (sql, ...a) => (await db.prepare(sql).bind(...a).all()).results;
   const one = (sql, ...a) => db.prepare(sql).bind(...a).first();
   const s = await getSettings(db);
-  const out = { from, to };
+  const out = { from, to, org: user.org }; const og = orgAnd(user.org);
   out.funnel = await one(`SELECT
-    (SELECT COUNT(*) FROM leads WHERE created_at BETWEEN ?1 AND ?2) AS leads,
-    (SELECT COUNT(DISTINCT lead_id) FROM activities WHERE lead_id IS NOT NULL AND at BETWEEN ?1 AND ?2) AS contacted,
-    (SELECT COUNT(*) FROM deals WHERE created_at BETWEEN ?1 AND ?2) AS deals,
-    (SELECT COUNT(*) FROM quotes WHERE created_at BETWEEN ?1 AND ?2) AS quotes,
-    (SELECT COUNT(*) FROM deals WHERE stage = 'مكسوبة' AND closed_at BETWEEN ?3 AND ?4) AS won,
-    (SELECT COALESCE(SUM(value),0) FROM deals WHERE stage = 'مكسوبة' AND closed_at BETWEEN ?3 AND ?4) AS won_value,
-    (SELECT COUNT(*) FROM deals WHERE stage = 'خاسرة' AND closed_at BETWEEN ?3 AND ?4) AS lost`, from, toEnd, from, to);
-  out.lossReasons = await all(`SELECT COALESCE(loss_reason,'غير موثّق') AS k, COUNT(*) AS n FROM deals WHERE stage = 'خاسرة' AND closed_at BETWEEN ? AND ? GROUP BY k ORDER BY n DESC`, from, to);
+    (SELECT COUNT(*) FROM leads WHERE created_at BETWEEN ?1 AND ?2${og}) AS leads,
+    (SELECT COUNT(DISTINCT lead_id) FROM activities WHERE lead_id IS NOT NULL AND at BETWEEN ?1 AND ?2${og}) AS contacted,
+    (SELECT COUNT(*) FROM deals WHERE created_at BETWEEN ?1 AND ?2${og}) AS deals,
+    (SELECT COUNT(*) FROM quotes WHERE created_at BETWEEN ?1 AND ?2${og}) AS quotes,
+    (SELECT COUNT(*) FROM deals WHERE stage = 'مكسوبة' AND closed_at BETWEEN ?3 AND ?4${og}) AS won,
+    (SELECT COALESCE(SUM(value),0) FROM deals WHERE stage = 'مكسوبة' AND closed_at BETWEEN ?3 AND ?4${og}) AS won_value,
+    (SELECT COUNT(*) FROM deals WHERE stage = 'خاسرة' AND closed_at BETWEEN ?3 AND ?4${og}) AS lost`, from, toEnd, from, to);
+  out.lossReasons = await all(`SELECT COALESCE(loss_reason,'غير موثّق') AS k, COUNT(*) AS n FROM deals WHERE stage = 'خاسرة' AND closed_at BETWEEN ? AND ?${og} GROUP BY k ORDER BY n DESC`, from, to);
   out.sources = await all(`SELECT COALESCE(l.source,'غير محدد') AS k, COUNT(*) AS leads,
     SUM(CASE WHEN l.status = 'محوّل لعميل' THEN 1 ELSE 0 END) AS converted
-    FROM leads l WHERE l.created_at BETWEEN ? AND ? GROUP BY k ORDER BY leads DESC`, from, toEnd);
+    FROM leads l WHERE l.created_at BETWEEN ? AND ?${orgAnd(user.org, 'l.org')} GROUP BY k ORDER BY leads DESC`, from, toEnd);
   out.sectors = await all(`SELECT COALESCE(cl.sector,'غير محدد') AS k, COUNT(c.id) AS contracts, COALESCE(SUM(c.total_value),0) AS value
-    FROM contracts c LEFT JOIN clients cl ON cl.id = c.client_id WHERE c.status IN ('نشط','موقّع','منتهي') AND c.start_date BETWEEN ? AND ? GROUP BY k ORDER BY value DESC`, from, to);
-  out.cash = await all(`SELECT substr(paid_at,1,7) AS k, SUM(amount) AS v FROM payments WHERE paid_at BETWEEN ? AND ? GROUP BY k ORDER BY k`, from, to);
-  out.expenses = await all(`SELECT COALESCE(category,'أخرى') AS k, SUM(amount) AS v FROM expenses WHERE date BETWEEN ? AND ? GROUP BY k ORDER BY v DESC`, from, to);
+    FROM contracts c LEFT JOIN clients cl ON cl.id = c.client_id WHERE c.status IN ('نشط','موقّع','منتهي') AND c.start_date BETWEEN ? AND ?${orgAnd(user.org, 'c.org')} GROUP BY k ORDER BY value DESC`, from, to);
+  out.cash = await all(`SELECT substr(paid_at,1,7) AS k, SUM(amount) AS v FROM payments WHERE paid_at BETWEEN ? AND ?${og} GROUP BY k ORDER BY k`, from, to);
+  out.expenses = await all(`SELECT COALESCE(category,'أخرى') AS k, SUM(amount) AS v FROM expenses WHERE date BETWEEN ? AND ?${og} GROUP BY k ORDER BY v DESC`, from, to);
   out.aging = await one(`SELECT
     COALESCE(SUM(CASE WHEN due_date >= ?1 THEN total-paid END),0) AS current,
     COALESCE(SUM(CASE WHEN due_date < ?1 AND due_date >= date(?1,'-30 days') THEN total-paid END),0) AS d30,
     COALESCE(SUM(CASE WHEN due_date < date(?1,'-30 days') AND due_date >= date(?1,'-60 days') THEN total-paid END),0) AS d60,
     COALESCE(SUM(CASE WHEN due_date < date(?1,'-60 days') THEN total-paid END),0) AS d90
-    FROM invoices WHERE status IN ('مصدرة','مدفوعة جزئياً','متأخرة')`, today());
+    FROM invoices WHERE status IN ('مصدرة','مدفوعة جزئياً','متأخرة')${og}`, today());
   const rep = Number(s.commission_rep || 0); const close = Number(s.commission_close || 0);
   out.team = await all(`SELECT u.id, u.name, u.role, u.commission_rate,
-    (SELECT COUNT(*) FROM activities a WHERE a.user_id = u.id AND a.at BETWEEN ?1 AND ?2) AS activities,
-    (SELECT COUNT(*) FROM visits v WHERE v.user_id = u.id AND v.at BETWEEN ?1 AND ?2) AS visits,
-    (SELECT COUNT(*) FROM deals d WHERE d.owner_id = u.id AND d.stage = 'مكسوبة' AND d.closed_at BETWEEN ?3 AND ?4) AS won,
-    (SELECT COALESCE(SUM(value),0) FROM deals d WHERE d.owner_id = u.id AND d.stage = 'مكسوبة' AND d.closed_at BETWEEN ?3 AND ?4) AS won_value,
-    (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id = u.id AND t.status = 'منجزة' AND t.done_at BETWEEN ?3 AND ?4) AS tasks_done,
-    (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id = u.id AND t.status = 'منجزة' AND t.done_at BETWEEN ?3 AND ?4 AND (t.due_date IS NULL OR t.done_at <= t.due_date)) AS tasks_ontime,
-    (SELECT ROUND(AVG(revisions),2) FROM tasks t WHERE t.assignee_id = u.id AND t.status = 'منجزة' AND t.done_at BETWEEN ?3 AND ?4) AS avg_rev
+    (SELECT COUNT(*) FROM activities a WHERE a.user_id = u.id AND a.at BETWEEN ?1 AND ?2${orgAnd(user.org, 'a.org')}) AS activities,
+    (SELECT COUNT(*) FROM visits v WHERE v.user_id = u.id AND v.at BETWEEN ?1 AND ?2${orgAnd(user.org, 'v.org')}) AS visits,
+    (SELECT COUNT(*) FROM deals d WHERE d.owner_id = u.id AND d.stage = 'مكسوبة' AND d.closed_at BETWEEN ?3 AND ?4${orgAnd(user.org, 'd.org')}) AS won,
+    (SELECT COALESCE(SUM(value),0) FROM deals d WHERE d.owner_id = u.id AND d.stage = 'مكسوبة' AND d.closed_at BETWEEN ?3 AND ?4${orgAnd(user.org, 'd.org')}) AS won_value,
+    (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id = u.id AND t.status = 'منجزة' AND t.done_at BETWEEN ?3 AND ?4${orgAnd(user.org, 't.org')}) AS tasks_done,
+    (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id = u.id AND t.status = 'منجزة' AND t.done_at BETWEEN ?3 AND ?4 AND (t.due_date IS NULL OR t.done_at <= t.due_date)${orgAnd(user.org, 't.org')}) AS tasks_ontime,
+    (SELECT ROUND(AVG(revisions),2) FROM tasks t WHERE t.assignee_id = u.id AND t.status = 'منجزة' AND t.done_at BETWEEN ?3 AND ?4${orgAnd(user.org, 't.org')}) AS avg_rev
     FROM users u WHERE u.active = 1 ORDER BY won_value DESC, activities DESC`, from, toEnd, from, to);
   out.team.forEach((r) => { const rate = Number(r.commission_rate) || (r.role === 'sales' ? rep + close : 0); r.commission = round2(r.won_value * rate / 100); });
   return json(out);
@@ -820,6 +832,13 @@ async function filesRoute(db, request, user, id) {
 
 // ---------- استيراد قاعدة جهات الاتصال ----------
 async function importRoute(db, request, user, what) {
+  if (what === 'morooj' && request.method === 'POST') {
+    if (user.role !== 'admin') return bad('استيراد بيانات مروج الحجاز للمدير العام فقط', 403);
+    const d = await body(request);
+    const r = await importMorooj(db, d, user);
+    await audit(db, user, 'import', 'morooj', null, JSON.stringify(r.counts).slice(0, 500));
+    return json(r);
+  }
   if (what !== 'leads' || request.method !== 'POST') return bad('غير مدعوم', 404);
   need(user, 'leads', 'w');
   if (!isBoss(user)) return bad('الاستيراد للإدارة فقط', 403);

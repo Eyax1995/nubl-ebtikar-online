@@ -33,6 +33,7 @@ function waLink(phone, text) {
 async function api(path, opts = {}) {
   const o = { method: opts.method || 'GET', headers: {}, credentials: 'same-origin' };
   if (opts.body !== undefined) { o.headers['content-type'] = 'application/json'; o.body = JSON.stringify(opts.body); }
+  if (S.org) o.headers['x-org'] = S.org; // الجهة المعروضة: نُبل وابتكار أو مروج الحجاز (فارغ = الكل)
   const r = await fetch(API + path, o);
   let data = {}; try { data = await r.json(); } catch { /* */ }
   if (r.status === 401 && !opts.noAuthRedirect) { S.meta = null; renderLogin(); throw new Error(data.error || 'سجّل الدخول'); }
@@ -124,7 +125,7 @@ const PILL = {
 const pill = (v) => (v ? `<span class="pill ${PILL[v] || ''}">${esc(v)}</span>` : '');
 
 /* ---------- الحالة العامة ---------- */
-const S = { meta: null, cache: {}, route: '' };
+const S = { meta: null, cache: {}, route: '', org: (() => { try { const v = localStorage.getItem('nh_org'); return v === 'nubl' || v === 'morooj' ? v : ''; } catch { return ''; } })() };
 const me = () => S.meta?.user || {};
 const can = (ent, op = 'r') => (S.meta?.perms?.[ent] || '').includes(op);
 const isBoss = () => ['admin', 'manager'].includes(me().role);
@@ -376,6 +377,7 @@ function readQs(form, k) {
 /* ---------- عرض قيمة حقل ---------- */
 function cell(f, row) {
   const v = row[f.k];
+  if (f.k === 'org' && typeof orgBadge === 'function') return orgBadge(v);
   switch (f.t) {
     case 'money': return v == null ? '—' : money(v);
     case 'date': {
@@ -509,7 +511,7 @@ async function openForm(ent, row = null, preset = {}, onSaved) {
 async function listView(ent, opts = {}) {
   const def = ENT[ent]; const v = $('#view');
   const st = (S.list ||= {})[ent] ||= { q: '', f: {}, offset: 0 };
-  const listF = def.fields.filter((f) => f.list);
+  const listF = def.fields.filter((f) => f.list && !(f.k === 'org' && S.org));
   const filters = def.fields.filter((f) => f.filter);
   v.innerHTML = `<div class="toolbar">
     <div class="search">${I.search}<input class="inp" id="q" placeholder="بحث…" value="${esc(st.q)}"></div>
