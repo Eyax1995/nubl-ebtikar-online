@@ -425,17 +425,19 @@ const fname = (s) => String(s || 'مستند').replace(/[\\/:*?"<>|]+/g, ' ').tr
 async function docFile(db, user, kind, id, h, format) {
   const s = await getSettings(db);
   const ctx = { settings: s, today: today(), signName: s.sign_name || 'إياد المغيرة', signTitle: s.sign_title || 'مدير قطاع التسويق' };
-  let blocks, name;
+  let blocks, name, org = 'nubl';
+  // مستندات مروج الحجاز تحمل بياناتها هي (الاسم والسجل والرقم الضريبي) لا بيانات نُبل وابتكار
+  const forOrg = (o) => { org = o || 'nubl'; if (org === 'morooj') ctx.settings = { ...s, company_name: s.morooj_company_name || 'مروج الحجاز للأعمال التجارية', cr_number: s.morooj_cr_number || '', vat_number: s.morooj_vat_number || '', company_city: s.morooj_address || 'جدة', bank_line: s.morooj_bank_line || '' }; };
   if (kind === 'quote') {
     h.need(user, 'quotes', 'r');
-    const q = await h.inScope(db, user, 'quotes', id);
+    const q = await h.inScope(db, user, 'quotes', id); forOrg(q.org);
     const doc = parse(q.doc, null) || legacyQuoteDoc(q);
     const cl = q.client_id ? await db.prepare('SELECT name, contact_name, city FROM clients WHERE id = ?').bind(q.client_id).first() : q.lead_id ? await db.prepare('SELECT name, company AS contact_name, city FROM leads WHERE id = ?').bind(q.lead_id).first() : null;
     ctx.clientName = cl ? [cl.contact_name && cl.contact_name !== cl.name ? cl.contact_name : null, cl.name, cl.city].filter(Boolean).join(' — ') : '';
     blocks = quoteBlocks(q, doc, ctx); name = `عرض سعر ${q.number} — ${doc.subject || q.title || ''}`;
   } else if (kind === 'contract') {
     h.need(user, 'contracts', 'r');
-    const c = await h.inScope(db, user, 'contracts', id);
+    const c = await h.inScope(db, user, 'contracts', id); forOrg(c.org);
     let doc = parse(c.doc, null);
     if (!doc) {
       const q = c.quote_id ? await db.prepare('SELECT * FROM quotes WHERE id = ?').bind(c.quote_id).first() : null;
@@ -447,12 +449,13 @@ async function docFile(db, user, kind, id, h, format) {
     blocks = contractBlocks(c, doc, ctx); name = `عقد ${c.number} — ${ctx.client.name || ''}`;
   } else if (kind === 'plan') {
     h.need(user, 'plans', 'r');
-    const p = await db.prepare('SELECT * FROM plans WHERE id = ?').bind(id).first(); if (!p) return bad('غير موجود', 404);
+    const p = await db.prepare('SELECT * FROM plans WHERE id = ?').bind(id).first(); if (!p) return bad('غير موجود', 404); forOrg(p.org);
     const cl = await db.prepare('SELECT name FROM clients WHERE id = ?').bind(p.client_id).first();
     ctx.clientName = cl?.name || '';
     blocks = planBlocks(p, parse(p.doc, {}), ctx); name = `الخطة التسويقية — ${cl?.name || ''}`;
   } else return bad('نوع غير معروف', 404);
-  if (format === 'html') { await audit(db, user, 'print', kind, id); return json({ title: name, html: renderHtml(blocks) }); }
+  if (format === 'html') { await audit(db, user, 'print', kind, id); return json({ title: name, html: renderHtml(blocks), org }); }
+  if (org === 'morooj') return bad('ملف Word لمستندات مروج الحجاز يُفعَّل بعد اعتماد ورقها الرسمي — استخدم «تنزيل PDF» حالياً');
   const bytes = await buildDocx(blocks, { title: name });
   await audit(db, user, 'docx', kind, id);
   return new Response(bytes, { headers: {

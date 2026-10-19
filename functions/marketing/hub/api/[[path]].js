@@ -9,7 +9,8 @@ import { tgCall, tgToken, notifyUser, notifyRoles, waBridge, h as hx } from './_
 import { handleUpdate, dailyDigest, newLinkCode } from './_lib/bot.js';
 import { loadTemplate, templatesFor, tplAllowed, runTemplate, taskChanged } from './_lib/engine.js';
 import { ENTITIES, HIDDEN, ROLES, ORGS } from './_lib/schema.js';
-import { importMorooj, orgSummary } from './_lib/morooj.js';
+import { importMorooj, orgSummary, finishLegacy } from './_lib/morooj.js';
+import { finRoute, hrRoute } from './_lib/ledger.js';
 
 // الجهة المعروضة حالياً (رأس X-Org من مبدّل الجهة في الواجهة) — null = كل الجهات
 const orgOf = (request) => { const v = (request.headers.get('x-org') || '').trim(); return ORGS[v] ? v : null; };
@@ -98,6 +99,8 @@ async function dispatch(db, env, request, user, parts) {
     switch (parts[0]) {
       case 'meta': return meta(db, user);
       case 'orgs': return json(await orgSummary(db, user));
+      case 'fin': return finRoute(db, request, user, parts[1]);
+      case 'hr': return hrRoute(db, request, user, parts[1], parts[2]);
       case 'e': return entityRoute(db, request, user, parts[1], parts[2], env);
       case 'templates': return templatesRoute(db, env, request, user, parts[1], parts[2]);
       case 'telegram': return telegramRoute(db, env, request, user, parts[1]);
@@ -276,6 +279,8 @@ async function entityRoute(db, request, user, entity, id, env) {
     if (entity === 'quotes' && !rec.number) rec.number = await nextNumber(db, 'quotes', 'Q', rec.org);
     if (entity === 'contracts' && !rec.number) rec.number = await nextNumber(db, 'contracts', 'C', rec.org);
     if (entity === 'invoices' && !rec.number) rec.number = await nextNumber(db, 'invoices', 'INV', rec.org);
+    const NUM = { journals: 'JV', payroll: 'PR', advances: 'ADV', payments: 'RV', expenses: 'PV' };
+    if (NUM[entity] && !rec.number) rec.number = await nextNumber(db, entity, NUM[entity], rec.org);
     repGuard(user, entity, rec);
     await beforeSave(db, entity, rec, null);
     const keys = Object.keys(rec);
@@ -349,6 +354,18 @@ async function beforeSave(db, entity, rec, before) {
   } else if (entity === 'quotes' && rec.discount !== undefined && before) {
     const sub = Number(before.subtotal) || 0; const disc = Number(rec.discount) || 0;
     rec.vat = round2((sub - disc) * vat); rec.total = round2(sub - disc + rec.vat);
+  }
+  if (entity === 'journals' && rec.lines !== undefined) {
+    let L = []; try { L = typeof rec.lines === 'string' ? JSON.parse(rec.lines || '[]') : rec.lines; } catch { throw new HttpError(400, 'بنود القيد غير صالحة'); }
+    L = (Array.isArray(L) ? L : []).map((l) => ({ account_id: Number(l.account_id) || null, debit: round2(l.debit), credit: round2(l.credit), note: String(l.note || '').slice(0, 200) }))
+      .filter((l) => l.account_id && (l.debit || l.credit));
+    const dr = round2(L.reduce((a, l) => a + l.debit, 0)); const cr = round2(L.reduce((a, l) => a + l.credit, 0));
+    if ((rec.status ?? before?.status ?? 'مرحّل') === 'مرحّل' && (L.length < 2 || Math.abs(dr - cr) > 0.009)) throw new HttpError(400, `القيد غير متوازن: مدين ${dr} ≠ دائن ${cr}`);
+    rec.lines = JSON.stringify(L); rec.total = dr;
+  }
+  if (entity === 'payroll') {
+    const g = (k) => Number(rec[k] ?? before?.[k] ?? 0) || 0;
+    rec.net = round2(g('basic') + g('allowances') + g('bonus') - g('deductions') - g('advance_deduct'));
   }
   if (entity === 'invoices' && rec.subtotal !== undefined) {
     rec.vat = round2(Number(rec.subtotal) * vat); rec.total = round2(Number(rec.subtotal) + rec.vat);
@@ -832,6 +849,10 @@ async function filesRoute(db, request, user, id) {
 
 // ---------- استيراد قاعدة جهات الاتصال ----------
 async function importRoute(db, request, user, what) {
+  if (what === 'morooj-finish' && request.method === 'POST') {
+    if (user.role !== 'admin') return bad('للمدير العام فقط', 403);
+    return json({ ok: true, finance: await finishLegacy(db, user) });
+  }
   if (what === 'morooj' && request.method === 'POST') {
     if (user.role !== 'admin') return bad('استيراد بيانات مروج الحجاز للمدير العام فقط', 403);
     const d = await body(request);

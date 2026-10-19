@@ -147,7 +147,7 @@ export async function audit(db, user, action, entity, id, detail) {
 export async function nextNumber(db, table, prefix, org) {
   const y = new Date().getFullYear();
   const like = `${prefix}-${y}-%`;
-  const byOrg = org && ['quotes', 'contracts', 'invoices'].includes(table);
+  const byOrg = org && ['quotes', 'contracts', 'invoices', 'journals', 'payroll', 'advances', 'payments', 'expenses'].includes(table);
   const last = await db.prepare(`SELECT number FROM ${table} WHERE number LIKE ?${byOrg ? " AND COALESCE(org,'nubl') = ?" : ''} ORDER BY id DESC LIMIT 1`)
     .bind(...(byOrg ? [like, org] : [like])).first('number');
   const n = last ? parseInt(String(last).split('-').pop(), 10) + 1 : 1;

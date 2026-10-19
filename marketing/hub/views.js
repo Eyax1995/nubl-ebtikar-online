@@ -408,11 +408,13 @@ function docTools(C) {
       }
       const cv = await html2canvas(host, { scale: 2, backgroundColor: null, useCORS: true, logging: false });
       const k = cv.width / host.offsetWidth;
-      const lh = await new Promise((ok) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => ok(im); im.onerror = () => ok(null); im.src = C.O + 'brand/letterhead-a4.png'; });
+      const mhEl = C.plain && D.querySelector('.mh');
+      const lh = mhEl ? await html2canvas(mhEl, { scale: 2, backgroundColor: '#ffffff', logging: false })
+        : await new Promise((ok) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => ok(im); im.onerror = () => ok(null); im.src = C.O + 'brand/letterhead-a4.png'; });
       const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', compress: true });
       pages.forEach(([a, b], i) => {
         if (i) pdf.addPage('a4');
-        if (lh) pdf.addImage(lh, 'PNG', 0, 0, 210, 297, 'lh', 'FAST');
+        if (lh) pdf.addImage(lh, 'PNG', 0, 0, 210, mhEl ? 52 : 297, 'lh', 'FAST');
         const c = D.createElement('canvas'); c.width = cv.width; c.height = Math.max(1, Math.ceil((b - a) * k));
         c.getContext('2d').drawImage(cv, 0, a * k, cv.width, (b - a) * k, 0, 0, cv.width, (b - a) * k);
         pdf.addImage(c, 'PNG', 20, 52, 166, (b - a) / mm, undefined, 'FAST');
@@ -474,6 +476,9 @@ function docTools(C) {
 function docShell(title, inner, opt = {}) {
   // كل المستندات المطبوعة تخرج على الأوراق الرسمية 3.0 (الترويسة والتذييل وشريط الأسهم في كل صفحة)
   const s = S.meta.settings; const O = location.origin + '/marketing/hub/';
+  // مستندات مروج الحجاز: ترويسة نصية خاصة بها (لا تُطبع على أوراق نُبل وابتكار) إلى أن يُعتمد ورقها الرسمي
+  const plain = opt.org === 'morooj';
+  const mh = plain ? `<div class="mh"><b>${esc(s.morooj_company_name || 'مروج الحجاز للأعمال التجارية')}</b><span>${[s.morooj_cr_number ? 'س.ت ' + esc(s.morooj_cr_number) : '', s.morooj_vat_number ? 'الرقم الضريبي ' + esc(s.morooj_vat_number) : '', esc(s.morooj_address || 'جدة — المملكة العربية السعودية')].filter(Boolean).join(' · ')}</span></div>` : '';
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title>
   <style>@font-face{font-family:'The Year of Handicrafts';src:url(${O}fonts/TheYearofHandicrafts-Bold.woff2) format('woff2');font-weight:700}@font-face{font-family:'DG Agnadeen';src:url(${O}fonts/DGAgnadeen-Regular.woff2) format('woff2');font-weight:400}@font-face{font-family:'DG Agnadeen';src:url(${O}fonts/DGAgnadeen-Bold.woff2) format('woff2');font-weight:700}
   @page{size:A4;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -511,14 +516,15 @@ function docShell(title, inner, opt = {}) {
   .dtb button{border:0;border-radius:8px;padding:7px 14px;font:700 13px 'DG Agnadeen',Tajawal,sans-serif;cursor:pointer;background:#fff;color:#18566D}.dtb button[data-a=pdf]{background:#D06429;color:#fff}.dtb button[disabled]{opacity:.55;cursor:wait}.dtb-m{font-size:12px;color:#EDCEA3}
   .fit1 .doc{font-size:12px;line-height:1.55}.fit1 .doc td,.fit1 .doc th{padding:5px 8px}.fit1 h3{margin:12px 0 4px}.fit1 .meta{padding:8px 12px;margin-bottom:10px}.fit1 .ttl{margin-bottom:8px}.fit1 .sig{margin-top:22px}
   .fit2 .doc{font-size:11px;line-height:1.45}.fit2 .doc td,.fit2 .doc th{padding:3px 6px}.fit2 h3{font-size:13px;margin:8px 0 3px}.fit2 .ttl h1{font-size:18px}.fit2 .meta{padding:6px 10px;margin-bottom:8px;gap:3px 18px}.fit2 .sig{margin-top:16px}.fit2 .d-h1{margin:10px 0 5px}.fit2 .d-p,.fit2 .d-ul{margin-bottom:5px}.fit2 table.dt{font-size:11px}
+  .mh{height:52mm;display:flex;flex-direction:column;justify-content:flex-end;padding:0 24mm 6mm 20mm;border-bottom:0}.mh b{font-family:'The Year of Handicrafts','DG Agnadeen',Tajawal,sans-serif;font-size:22px;color:#3F5A24}.mh span{font-size:11px;color:#5A6B4A;border-top:2px solid #6E8B3D;padding-top:4px;margin-top:4px}
   @media print{.dtb{display:none!important}}
-  @media screen{body{background:#C5D5DA;padding-top:46px}table.pg{margin:20px auto;background:#fff url(${O}brand/letterhead-a4.png) top center/210mm auto no-repeat;min-height:297mm}.lh{display:none}}</style></head><body>
-  <img class="lh" src="${O}brand/letterhead-a4.png" alt="">
-  <table class="pg"><thead><tr><td></td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td><div class="doc">
-  ${opt.official ? '' : `<div class="reg">${[s.company_name, s.cr_number ? 'س.ت ' + esc(s.cr_number) : '', s.vat_number ? 'الرقم الضريبي ' + esc(s.vat_number) : ''].filter(Boolean).map((x, i) => i ? x : esc(x)).join(' · ')}</div>`}
+  @media screen{body{background:#C5D5DA;padding-top:46px}table.pg{margin:20px auto;background:#fff ${plain ? '' : `url(${O}brand/letterhead-a4.png) top center/210mm auto no-repeat`};min-height:297mm}.lh{display:none}}</style></head><body>
+  ${plain ? '' : `<img class="lh" src="${O}brand/letterhead-a4.png" alt="">`}
+  <table class="pg"><thead><tr><td>${mh}</td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td><div class="doc">
+  ${opt.official || plain ? '' : `<div class="reg">${[s.company_name, s.cr_number ? 'س.ت ' + esc(s.cr_number) : '', s.vat_number ? 'الرقم الضريبي ' + esc(s.vat_number) : ''].filter(Boolean).map((x, i) => i ? x : esc(x)).join(' · ')}</div>`}
   ${inner}</div></td></tr></tbody></table>
-  <div class="dtb" id="dtb"><span class="dtb-t">${esc(title)}</span><span class="dtb-s">A4 · الأوراق الرسمية</span><button type="button" data-a="print">طباعة</button><button type="button" data-a="pdf">تنزيل PDF</button><button type="button" data-a="word">تنزيل Word</button><span class="dtb-m" id="dtb-m"></span></div>
-  <script>(${docTools.toString()})(${JSON.stringify({ title, O, fit: !!opt.fit, docx: opt.docx ? (String(opt.docx).startsWith('/') ? location.origin + opt.docx : String(opt.docx)) : '', api: location.origin + '/marketing/hub/api/' }).replace(/</g, '\\u003c')})<\/script></body></html>`;
+  <div class="dtb" id="dtb"><span class="dtb-t">${esc(title)}</span><span class="dtb-s">A4 · ${plain ? 'مروج الحجاز' : 'الأوراق الرسمية'}</span><button type="button" data-a="print">طباعة</button><button type="button" data-a="pdf">تنزيل PDF</button>${plain ? '' : '<button type="button" data-a="word">تنزيل Word</button>'}<span class="dtb-m" id="dtb-m"></span></div>
+  <script>(${docTools.toString()})(${JSON.stringify({ title, O, plain, fit: !!opt.fit, docx: opt.docx ? (String(opt.docx).startsWith('/') ? location.origin + opt.docx : String(opt.docx)) : '', api: location.origin + '/marketing/hub/api/' }).replace(/</g, '\\u003c')})<\/script></body></html>`;
 }
 // طباعة أي صفحة تقارير على الأوراق الرسمية: تُنسخ محتويات الصفحة الحالية دون الأزرار وأدوات التصفية
 function printOfficialView(title, sub) {
@@ -530,8 +536,13 @@ function openDoc(html) { const w = window.open('', '_blank'); if (!w) return toa
 function partyName(q) { return q.client_id ? refLabel('clients', q.client_id) : q.lead_id ? refLabel('leads', q.lead_id) : ''; }
 // قالب عرض السعر — مصدر واحد للطباعة ولملف العرض المرسل للقطاع الآخر (xreq.js)
 function printQuote(q) { openDoc(quoteDocHtml(q)); }
+// بيانات الجهة المُصدِرة للمستند (نُبل وابتكار أو مروج الحجاز)
+function orgSettings(org) {
+  const s = S.meta.settings;
+  return org === 'morooj' ? { ...s, company_name: s.morooj_company_name || 'مروج الحجاز للأعمال التجارية', cr_number: s.morooj_cr_number || '', vat_number: s.morooj_vat_number || '', bank_line: s.morooj_bank_line || '' } : s;
+}
 function quoteDocHtml(q) {
-  const s = S.meta.settings; let items = []; try { items = JSON.parse(q.items || '[]'); } catch { /* */ }
+  const s = orgSettings(q.org); let items = []; try { items = JSON.parse(q.items || '[]'); } catch { /* */ }
   const sub = items.reduce((a, it) => a + it.qty * it.price, 0); const disc = +q.discount || 0; const vat = (sub - disc) * (Number(s.vat_rate || 15) / 100);
   return (docShell(`عرض سعر ${q.number}`, `<div class="ttl"><h1>عرض سعر</h1><div class="n">${esc(q.number || '')}</div></div>
   <div class="meta"><div>مقدّم إلى: <b>${esc(partyName(q))}</b></div><div>التاريخ: <span class="n">${todayStr()}</span></div><div>الموضوع: ${esc(q.title || '')}</div><div>صالح حتى: <span class="n">${esc(q.valid_until || '')}</span></div></div>
@@ -541,10 +552,10 @@ function quoteDocHtml(q) {
   ${q.notes ? `<h3>ملاحظات</h3><p style="white-space:pre-wrap">${esc(q.notes)}</p>` : ''}
   <h3>ما لا يشمله العرض</h3><ul><li>ميزانية الإعلانات الممولة — تُصرف من حساب العميل مباشرة.</li><li>أي بند غير مذكور صراحة أعلاه.</li></ul>
   <h3>الشروط</h3><ul><li>الأسعار بالريال السعودي، والضريبة 15% مضافة كما هو موضح.</li><li>جولتا تعديل مشمولتان لكل عمل، والاعتماد حكمي بعد 3 أيام عمل دون ملاحظات.</li><li>لا نضمن نتائج لا نتحكم فيها (مبيعات، متابعين، ترتيب بحث) — نلتزم بالتنفيذ والقياس والشفافية.</li><li>التنفيذ يبدأ بعد توقيع العقد وسداد الدفعة الأولى.</li></ul>
-  <div class="sig"><div>${esc(s.company_name)}</div><div>اعتماد العميل</div></div>`, { fit: true, docx: q.id ? API + 'studio/doc/quote/' + q.id : '' }));
+  <div class="sig"><div>${esc(s.company_name)}</div><div>اعتماد العميل</div></div>`, { fit: true, org: q.org, docx: q.id ? API + 'studio/doc/quote/' + q.id : '' }));
 }
 function printContract(c, client) {
-  const s = S.meta.settings;
+  const s = orgSettings(c.org);
   openDoc(docShell(`عقد ${c.number}`, `<div class="ttl"><h1>عقد تقديم خدمات تسويقية</h1><div class="n">${esc(c.number)}</div></div>
   <div class="meta"><div>الطرف الأول: <b>${esc(s.company_name)}</b></div><div>الطرف الثاني: <b>${esc(client?.name || '')}</b></div>
   <div>س.ت الطرف الثاني: <span class="n">${esc(client?.cr_number || '—')}</span></div><div>الرقم الضريبي: <span class="n">${esc(client?.vat_number || '—')}</span></div>
@@ -564,17 +575,17 @@ function printContract(c, client) {
   <li>تختص محاكم جدة بالنظر في أي نزاع ينشأ عن هذا العقد.</li></ul>
   ${c.notes ? `<h3>4. ملاحظات</h3><p style="white-space:pre-wrap">${esc(c.notes)}</p>` : ''}
   <div class="sig"><div>الطرف الأول<br>${esc(s.company_name)}</div><div>الطرف الثاني<br>${esc(client?.name || '')}</div></div>
-  <p style="font-size:11px;color:#5D7581;margin-top:18px">نموذج تشغيلي — يُراجع قانونياً قبل اعتماده كصيغة نهائية.</p>`, { docx: c.id ? API + 'studio/doc/contract/' + c.id : '' }));
+  <p style="font-size:11px;color:#5D7581;margin-top:18px">نموذج تشغيلي — يُراجع قانونياً قبل اعتماده كصيغة نهائية.</p>`, { org: c.org, docx: c.id ? API + 'studio/doc/contract/' + c.id : '' }));
 }
 function printInvoice(inv, client) {
-  const s = S.meta.settings;
+  const s = orgSettings(inv.org);
   openDoc(docShell(`مطالبة ${inv.number}`, `<div class="ttl"><h1>مطالبة مالية</h1><div class="n">${esc(inv.number)}</div></div>
   <div class="meta"><div>العميل: <b>${esc(client?.name || '')}</b></div><div>تاريخ الإصدار: <span class="n">${esc(inv.issue_date || '')}</span></div>
   <div>الرقم الضريبي للعميل: <span class="n">${esc(client?.vat_number || '—')}</span></div><div>تاريخ الاستحقاق: <span class="n">${esc(inv.due_date || '')}</span></div></div>
   <table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody><tr><td>${esc(inv.description || '')}</td><td class="n">${moneyTxt(inv.subtotal)}</td></tr></tbody></table>
   <div class="tot"><div><span>المبلغ قبل الضريبة</span><span class="n">${moneyTxt(inv.subtotal)}</span></div><div><span>ضريبة القيمة المضافة ${s.vat_rate}%</span><span class="n">${moneyTxt(inv.vat)}</span></div>
   <div class="g"><span>الإجمالي (ر.س)</span><span class="n">${moneyTxt(inv.total)}</span></div>${inv.paid ? `<div><span>المدفوع</span><span class="n">${moneyTxt(inv.paid)}</span></div><div class="g"><span>المتبقي</span><span class="n">${moneyTxt(inv.total - inv.paid)}</span></div>` : ''}</div>
-  <p style="font-size:12px;color:#5D7581">${inv.tax_ref ? `الفاتورة الضريبية الرسمية رقم <b>${esc(inv.tax_ref)}</b> صادرة من النظام المحاسبي.` : 'هذه مطالبة مالية؛ تصدر الفاتورة الضريبية الإلكترونية الرسمية من النظام المحاسبي المعتمد.'}</p>`));
+  <p style="font-size:12px;color:#5D7581">${inv.tax_ref ? `الفاتورة الضريبية الرسمية رقم <b>${esc(inv.tax_ref)}</b> صادرة من النظام المحاسبي.` : 'هذه مطالبة مالية؛ تصدر الفاتورة الضريبية الإلكترونية الرسمية من النظام المحاسبي المعتمد.'}</p>`, { org: inv.org }));
 }
 
 /* ====================== العقد والفاتورة ====================== */

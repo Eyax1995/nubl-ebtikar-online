@@ -4,6 +4,7 @@
 // مع إعادة ربط المراجع، والكيانات التي لا مقابل لها بعد (المحاسبة، الموارد البشرية، الحملات، المتجر…) تبقى في الأرشيف للمراحل التالية.
 import { tableCols, today, round2, HttpError } from './core.js';
 import { ORGS, ORG_ENTITIES } from './schema.js';
+import { ensureCoa } from './ledger.js';
 
 const SRC = 'morooj';
 const REFS = { lead_id: 'leads', client_id: 'clients', deal_id: 'deals', quote_id: 'quotes', contract_id: 'contracts', project_id: 'projects', invoice_id: 'invoices' };
@@ -164,8 +165,91 @@ export async function importMorooj(db, d, user) {
         WHEN COALESCE((SELECT SUM(amount) FROM payments p WHERE p.invoice_id = invoices.id), 0) > 0 THEN 'مدفوعة جزئياً' ELSE 'مصدرة' END
       WHERE id IN (${part.map(() => '?').join(',')})`).bind(...part).run();
   }
-  return { ok: true, counts, legacy: legacyOnly };
+  const finance = await finishLegacy(db, user);
+  return { ok: true, counts, legacy: legacyOnly, finance };
 }
+
+// المرحلة 1ب: المحاسبة والموارد البشرية من أرشيف الدمج (آمنة للتكرار)
+// شجرة الحسابات ← accounts · القيود ← journals · الموظفون/الرواتب/السلف · وحسابات سندات القبض والصرف وحساب إيراد الفاتورة
+export async function finishLegacy(db, user) {
+  const rows = async (entity) => (await db.prepare('SELECT old_id, new_id, data FROM legacy_import WHERE src = ? AND entity = ?').bind(SRC, entity).all()).results
+    .map((r) => { let d = {}; try { d = JSON.parse(r.data); } catch { /* */ } return { old: String(r.old_id), nid: r.new_id, d }; });
+  const mark = (entity, old, nid) => db.prepare('UPDATE legacy_import SET new_id = ? WHERE src = ? AND entity = ? AND old_id = ?').bind(nid, SRC, entity, old);
+  const out = {};
+  // 1) شجرة الحسابات: مطابقة بالرمز مع الشجرة الافتراضية، وإضافة ما ليس فيها
+  const accs = await rows('accounts');
+  if (accs.length) {
+    await ensureCoa(db, 'morooj');
+    const have = Object.fromEntries((await db.prepare("SELECT id, code FROM accounts WHERE org = 'morooj'").all()).results.map((r) => [r.code, r.id]));
+    const st = []; let added = 0;
+    for (const a of accs) {
+      const code = String(a.d.code || '').trim(); if (!code) continue;
+      if (have[code]) { st.push(db.prepare("UPDATE accounts SET name = ?, type = COALESCE(?, type), active = ? WHERE id = ?").bind(a.d.name || code, a.d.type || null, a.d.active === false ? 0 : 1, have[code])); }
+      else {
+        const r = await db.prepare("INSERT INTO accounts (code, name, type, is_group, active, notes, org, created_by) VALUES (?,?,?,?,?,?, 'morooj', ?)")
+          .bind(code, a.d.name || code, a.d.type || null, a.d.is_group ? 1 : 0, a.d.active === false ? 0 : 1, a.d.notes || null, user.id).run();
+        have[code] = r.meta.last_row_id; added++;
+      }
+    }
+    if (st.length) await db.batch(st);
+    const byOld = Object.fromEntries(accs.map((a) => [a.old, have[String(a.d.code || '').trim()]]));
+    const par = accs.filter((a) => a.d.parent_id && byOld[String(a.d.parent_id)] && byOld[a.old]).map((a) => db.prepare('UPDATE accounts SET parent_id = ? WHERE id = ?').bind(byOld[String(a.d.parent_id)], byOld[a.old]));
+    if (par.length) await db.batch(par);
+    await db.batch(accs.filter((a) => byOld[a.old]).map((a) => mark('accounts', a.old, byOld[a.old])));
+    out.accounts = { total: accs.length, added };
+  }
+  const accMap = Object.fromEntries((await rows('accounts')).filter((a) => a.nid).map((a) => [a.old, a.nid]));
+  const AC = (v) => (v == null || v === '' ? null : accMap[String(v)] ?? null);
+  // 2) سندات القبض والصرف المنقولة: الرقم والحسابات والحالة
+  const rc = (await rows('receipts')).filter((r) => r.nid);
+  if (rc.length) await db.batch(rc.map((r) => db.prepare('UPDATE payments SET number = ?, cash_account = ?, account_id = ?, description = ?, status = ? WHERE id = ?')
+    .bind(r.d.number || null, AC(r.d.cash_account), AC(r.d.account_id), r.d.description || null, r.d.status || 'مرحّل', r.nid)));
+  const ds = (await rows('disbursements')).filter((r) => r.nid);
+  if (ds.length) await db.batch(ds.map((r) => db.prepare('UPDATE expenses SET number = ?, cash_account = ?, account_id = ?, status = ? WHERE id = ?')
+    .bind(r.d.number || null, AC(r.d.cash_account), AC(r.d.account_id), r.d.status || 'مرحّل', r.nid)));
+  const iv = (await rows('invoices')).filter((r) => r.nid && r.d.revenue_account);
+  if (iv.length) await db.batch(iv.map((r) => db.prepare('UPDATE invoices SET revenue_account = ? WHERE id = ?').bind(AC(r.d.revenue_account), r.nid)));
+  out.vouchers = { receipts: rc.length, disbursements: ds.length };
+  // 3) القيود اليدوية
+  const jv = (await rows('journals')).filter((r) => !r.nid);
+  for (const j of jv) {
+    const lines = (Array.isArray(j.d.lines) ? j.d.lines : []).map((l) => ({ account_id: AC(l.account_id), debit: num(l.debit), credit: num(l.credit), note: l.note || '' })).filter((l) => l.account_id && (l.debit || l.credit));
+    const total = round2(lines.reduce((a, l) => a + l.debit, 0));
+    const r = await db.prepare("INSERT INTO journals (number, date, description, status, ref, lines, total, org, created_by) VALUES (?,?,?,?,?,?,?, 'morooj', ?)")
+      .bind(j.d.number || null, j.d.date || null, j.d.description || null, j.d.status || 'مرحّل', j.d.ref || null, JSON.stringify(lines), total, user.id).run();
+    await mark('journals', j.old, r.meta.last_row_id).run();
+  }
+  out.journals = jv.length;
+  // 4) الموظفون ثم السلف ثم الرواتب
+  const em = await rows('employees');
+  for (const e of em.filter((x) => !x.nid)) {
+    const d = e.d;
+    const r = await db.prepare(`INSERT INTO employees (name, job_title, phone, email, start_date, status, basic_salary, housing, transport, other_allow, fixed_deduct, iban, notes, org, created_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'morooj', ?)`).bind(d.name || 'موظف', d.job_title || null, d.phone || null, d.email || null, d.start_date || null, d.status || 'على رأس العمل',
+      num(d.basic_salary), num(d.housing), num(d.transport), num(d.other_allow), num(d.fixed_deduct), d.bank_iban || d.iban || null, d.notes || null, user.id).run();
+    e.nid = r.meta.last_row_id; await mark('employees', e.old, e.nid).run();
+  }
+  const EM = Object.fromEntries(em.filter((e) => e.nid).map((e) => [e.old, e.nid]));
+  const ad = (await rows('advances')).filter((r) => !r.nid);
+  for (const a of ad) {
+    const d = a.d;
+    const r = await db.prepare(`INSERT INTO advances (number, date, employee_id, amount, installment, paid_back, reason, cash_account, status, notes, org, created_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?, 'morooj', ?)`).bind(d.number || null, d.date || null, EM[String(d.employee_id)] || null, num(d.amount), num(d.installment), num(d.paid_back),
+      d.reason || null, AC(d.cash_account), d.status || 'قائمة', d.notes || null, user.id).run();
+    await mark('advances', a.old, r.meta.last_row_id).run();
+  }
+  const pr = (await rows('payroll')).filter((r) => !r.nid);
+  for (const p of pr) {
+    const d = p.d; const gross = num(d.basic) + num(d.allowances) + num(d.bonus);
+    const r = await db.prepare(`INSERT INTO payroll (number, month, employee_id, basic, allowances, bonus, deductions, advance_deduct, net, status, paid_date, cash_account, notes, org, created_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'morooj', ?)`).bind(d.number || null, d.month || null, EM[String(d.employee_id)] || null, num(d.basic), num(d.allowances), num(d.bonus),
+      num(d.deductions), num(d.advance_deduct), round2(gross - num(d.deductions) - num(d.advance_deduct)), d.status || 'مسودة', d.paid_date || null, AC(d.cash_account), d.notes || null, user.id).run();
+    await mark('payroll', p.old, r.meta.last_row_id).run();
+  }
+  out.hr = { employees: em.length, advances: ad.length, payroll: pr.length };
+  return out;
+}
+
 
 // ملخص الجهتين لمبدّل الجهة ولوحة الإعدادات
 export async function orgSummary(db) {

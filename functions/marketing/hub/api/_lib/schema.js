@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -130,6 +130,23 @@ export const DDL = [
   // v10: دمج مروج الحجاز — أرشيف خام لكل سجل مستورد (المصدر، الكيان، المعرّف القديم ← الجديد)
   `CREATE TABLE IF NOT EXISTS legacy_import (src TEXT NOT NULL, entity TEXT NOT NULL, old_id TEXT NOT NULL, new_id INTEGER, data TEXT,
     at TEXT DEFAULT (datetime('now')), PRIMARY KEY (src, entity, old_id))`,
+  // v11: المحاسبة (شجرة الحسابات والقيود) والموارد البشرية (الموظفون، مسير الرواتب، السلف) — لكل جهة
+  `CREATE TABLE IF NOT EXISTS accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL, name TEXT NOT NULL, type TEXT, parent_id INTEGER,
+    is_group INTEGER DEFAULT 0, active INTEGER DEFAULT 1, notes TEXT, org TEXT DEFAULT 'nubl', created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  `CREATE INDEX IF NOT EXISTS ix_accounts_org ON accounts(org, code)`,
+  `CREATE TABLE IF NOT EXISTS journals (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT, date TEXT, description TEXT, status TEXT DEFAULT 'مرحّل', ref TEXT,
+    lines TEXT, total REAL DEFAULT 0, org TEXT DEFAULT 'nubl', created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  `CREATE INDEX IF NOT EXISTS ix_journals_org ON journals(org, date)`,
+  `CREATE TABLE IF NOT EXISTS employees (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, job_title TEXT, phone TEXT, email TEXT, start_date TEXT,
+    status TEXT DEFAULT 'على رأس العمل', basic_salary REAL DEFAULT 0, housing REAL DEFAULT 0, transport REAL DEFAULT 0, other_allow REAL DEFAULT 0, fixed_deduct REAL DEFAULT 0,
+    bank_name TEXT, iban TEXT, user_id INTEGER, notes TEXT, org TEXT DEFAULT 'nubl', created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS payroll (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT, month TEXT, employee_id INTEGER, basic REAL DEFAULT 0, allowances REAL DEFAULT 0,
+    bonus REAL DEFAULT 0, deductions REAL DEFAULT 0, advance_deduct REAL DEFAULT 0, net REAL DEFAULT 0, status TEXT DEFAULT 'مسودة', paid_date TEXT, cash_account INTEGER,
+    notes TEXT, org TEXT DEFAULT 'nubl', created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  `CREATE INDEX IF NOT EXISTS ix_payroll_month ON payroll(org, month)`,
+  `CREATE TABLE IF NOT EXISTS advances (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT, date TEXT, employee_id INTEGER, amount REAL DEFAULT 0, installment REAL DEFAULT 0,
+    paid_back REAL DEFAULT 0, reason TEXT, cash_account INTEGER, status TEXT DEFAULT 'قائمة', notes TEXT, org TEXT DEFAULT 'nubl', created_by INTEGER,
+    created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
 ];
 
 // الجهات داخل المنصة (فصل الأعمال حسب طبيعة العملاء — الفريق والإدارة واحدة)
@@ -173,6 +190,13 @@ export const MIGRATIONS = [
   'ALTER TABLE content ADD COLUMN brief TEXT',
   'ALTER TABLE content ADD COLUMN plan_id INTEGER',
   "ALTER TABLE content ADD COLUMN source TEXT DEFAULT 'المنصة'",
+  // v11: السندات على المقبوضات والمصروفات + حساب الإيراد في الفاتورة
+  'ALTER TABLE payments ADD COLUMN number TEXT', 'ALTER TABLE payments ADD COLUMN cash_account INTEGER', 'ALTER TABLE payments ADD COLUMN account_id INTEGER',
+  'ALTER TABLE payments ADD COLUMN description TEXT', "ALTER TABLE payments ADD COLUMN status TEXT DEFAULT 'مرحّل'",
+  'ALTER TABLE expenses ADD COLUMN number TEXT', 'ALTER TABLE expenses ADD COLUMN cash_account INTEGER', 'ALTER TABLE expenses ADD COLUMN account_id INTEGER',
+  "ALTER TABLE expenses ADD COLUMN status TEXT DEFAULT 'مرحّل'", 'ALTER TABLE invoices ADD COLUMN revenue_account INTEGER',
+  'CREATE TRIGGER IF NOT EXISTS tg_payroll_org_ins AFTER INSERT ON payroll WHEN NEW.employee_id IS NOT NULL BEGIN UPDATE payroll SET org = COALESCE((SELECT org FROM employees WHERE id = NEW.employee_id), org) WHERE id = NEW.id; END',
+  'CREATE TRIGGER IF NOT EXISTS tg_advances_org_ins AFTER INSERT ON advances WHEN NEW.employee_id IS NOT NULL BEGIN UPDATE advances SET org = COALESCE((SELECT org FROM employees WHERE id = NEW.employee_id), org) WHERE id = NEW.id; END',
   // v10: الجهة (نُبل وابتكار = القطاع الربحي · مروج الحجاز = القطاع غير الربحي) + وراثتها آلياً من العميل/العميل المحتمل
   ...ORG_MIGRATIONS(),
 ];
@@ -268,17 +292,17 @@ export const ENTITIES = {
     perms: { ...ALL, sales: 'r', account: 'r', finance: 'rwd' }, own: { sales: 'owner_id' }, order: 'id DESC',
   },
   invoices: {
-    cols: ['number', 'client_id', 'contract_id', 'issue_date', 'due_date', 'description', 'subtotal', 'vat', 'total', 'paid', 'status', 'tax_ref', 'notes'],
+    cols: ['number', 'client_id', 'contract_id', 'issue_date', 'due_date', 'description', 'subtotal', 'vat', 'total', 'paid', 'status', 'tax_ref', 'notes', 'revenue_account'],
     search: ['number', 'description', 'tax_ref'],
     perms: { ...ALL, finance: 'rwd' }, order: 'due_date DESC, id DESC',
   },
   payments: {
-    cols: ['invoice_id', 'client_id', 'amount', 'method', 'ref', 'paid_at', 'notes', 'user_id'],
+    cols: ['invoice_id', 'client_id', 'amount', 'method', 'ref', 'paid_at', 'notes', 'user_id', 'number', 'cash_account', 'account_id', 'description', 'status'],
     search: ['ref', 'notes'],
     perms: { ...ALL, finance: 'rwd' }, order: 'paid_at DESC, id DESC',
   },
   expenses: {
-    cols: ['category', 'vendor', 'amount', 'vat', 'date', 'client_id', 'notes', 'receipt_link', 'user_id'],
+    cols: ['category', 'vendor', 'amount', 'vat', 'date', 'client_id', 'notes', 'receipt_link', 'user_id', 'number', 'cash_account', 'account_id', 'status'],
     search: ['category', 'vendor', 'notes'],
     perms: { ...ALL, finance: 'rwd' }, order: 'date DESC, id DESC',
   },
@@ -325,6 +349,27 @@ export const ENTITIES = {
     search: ['name', 'phone', 'email', 'city'],
     perms: { ...ALL, finance: 'rw', sales: 'r', account: 'r' }, order: "status = 'نشط' DESC, name",
   },
+  // ---- المحاسبة والموارد البشرية (v11) — لكل جهة حساباتها وموظفوها ----
+  accounts: {
+    cols: ['code', 'name', 'type', 'parent_id', 'is_group', 'active', 'notes', 'org'],
+    search: ['code', 'name'], perms: { ...ALL, finance: 'rwd' }, order: 'code',
+  },
+  journals: {
+    cols: ['number', 'date', 'description', 'status', 'ref', 'lines', 'total', 'org'],
+    search: ['number', 'description', 'ref'], perms: { ...ALL, manager: 'r', finance: 'rwd' }, order: 'date DESC, id DESC',
+  },
+  employees: {
+    cols: ['name', 'job_title', 'phone', 'email', 'start_date', 'status', 'basic_salary', 'housing', 'transport', 'other_allow', 'fixed_deduct', 'bank_name', 'iban', 'user_id', 'notes', 'org'],
+    search: ['name', 'job_title', 'phone', 'email'], perms: { admin: 'rwd', finance: 'rwd', manager: 'r', executive: 'r' }, order: "status = 'على رأس العمل' DESC, name",
+  },
+  payroll: {
+    cols: ['number', 'month', 'employee_id', 'basic', 'allowances', 'bonus', 'deductions', 'advance_deduct', 'net', 'status', 'paid_date', 'cash_account', 'notes', 'org'],
+    search: ['number', 'month', 'notes'], perms: { admin: 'rwd', finance: 'rwd', manager: 'r', executive: 'r' }, order: 'month DESC, id DESC',
+  },
+  advances: {
+    cols: ['number', 'date', 'employee_id', 'amount', 'installment', 'paid_back', 'reason', 'cash_account', 'status', 'notes', 'org'],
+    search: ['number', 'reason'], perms: { admin: 'rwd', finance: 'rwd', manager: 'r', executive: 'r' }, order: 'date DESC, id DESC',
+  },
   users: {
     cols: ['name', 'email', 'phone', 'role', 'title', 'active', 'commission_rate'],
     search: ['name', 'email', 'phone'],
@@ -332,16 +377,23 @@ export const ENTITIES = {
   },
 };
 
-for (const t of ORG_ENTITIES) ENTITIES[t].cols.push('org');
+for (const t of ORG_ENTITIES) if (!ENTITIES[t].cols.includes('org')) ENTITIES[t].cols.push('org');
 
 // أعمدة تُخفى عن أدوار معيّنة (حماية الأرقام المالية)
 export const HIDDEN = {
   designer: ['value', 'monthly_value', 'total_value', 'subtotal', 'vat', 'total', 'paid', 'price', 'monthly', 'commission_rate', 'rate', 'iban', 'bank_name', 'rep_until'],
   sales: ['iban', 'bank_name'],
+  manager: ['iban'],
   account: ['iban', 'bank_name'],
 };
 
 export const DEFAULT_SETTINGS = {
+  // مروج الحجاز (من شهادة السجل التجاري وإثبات العنوان الوطني وخطاب الآيبان — 18 أكتوبر 2026). الرقم الضريبي للمكلّف الرئيس وفروعه.
+  morooj_company_name: 'مؤسسة مروج الحجاز للأعمال التجارية',
+  morooj_cr_number: '7049022358',
+  morooj_vat_number: '302024915400003',
+  morooj_address: 'جدة — حي الحمدانية — العنوان الوطني JGAA8066',
+  morooj_bank_line: 'البنك الأهلي السعودي — باسم مؤسسة مروج الحجاز للأعمال التجارية — الآيبان SA8710000001400035472300 (سويفت NCBKSAJE)',
   company_name: 'نُبل وابتكار للخدمات التسويقية',
   company_city: 'جدة — حي الحمدانية',
   cr_number: '4030598563',

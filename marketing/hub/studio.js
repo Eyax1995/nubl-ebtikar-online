@@ -72,7 +72,7 @@
   const printOfficial = async (kind, id) => {
     const w = window.open('', '_blank'); if (!w) return toast('اسمح بالنوافذ المنبثقة للطباعة', 1);
     w.document.write('<p style="font-family:sans-serif;text-align:center;margin-top:40vh;color:#15556B">جارٍ تجهيز المستند على الأوراق الرسمية…</p>');
-    try { const d = await api(`studio/doc/${kind}/${id}?format=html`); w.document.open(); w.document.write(docShell(d.title, d.html, { official: true, fit: kind === 'quote', docx: API + `studio/doc/${kind}/${id}` })); w.document.close(); }
+    try { const d = await api(`studio/doc/${kind}/${id}?format=html`); w.document.open(); w.document.write(docShell(d.title, d.html, { official: true, org: d.org, fit: kind === 'quote', docx: API + `studio/doc/${kind}/${id}` })); w.document.close(); }
     catch (e) { w.close(); toast(e.message, 1); }
   };
   window.nublPrintOfficial = printOfficial;
