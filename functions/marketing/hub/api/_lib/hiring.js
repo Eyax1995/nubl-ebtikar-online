@@ -8,7 +8,7 @@ import { notifyRoles } from './telegram.js';
 export const EXPERIENCE = ['أقل من سنة', 'من سنة إلى سنتين', 'من 3 إلى 5 سنوات', 'أكثر من 5 سنوات'];
 export const START_WHEN = ['خلال أسبوع', 'خلال أسبوعين', 'خلال شهر', 'أكثر من شهر'];
 export const APP_STATUS = ['جديد', 'قيد الفرز', 'مقابلة', 'عرض وظيفي', 'مقبول', 'معتذر عنه', 'انسحب'];
-const DEFAULT_MODES = ['حضوري في جدة', 'عن بُعد', 'مرن'];
+const DEFAULT_MODES = ['حضوري في جدة']; // الوظائف حضورية افتراضياً — أضف «عن بُعد» أو «مرن» للوظيفة من المنصة عند الحاجة
 const MAX_CV = 5 * 1024 * 1024;
 const CHUNK = 1_200_000; // محارف base64 لكل صف (حد صف D1 ≈ 2MB)
 const CV_MIME = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'application/msword': 'doc',

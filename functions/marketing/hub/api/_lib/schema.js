@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -235,6 +235,8 @@ export const MIGRATIONS = [
     '["Photoshop","Illustrator","InDesign","Premiere Pro","After Effects","CapCut","Figma","Canva"]',
     'أفضل عمل صممتِه ولماذا؟ (سطران)', 'مفتوحة', 10
     WHERE NOT EXISTS (SELECT 1 FROM jobs)`,
+  // v17: وظيفة المصممة حضورية فقط في جدة (قرار إياد 20 أكتوبر 2026) — لا عن بُعد ولا مرن
+  `UPDATE jobs SET modes = '["حضوري في جدة"]', updated_at = datetime('now') WHERE slug = 'designer' AND modes LIKE '%عن بُعد%'`,
   // v10: الجهة (نُبل وابتكار = القطاع الربحي · مروج الحجاز = القطاع غير الربحي) + وراثتها آلياً من العميل/العميل المحتمل
   ...ORG_MIGRATIONS(),
 ];

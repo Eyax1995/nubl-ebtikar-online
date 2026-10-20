@@ -24,6 +24,10 @@
     catch { $('#cr-jobs').innerHTML = `<div class="cr-none">تعذّر تحميل الوظائف الآن. حدّث الصفحة، أو راسلنا على واتساب <a class="num" href="https://wa.me/${window.WA || '966563413040'}">0563413040</a>.</div>`; return; }
     const jobs = data.jobs || [];
     if (!jobs.length) { $('#cr-jobs').innerHTML = '<div class="cr-none"><b>لا توجد وظائف مفتوحة حالياً.</b><br>تابع حساباتنا — نعلن فيها عن أي فرصة جديدة.</div>'; return; }
+    const op = $('#cr-open');
+    op.innerHTML = `<span class="st"><i class="cr-dot"></i>التقديم مفتوح الآن${jobs.length === 1 ? ': ' + esc(jobs[0].title) : ` — ${jobs.length === 2 ? 'وظيفتان متاحتان' : jobs.length <= 10 ? jobs.length + ' وظائف متاحة' : jobs.length + ' وظيفة متاحة'}`}</span><a class="btn btn-p" href="#cr-jobs" id="cr-go">قدّم الآن ↓</a>`;
+    op.hidden = false;
+    $('#cr-go').onclick = (e) => { e.preventDefault(); ($('#cr-app').hidden ? $('#cr-jobs') : $('#cr-app')).scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     const want = new URLSearchParams(location.search).get('job');
     const pick = jobs.find((j) => j.slug === want) || (jobs.length === 1 ? jobs[0] : null);
     renderJobs(jobs);
@@ -31,13 +35,14 @@
   }
   function renderJobs(jobs) {
     $('#cr-jobs').innerHTML = `<h2 style="font-size:clamp(22px,3vw,30px)">الوظائف المتاحة</h2>` + jobs.map((j) => `<button type="button" class="cr-job" data-j="${j.id}">
-      <h3>${esc(j.title)}</h3><p>${esc(j.summary || '')}</p>
+      <span class="cr-avail"><i class="cr-dot"></i>متاحة — التقديم مفتوح</span><h3>${esc(j.title)}</h3><p>${esc(j.summary || '')}</p>
       <div class="cr-meta">${j.location ? `<span>${esc(j.location)}</span>` : ''}${j.modes.map((m) => `<span>${esc(m)}</span>`).join('')}</div><span class="go">قدّم الآن ←</span></button>`).join('');
     $$('[data-j]').forEach((b) => b.onclick = () => { open(jobs.find((j) => j.id == b.dataset.j), true); history.replaceState(null, '', '?job=' + encodeURIComponent(job.slug)); });
   }
   function open(j, many) {
     job = j; $('#cr-jobs').hidden = true; $('#cr-app').hidden = false; $('#cr-change').hidden = !many;
-    $('#cr-title').textContent = j.title; $('#cr-sum').textContent = [j.summary, j.details].filter(Boolean).join(' ');
+    $('#cr-title').textContent = j.title;
+    if (!$('#cr-av')) $('#cr-title').insertAdjacentHTML('beforebegin', '<span class="cr-avail" id="cr-av"><i class="cr-dot"></i>متاحة — التقديم مفتوح</span><br>'); $('#cr-sum').textContent = [j.summary, j.details].filter(Boolean).join(' ');
     $('#cr-meta').innerHTML = [j.location, ...j.modes].filter(Boolean).map((m) => `<span>${esc(m)}</span>`).join('');
     opts('experience', data.experience); opts('mode', j.modes); opts('start_when', data.start_when);
     chips('skills', j.skills); chips('tools', j.tools);
@@ -50,6 +55,8 @@
 
   /* ---------- الخيارات ---------- */
   function opts(k, list) {
+    if (k === 'mode') $('.cr-f[data-f="mode"] > span').innerHTML = list.length === 1 ? 'نوع الدوام' : 'نوع الدوام المناسب <i>*</i>';
+    if (k === 'mode' && list.length === 1) { sel.mode = list[0]; $('#o-mode').innerHTML = `<span class="cr-fixed">🏢 ${esc(list[0])}</span>`; return; }
     $('#o-' + k).innerHTML = list.map((o) => `<button type="button" aria-pressed="${sel[k] === o}" data-v="${esc(o)}">${esc(o)}</button>`).join('');
     $$('#o-' + k + ' button').forEach((b) => b.onclick = () => { sel[k] = b.dataset.v; $$('#o-' + k + ' button').forEach((x) => x.setAttribute('aria-pressed', x === b)); clearBad(k); save(); });
   }
@@ -70,13 +77,13 @@
     const d = store.get(key()); reset();
     if (!d) { $('#cr-restored').hidden = true; return; }
     TEXT.forEach((k) => { if (d[k]) form.elements[k].value = d[k]; });
-    ['experience', 'mode', 'start_when'].forEach((k) => { sel[k] = d[k] || ''; $$('#o-' + k + ' button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === sel[k])); });
+    ['experience', 'mode', 'start_when'].forEach((k) => { if (k === 'mode' && job.modes.length === 1) return; sel[k] = d[k] || ''; $$('#o-' + k + ' button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === sel[k])); });
     ['skills', 'tools'].forEach((k) => { sel[k] = new Set(d[k] || []); $$('#o-' + k + ' button').forEach((b) => b.setAttribute('aria-pressed', sel[k].has(b.dataset.v))); });
     setCvMode(d.cvMode || 'file');
     $('#cr-restored').hidden = !TEXT.some((k) => d[k]);
   }
   function reset() {
-    form.reset(); sel.experience = sel.mode = sel.start_when = ''; sel.skills = new Set(); sel.tools = new Set(); setFile(null); setCvMode('file');
+    form.reset(); sel.experience = sel.start_when = ''; sel.mode = job && job.modes.length === 1 ? job.modes[0] : ''; sel.skills = new Set(); sel.tools = new Set(); setFile(null); setCvMode('file');
     $$('.cr-opts button,.cr-chips button').forEach((b) => b.setAttribute('aria-pressed', 'false')); $$('.cr-f.bad').forEach((f) => f.classList.remove('bad'));
   }
   $('#cr-clear').onclick = () => { store.del(key()); reset(); $('#cr-restored').hidden = true; go(1); };
