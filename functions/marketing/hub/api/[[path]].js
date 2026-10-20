@@ -695,6 +695,15 @@ async function dashboard(db, user) {
       FROM content WHERE 1=1${og}`, t, wk, t);
   }
   out.seasons = await all(`SELECT id, name, date, plan_days, print_days, sectors FROM seasons WHERE date >= ? ORDER BY date LIMIT 5`, t);
+  // بلا قسم «المالية»: لوحة القيادة تبقى بالأعداد فقط — تُحذف قيم الصفقات والعقود والتجديدات بالريال
+  if (!sectionAllowed(user, 'finance')) {
+    out.pipeline?.forEach((r) => delete r.v);
+    if (out.deals) { delete out.deals.open_value; delete out.deals.weighted; delete out.deals.won_month_value; }
+    if (out.contracts) delete out.contracts.mrr;
+    out.renewals?.forEach((r) => delete r.monthly_value);
+    out.stale?.forEach((r) => delete r.value);
+    out.no_money = true;
+  }
   out.today = t; out.org = user.org;
   return json(out);
 }

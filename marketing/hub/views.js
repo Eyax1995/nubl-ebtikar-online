@@ -21,10 +21,14 @@ async function dashboardView() {
   const d = await api('dashboard');
   const st = Object.fromEntries((d.pipeline || []).map((p) => [p.k, p]));
   const winRate = d.deals && (d.deals.won90 + d.deals.lost90) ? Math.round(d.deals.won90 * 100 / (d.deals.won90 + d.deals.lost90)) + '%' : '—';
+  const nm = !!d.no_money; // بلا قسم «المالية»: أعداد فقط بلا ريالات
+  const openN = (d.pipeline || []).filter((p) => !['مكسوبة', 'خاسرة'].includes(p.k)).reduce((a, p) => a + (p.n || 0), 0);
   const k = [];
   if (d.leads) k.push(kpi('عملاء محتملون', n0(d.leads.total), `${n0(d.leads.month)} جديد هذا الشهر`), kpi('متابعات مستحقة', n0(d.leads.due), 'اليوم وما قبله', d.leads.due ? 'warn' : ''));
-  if (d.deals) k.push(kpi('قيمة خط المبيعات', n0(d.deals.open_value) + '<small>ر.س</small>', `المرجّح ${moneyTxt(d.deals.weighted)} ر.س`), kpi('مكسوب هذا الشهر', n0(d.deals.won_month_value) + '<small>ر.س</small>', `${d.deals.won_month || 0} صفقة · نسبة الفوز (90 يوماً) ${winRate}`, 'good'));
-  if (d.contracts) k.push(kpi('الإيراد الشهري المتكرر', n0(d.contracts.mrr) + '<small>ر.س</small>', `${d.contracts.active} عقد نشط`));
+  if (d.deals && nm) k.push(kpi('صفقات مفتوحة', n0(openN), 'في خط المبيعات'), kpi('مكسوب هذا الشهر', n0(d.deals.won_month), `صفقة · نسبة الفوز (90 يوماً) ${winRate}`, 'good'));
+  else if (d.deals) k.push(kpi('قيمة خط المبيعات', n0(d.deals.open_value) + '<small>ر.س</small>', `المرجّح ${moneyTxt(d.deals.weighted)} ر.س`), kpi('مكسوب هذا الشهر', n0(d.deals.won_month_value) + '<small>ر.س</small>', `${d.deals.won_month || 0} صفقة · نسبة الفوز (90 يوماً) ${winRate}`, 'good'));
+  if (d.contracts && nm) k.push(kpi('عقود نشطة', n0(d.contracts.active), 'القيم المالية لقسم المالية'));
+  else if (d.contracts) k.push(kpi('الإيراد الشهري المتكرر', n0(d.contracts.mrr) + '<small>ر.س</small>', `${d.contracts.active} عقد نشط`));
   if (d.money) k.push(kpi('المستحقات', n0(d.money.receivable) + '<small>ر.س</small>', `متأخر ${moneyTxt(d.money.overdue)} ر.س (${d.money.overdue_n || 0})`, d.money.overdue ? 'warn' : ''),
     kpi('المحصّل هذا الشهر', n0(d.collected.s) + '<small>ر.س</small>', `مصروفات ${moneyTxt(d.expensesMonth.s)} ر.س`, 'good'));
   if (d.tasks) k.push(kpi('مهام مفتوحة', n0(d.tasks.open), `${d.tasks.overdue || 0} متأخرة · ${d.tasks.week || 0} هذا الأسبوع`, d.tasks.overdue ? 'warn' : ''));
@@ -32,14 +36,14 @@ async function dashboardView() {
   if (d.tasks && d.tasks.done_month) k.push(kpi('الالتزام بالمواعيد', Math.round((d.tasks.ontime_month / d.tasks.done_month) * 100) + '%', 'المستهدف ≥ 95%', d.tasks.ontime_month / d.tasks.done_month >= 0.95 ? 'good' : 'warn'));
   const cards = [];
   if (d.pipeline) cards.push(`<div class="card"><h3>${I.funnel} خط المبيعات حسب المرحلة<span class="sp"></span><a href="#/pipeline" class="small">فتح ←</a></h3>
-    ${bars(L.stages.map((s) => ({ k: s, n: st[s]?.n || 0, v: st[s]?.v || 0 })), { val: (r) => r.v, fmt: (x) => moneyTxt(x), label: (r) => `${r.k} (${r.n})` })}</div>`);
+    ${bars(L.stages.map((s) => ({ k: s, n: st[s]?.n || 0, v: st[s]?.v || 0 })), nm ? { val: (r) => r.n, fmt: (x) => `${x} صفقة`, label: (r) => r.k } : { val: (r) => r.v, fmt: (x) => moneyTxt(x), label: (r) => `${r.k} (${r.n})` })}</div>`);
   if (d.revenue) cards.push(`<div class="card"><h3>${I.cash} التحصيل — آخر 6 أشهر</h3>${d.revenue.length ? `<div class="vbars">${(() => { const mx = Math.max(...d.revenue.map((r) => r.v), 1);
     return d.revenue.map((r) => `<div class="vb"><span class="num">${moneyTxt(Math.round(r.v))}</span><i style="height:${(r.v / mx) * 100}%"></i><span>${MONTHS[+r.k.slice(5) - 1]}</span></div>`).join(''); })()}</div>` : '<div class="empty small">لا مدفوعات مسجلة بعد</div>'}</div>`);
   if (d.leadSources) cards.push(`<div class="card"><h3>${I.users} مصادر العملاء المحتملين</h3>${bars(d.leadSources, { color: 'var(--teal)' })}</div>`);
   if (d.stale?.length) cards.push(`<div class="card"><h3>${I.funnel} صفقات راكدة<span class="sp"></span><span class="pill r">${d.stale.length}</span></h3>${d.stale.map((x) =>
-    `<a class="list-i" href="#/pipeline"><div class="g"><b>${esc(x.title)}</b><span class="small muted">${esc(x.stage)} · آخر تحديث ${fdate(x.updated_at)}</span></div>${money(x.value)}</a>`).join('')}</div>`);
+    `<a class="list-i" href="#/pipeline"><div class="g"><b>${esc(x.title)}</b><span class="small muted">${esc(x.stage)} · آخر تحديث ${fdate(x.updated_at)}</span></div>${nm ? '' : money(x.value)}</a>`).join('')}</div>`);
   if (d.renewals) cards.push(`<div class="card"><h3>${I.sign} تجديدات خلال 30 يوماً</h3>${d.renewals.length ? d.renewals.map((x) =>
-    `<a class="list-i" href="#/contract/${x.id}"><div class="g"><b>${esc(x.client || '')}</b><span class="small muted">${esc(x.number)} · ينتهي ${fdate(x.end_date)}</span></div>${money(x.monthly_value)}</a>`).join('') : '<div class="empty small">لا تجديدات قريبة</div>'}</div>`);
+    `<a class="list-i" href="#/contract/${x.id}"><div class="g"><b>${esc(x.client || '')}</b><span class="small muted">${esc(x.number)} · ينتهي ${fdate(x.end_date)}</span></div>${nm ? '' : money(x.monthly_value)}</a>`).join('') : '<div class="empty small">لا تجديدات قريبة</div>'}</div>`);
   cards.push(`<div class="card"><h3>${I.star} المواسم القادمة<span class="sp"></span><a href="#/seasons" class="small">الكل ←</a></h3>${(d.seasons || []).map(seasonLine).join('') || '<div class="empty small">—</div>'}</div>`);
   V().innerHTML = `<div class="grid g4">${k.join('')}</div><div class="grid g2" style="margin-top:14px">${cards.join('')}</div>`;
 }

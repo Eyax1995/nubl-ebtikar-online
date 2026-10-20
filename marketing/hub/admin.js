@@ -96,7 +96,9 @@
   const LINK = { debts: 'finance', studio: 'clients', xreq: 'clients' };
   NAV.forEach(([, items]) => items.forEach((i) => { if (LINK[i[0]] && !i[3]) i[3] = '§' + LINK[i[0]]; }));
   const navBase = navAllowed;
-  navAllowed = (perm) => (typeof perm === 'string' && perm[0] === '§' ? secOk(perm.slice(1)) : navBase(perm));
+  navAllowed = (perm) => (typeof perm === 'string' && perm[0] === '§' ? secOk(perm.slice(1))
+    : perm === '#reports' ? navBase(perm) && secOk('finance') // التقارير (الإيراد والتحصيل) تتبع قسم المالية فوق الدور
+      : navBase(perm));
 
   async function sectionsCard() {
     if (me().role !== 'admin' || $('#sec-card')) return;

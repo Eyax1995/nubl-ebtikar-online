@@ -4,7 +4,7 @@
 // وخارجها قالب خدمي مختصر يدعو العضو للرد بـ«تقرير» فتنفتح النافذة ويصله التقرير كاملاً).
 import { getSettings, today, addDays } from './core.js';
 import { ENTITIES } from './schema.js';
-import { allowed } from './sections.js';
+import { allowed, sectionAllowed } from './sections.js';
 import { tgToken, tgCall, waBridge, h as hx } from './telegram.js';
 
 const BOSS = ['admin', 'manager', 'executive'];
@@ -75,7 +75,7 @@ export async function buildReport(db, user, slot = 'am') {
       SUM(CASE WHEN status = 'مراجعة' THEN 1 ELSE 0 END) AS review, SUM(CASE WHEN status = 'منجزة' AND done_at = ?1 THEN 1 ELSE 0 END) AS done FROM tasks`, t);
     const ld = await one(`SELECT SUM(CASE WHEN substr(created_at,1,10) = ?1 THEN 1 ELSE 0 END) AS today,
       SUM(CASE WHEN next_followup < ?1 AND status NOT IN ('محوّل لعميل','غير مهتم','غير صالح') THEN 1 ELSE 0 END) AS overdue FROM leads`, t);
-    const dl = await one("SELECT COALESCE(SUM(CASE WHEN stage NOT IN ('مكسوبة','خاسرة') THEN value END),0) AS pipe, SUM(CASE WHEN stage NOT IN ('مكسوبة','خاسرة') AND updated_at < datetime('now','-7 days') THEN 1 ELSE 0 END) AS stale FROM deals");
+    const dl = await one("SELECT COALESCE(SUM(CASE WHEN stage NOT IN ('مكسوبة','خاسرة') THEN value END),0) AS pipe, SUM(CASE WHEN stage NOT IN ('مكسوبة','خاسرة') THEN 1 ELSE 0 END) AS open_n, SUM(CASE WHEN stage NOT IN ('مكسوبة','خاسرة') AND updated_at < datetime('now','-7 days') THEN 1 ELSE 0 END) AS stale FROM deals");
     const people = await all(`SELECT u.name, SUM(CASE WHEN t.status != 'منجزة' THEN 1 ELSE 0 END) AS open,
       SUM(CASE WHEN t.status != 'منجزة' AND t.due_date < ? THEN 1 ELSE 0 END) AS late FROM users u LEFT JOIN tasks t ON t.assignee_id = u.id
       WHERE u.active = 1 GROUP BY u.id HAVING open > 0 ORDER BY late DESC, open DESC LIMIT 8`, t);
@@ -83,7 +83,7 @@ export async function buildReport(db, user, slot = 'am') {
     sec('🧭 حالة القطاع');
     ln(`• المهام: مفتوحة ${tk.open || 0} · متأخرة ${tk.late || 0} · للمراجعة ${tk.review || 0} · أُنجز اليوم ${tk.done || 0}`);
     ln(`• العملاء المحتملون: جديد اليوم ${ld.today || 0} · متابعات متأخرة ${ld.overdue || 0}`);
-    ln(`• خط المبيعات ${nf(dl.pipe)} ر.س · صفقات راكدة +7 أيام: ${dl.stale || 0}`);
+    ln(`• خط المبيعات ${sectionAllowed(user, 'finance') ? `${nf(dl.pipe)} ر.س` : `${dl.open_n || 0} صفقة مفتوحة`} · صفقات راكدة +7 أيام: ${dl.stale || 0}`);
     if (people.length) ln('• الفريق (مفتوحة/متأخرة): ' + people.map((p) => `${String(p.name).split(' ')[0]} ${p.open}/${p.late}`).join(' · '));
   }
   const short = [`مفتوحة ${open.length}`, late.length && `متأخرة ${late.length}`, dueToday.length && `اليوم ${dueToday.length}`, fol.length && `متابعات ${fol.length}`,
