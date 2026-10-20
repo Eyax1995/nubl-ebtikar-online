@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -158,6 +158,10 @@ export const DDL = [
     tables INTEGER DEFAULT 0, rows INTEGER DEFAULT 0, raw_size INTEGER DEFAULT 0, size INTEGER DEFAULT 0, chunks INTEGER DEFAULT 0, error TEXT,
     user_id INTEGER, created_at TEXT DEFAULT (datetime('now')), done_at TEXT)`,
   `CREATE TABLE IF NOT EXISTS backup_chunks (backup_id INTEGER NOT NULL, seq INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (backup_id, seq))`,
+  // v14: فهارس عارض سجل التدقيق (التصفية بالمستخدم والكيان والتاريخ)
+  'CREATE INDEX IF NOT EXISTS ix_audit_at ON audit(at)',
+  'CREATE INDEX IF NOT EXISTS ix_audit_user ON audit(user_id, id)',
+  'CREATE INDEX IF NOT EXISTS ix_audit_entity ON audit(entity, entity_id)',
 ];
 
 // الجهات داخل المنصة (فصل الأعمال حسب طبيعة العملاء — الفريق والإدارة واحدة)

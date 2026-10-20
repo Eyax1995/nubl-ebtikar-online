@@ -37,6 +37,60 @@
   const sr = ROUTES.settings;
   if (sr) { const base = sr.render; sr.render = async (...a) => { await base(...a); await backupsCard(); }; }
 
-  // إن سبق الإقلاعُ تحميلَ هذه الوحدة (الإعدادات معروضة بلا البطاقة): أعد رسم الصفحة
-  if (S.meta && $('.side')) rerender();
+  /* ---------- (ب) سجل التدقيق #/audit — للمدير فقط ---------- */
+  const ACT = { create: 'إنشاء', update: 'تعديل', delete: 'حذف', login: 'دخول', password: 'تغيير كلمة المرور', reset: 'كلمة مرور مؤقتة', settings: 'الإعدادات',
+    import: 'استيراد', convert: 'تحويل لعميل', pay: 'سداد', 'to-contract': 'تحويل لعقد', renew: 'تجديد', schedule: 'جدولة', print: 'طباعة', docx: 'ملف Word',
+    'edit-doc': 'تعديل المستند', template: 'تشغيل قالب', duplicate: 'نسخ قالب', revoke: 'إلغاء مفتاح', mcp: 'وكيل ذكاء (MCP)', portal: 'رابط المندوب', payout: 'صرف عمولات',
+    void: 'إلغاء', 'payroll-run': 'إعداد الرواتب', prefs: 'تفضيلات', backup: 'نسخة احتياطية', download: 'تنزيل', sections: 'صلاحيات الأقسام',
+    'tg-setup': 'ربط تلجرام', 'tg-unlink': 'فك تلجرام', 'tg-disconnect': 'فصل تلجرام', bridge: 'جسر واتساب', xq_config: 'إعداد الطلبات بين القطاعات' };
+  const ENT_AR = { users: 'المستخدمون', settings: 'الإعدادات', backups: 'النسخ الاحتياطية', morooj: 'دمج مروج', api_tokens: 'مفاتيح API', rep_payouts: 'صرف العمولات',
+    commissions: 'العمولات', xq_requests: 'طلبات القطاعات', reports: 'التقارير', doc: 'مستند', quote: 'عرض سعر', contract: 'عقد', plan: 'خطة' };
+  const entLabel = (e) => ENT_AR[e] || ENT[e]?.title || e || '—';
+  const actLabel = (a) => ACT[a] || a || '—';
+  const DETAIL = { leads: 'lead', clients: 'client', quotes: 'quote', contracts: 'contract', invoices: 'invoice' };
+  const ksa = (at) => { if (!at) return '—'; const d = new Date(String(at).replace(' ', 'T') + 'Z'); const k = new Date(d.getTime() + 3 * 3600e3).toISOString(); return `${fdate(k.slice(0, 10))} <span class="num small muted" dir="ltr">${k.slice(11, 16)}</span>`; };
+  const ACT_PILL = { delete: 'r', void: 'r', revoke: 'r', create: 't', login: 'x', update: 'b', pay: 'g' };
+
+  async function auditView() {
+    if (me().role !== 'admin') { V().innerHTML = '<div class="empty">سجل التدقيق للمدير العام فقط</div>'; return; }
+    const f = { user_id: '', entity: '', action: '', from: addDays(todayStr(), -30), to: todayStr(), q: '' };
+    let rows = [], total = 0;
+    const fc = await api('audit/facets');
+    V().innerHTML = `<div class="card"><div class="toolbar" id="au-f" style="flex-wrap:wrap;gap:8px">
+        <select class="inp" name="user_id" style="max-width:190px"><option value="">كل المستخدمين</option>${fc.users.map((u) => `<option value="${u.k == null ? 'none' : u.k}">${esc(u.name || (u.k == null ? 'النظام / آلي' : '#' + u.k))} (${u.n})</option>`).join('')}</select>
+        <select class="inp" name="entity" style="max-width:190px"><option value="">كل الكيانات</option>${fc.entities.map((e) => `<option value="${esc(e.k)}">${esc(entLabel(e.k))} (${e.n})</option>`).join('')}</select>
+        <select class="inp" name="action" style="max-width:170px"><option value="">كل الإجراءات</option>${fc.actions.map((a) => `<option value="${esc(a.k)}">${esc(actLabel(a.k))} (${a.n})</option>`).join('')}</select>
+        <label class="small muted" style="display:flex;align-items:center;gap:4px">من <input class="inp" type="date" name="from" value="${f.from}"></label>
+        <label class="small muted" style="display:flex;align-items:center;gap:4px">إلى <input class="inp" type="date" name="to" value="${f.to}"></label>
+        <input class="inp" name="q" placeholder="بحث في التفاصيل…" style="max-width:200px">
+      </div><div class="small muted" id="au-n" style="margin:8px 0"></div><div id="au-t"></div><div style="text-align:center;margin-top:10px"><button class="btn btn-g btn-s" id="au-more" hidden>تحميل المزيد</button></div></div>`;
+    const qs = (offset) => { const p = new URLSearchParams({ limit: 100, offset }); Object.entries(f).forEach(([k, v]) => v && p.set(k, v)); return p.toString(); };
+    const draw = () => {
+      $('#au-n').innerHTML = `<span class="num">${total.toLocaleString('en')}</span> حدث — يُعرض <span class="num">${rows.length.toLocaleString('en')}</span>`;
+      $('#au-t').innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>الوقت (الرياض)</th><th>المستخدم</th><th>الإجراء</th><th>الكيان</th><th>السجل</th><th>التفاصيل</th></tr></thead><tbody>${rows.map((r) => {
+        const det = DETAIL[r.entity]; const idc = r.entity_id ? (det && r.action !== 'delete' ? `<a href="#/${det}/${r.entity_id}" class="num">#${r.entity_id}</a>` : `<span class="num">#${r.entity_id}</span>`) : '—';
+        return `<tr><td style="white-space:nowrap">${ksa(r.at)}</td><td>${esc(r.user_name || (r.user_id ? '#' + r.user_id : 'النظام / آلي'))}</td>
+          <td><span class="pill ${ACT_PILL[r.action] || 'x'}">${esc(actLabel(r.action))}</span></td><td>${esc(entLabel(r.entity))}</td><td>${idc}</td>
+          <td class="small" style="max-width:340px;overflow-wrap:anywhere">${esc(r.detail || '')}</td></tr>`;
+      }).join('')}</tbody></table></div>` : '<div class="empty">لا أحداث تطابق التصفية</div>';
+      $('#au-more').hidden = rows.length >= total;
+    };
+    const load = async (more) => {
+      const seq = S.renderSeq;
+      const d = await api('audit?' + qs(more ? rows.length : 0));
+      if (seq !== S.renderSeq || !$('#au-t')) return;
+      rows = more ? rows.concat(d.rows) : d.rows; total = d.total; draw();
+    };
+    const fe = $('#au-f');
+    const onF = debounce(() => { fe.querySelectorAll('[name]').forEach((el) => { f[el.name] = el.value.trim(); }); load(false).catch((e) => toast(e.message, 1)); }, 250);
+    fe.addEventListener('change', onF); fe.addEventListener('input', (e) => e.target.name === 'q' && onF());
+    $('#au-more').onclick = () => load(true).catch((e) => toast(e.message, 1));
+    await load(false);
+  }
+  ROUTES.audit = { title: 'سجل التدقيق', render: auditView };
+  const adm = NAV.find((x) => x[0] === 'الإدارة');
+  if (adm && !adm[1].some((i) => i[0] === 'audit')) adm[1].splice(adm[1].length - 1, 0, ['audit', 'سجل التدقيق', 'doc', '#admin']);
+
+  // إن سبق الإقلاعُ تحميلَ هذه الوحدة: أعد بناء القائمة (بند سجل التدقيق) والصفحة (بطاقة النسخ)
+  if (S.meta && $('.side')) { renderShell(); rerender(); }
 })();
