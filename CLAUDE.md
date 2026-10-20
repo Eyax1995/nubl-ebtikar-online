@@ -15,6 +15,7 @@
 | `marketing/hub/` | واجهة المنصة الإدارية (JS بلا خطوة بناء) |
 | `functions/marketing/hub/api/` | خادم المنصة (Pages Functions + D1 `DB`) |
 | `functions/wa/` | مساعد واتساب + الجسر + فحص الصحة (D1 `WA_DB`) |
+| `marketing/rep/`, `marketing/client/`, `marketing/portal/` | بوابتا المندوب والعميل (دخول برمز واتساب) — الخادم في `_lib/portal*.js` |
 
 ### واجهة المنصة `marketing/hub/`
 ترتيب التحميل في `index.html`: `hub.js` (النواة: `$`, `api`, `I`, `ENT`, `NAV`, `ROUTES`, `modal`, `openForm`, `listView`, `renderShell`, `rerender`) ← `views.js` ← `notif.js` ← `agent.js` ← `debts.js` ← `xreq.js` ← `tpl.js` (يستدعي `boot()`) ← `wainbox.js` ← `fields.js` ← `ops.js` ← `commissions.js` ← `studio.js` ← `alerts.js` ← `ui.js` ← `shapes3d.js` (أسهم الهوية المجسّمة ثلاثية الأبعاد بطبقات CSS 3D بلا مكتبات: شاشة الدخول، أسفل القائمة، مؤشر التحميل، انتظار ذكاء نُبل — `window.nubl3d.column/chevron/loader`).
@@ -24,6 +25,13 @@
 - عند تعديل أي ملف واجهة ارفع رقم الإصدار `?v=` في `index.html` لكسر التخزين المؤقت.
 - **ثيم الواجهة**: أعاد إياد (17 أكتوبر 2026) واجهة المنصة إلى ثيم «نُبل موشن» السابق (`#082A37` `#15556B` `#308D8B` `#DC9C47` `#D2652A`، IBM Plex Sans Arabic) — لا تغيّر ثيم الواجهة دون طلب صريح. هوية 3.0 تُطبَّق على **المخرجات** فقط: كل المستندات المطبوعة عبر `docShell` في views.js على الأوراق الرسمية (`brand/letterhead-a4.png` في كل صفحة، من PDF الأوراق المعتمد)، وصفحات التقارير بـ `printOfficialView`، ومعاينة الاستوديو بـ `brand/lh-top|bottom|strip.png`، وملفات Word من `letterhead.js`.
 - الموقع العام `/marketing` (قرار إياد 17 أكتوبر 2026): **هوية 3.0** (ألوان وشعار، والخطوط: DG Agnadeen للعناوين الرئيسة وTajawal للباقي — طبقة آخر `site.css`) + **أيقونات المنصة المتحركة وتفاعلها** (`motion.css`/`motion.js`). **الزوايا (^) هي الشكل الخاص بالتسويق** في كل التفاصيل: النقش `pattern.svg`، النقاط والتقييمات (`.cvr`)، زاوية ركن البطاقات (`.cv-corner`)، أعمدة أسهم مجسّمة ثلاثية الأبعاد بطبقات CSS 3D (`nubl3d.col3d`) مكان مجسّم النجمة، وستارة الانتقال بين الصفحات تمرّر الأسهم المجسّمة (`.csweep` على `html.leaving/entering`). **لا نجمة إطلاقاً.** صورة OG لكل صفحة في `marketing/og/<slug>.jpg` (الاسم، التعريف، السلوجان، الشعار، الزوايا — بلا أسعار)، ولا أسعار في og:title/description. لا صور شخصية في الموقع.
+
+### بوابتا المندوب والعميل
+- الدخول: `POST portal/otp` ثم `portal/verify` → كوكي `np_s` (Path=/marketing، 30 يوماً) منفصل تماماً عن جلسات الموظفين. الحساب = مطابقة الجوال لـ `reps.phone` أو `clients.phone` (آخر 9 أرقام)؛ تغيير الجوال أو إيقاف المندوب يُنهي الوصول فوراً.
+- إرسال الرمز: نص حر إن كانت نافذة الـ24 ساعة مفتوحة، وإلا قالب المصادقة `nubl_login_code` (يُطلب إنشاؤه من Meta آلياً، وحالته في الإعداد `portal_otp_tpl`)، وإلى أن يُعتمد: جسر الإشعارات.
+- الجداول `portal_codes` و`portal_sessions` و`portal_requests` تُنشأ داخل `portal.js` (لا تمر بـ MIGRATIONS).
+- كل ما يرفعه الشريك يُسجَّل في `portal_requests` ويظهر للفريق في شاشة `#portals` (`hub/portals.js`) مع زر «دعوة للبوابة» في صفحة العميل ولوحة المناديب.
+- لا تكتب ردود العميل في `quotes.notes`: تُطبع داخل مستند العرض.
 
 ### الخادم
 - `[[path]].js` يوجّه كل `/marketing/hub/api/*`. المخطط في `_lib/schema.js` (`SCHEMA_VERSION` + `MIGRATIONS` تُطبَّق آلياً عند أول طلب). البيانات الأولية في `_lib/seed.js`.

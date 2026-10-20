@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#082A37">
+<title>بوابة العميل — نُبل وابتكار للتسويق</title>
+<link rel="icon" href="/marketing/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/marketing/portal/portal.css?v=1">
+</head>
+<body>
+<div id="app"><div class="login"><div class="lcard"><img src="/marketing/logo.png" alt=""><p>جارٍ التحميل…</p></div></div></div>
+<script src="/marketing/portal/portal.js?v=1"></script>
+<script>
+'use strict';
+(() => {
+  const { $, esc, url, money, date, pill, api, toast, modal, busy, boot, logout, fileB64, waLink, tabs, accountPicker, bindPicker } = P;
+  let D = null; let tab = (location.hash || '').slice(1) || '';
+
+  async function load() { D = await api('client'); if (!tab) tab = D.totals.awaiting ? 'content' : 'bills'; draw(); }
+  const remain = (i) => Math.max(0, Number(i.total || 0) - Number(i.paid || 0));
+  const late = (i) => ['مصدرة', 'مدفوعة جزئياً'].includes(i.status) && i.due_date && i.due_date < D.today;
+
+  function draw() {
+    const t = D.totals; const c = D.client;
+    $('#app').innerHTML = `
+    <header class="hd"><div class="wrap">
+      <div class="top"><a class="brand" href="/marketing/" target="_blank" rel="noopener"><img src="/marketing/logo-white.png" alt="نُبل وابتكار"><span>${esc(D.company)}<br>بوابة العميل</span></a>
+        <div class="acts">${accountPicker(D.accounts, c.id)}<button class="ghost" id="lo">خروج</button></div></div>
+      <h1>أهلاً ${esc(c.contact_name || c.name)}</h1>
+      <div class="sub">${esc(c.brand || c.name)}${c.package ? ' · ' + esc(c.package) : ''}${D.manager ? ` · مدير حسابك: <b>${esc(D.manager.name)}</b>` : ''}</div>
+    </div></header>
+    <div class="wrap">
+      <div class="cards">
+        <div class="c ${t.due > 0 ? 'o' : 'g'}"><span>المستحق عليك</span><b>${money(t.due)}</b>${t.overdue ? `<small>${t.overdue} فاتورة متأخرة</small>` : ''}</div>
+        <div class="c g"><span>المسدَّد</span><b>${money(t.paid)}</b></div>
+        <div class="c ${t.awaiting ? 'y' : ''}"><span>منشورات بانتظار اعتمادك</span><b class="num">${t.awaiting}</b></div>
+        <div class="c"><span>عروض بانتظار ردّك</span><b class="num">${t.quotes_open}</b></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn gold" id="newReq">＋ طلب أو ملاحظة لفريقك</button>
+        <a class="btn wa" href="${waLink(D.wa, 'السلام عليكم، معكم ' + (c.contact_name || c.name) + ' من ' + c.name)}" target="_blank" rel="noopener">واتساب الفريق</a>
+      </div>
+      ${tabs([['content', 'المحتوى', t.awaiting], ['bills', 'الفواتير والمدفوعات', t.overdue], ['docs', 'العروض والعقود', t.quotes_open], ['work', 'المشاريع'], ['req', 'طلباتي']], tab)}
+      <div id="pane"></div>
+    </div>
+    <div class="foot">${esc(D.company)} · جدة</div>`;
+    $('#lo').onclick = logout;
+    $('#newReq').onclick = () => newRequest();
+    bindPicker(() => { tab = ''; load(); });
+    document.querySelectorAll('.tab').forEach((b) => { b.onclick = () => { tab = b.dataset.tab; history.replaceState(null, '', '#' + tab); document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b)); pane(); }; });
+    pane();
+  }
+
+  function pane() {
+    const el = $('#pane');
+    if (tab === 'content') {
+      const wait = D.content.filter((x) => x.status === 'بانتظار اعتماد العميل'); const rest = D.content.filter((x) => x.status !== 'بانتظار اعتماد العميل');
+      const post = (x) => `<div class="post${x.status === 'بانتظار اعتماد العميل' ? ' wait' : ''}">
+        <div class="meta">${pill(x.status)}<span>${esc(x.platform || '')}${x.format ? ' · ' + esc(x.format) : ''}</span><span>${date(x.publish_date)}${x.publish_time ? ' <span class="num">' + esc(x.publish_time) + '</span>' : ''}</span></div>
+        ${x.title ? `<b style="display:block;margin-top:6px">${esc(x.title)}</b>` : ''}
+        ${x.caption ? `<div class="cap">${esc(x.caption)}${x.hashtags ? '\n\n' + esc(x.hashtags) : ''}</div>` : ''}
+        <div class="row">${url(x.asset_link) !== '#' ? `<a class="btn line sm" href="${url(x.asset_link)}" target="_blank" rel="noopener">عرض التصميم</a>` : ''}
+        ${x.status === 'بانتظار اعتماد العميل' ? `<button class="btn teal sm" data-ok="${x.id}">اعتماد</button><button class="btn line sm" data-rev="${x.id}">طلب تعديل</button>` : ''}</div></div>`;
+      el.innerHTML = `<section><h2>بانتظار اعتمادك <span class="cnt">${wait.length}</span></h2>${wait.length ? wait.map(post).join('') : '<div class="empty">لا منشورات بانتظارك الآن ✓</div>'}</section>
+        ${rest.length ? `<section><h2>تقويم المحتوى <span class="cnt">${rest.length}</span></h2>${rest.map(post).join('')}</section>` : ''}`;
+      el.querySelectorAll('[data-ok]').forEach((b) => { b.onclick = () => busy(b, async () => { await api('client/content/' + b.dataset.ok, { action: 'approve' }); toast('اعتُمد المنشور ✓'); await load(); }); });
+      el.querySelectorAll('[data-rev]').forEach((b) => { b.onclick = () => revise(b.dataset.rev); });
+    } else if (tab === 'docs') {
+      el.innerHTML = `<section><h2>عروض الأسعار <span class="cnt">${D.quotes.length}</span></h2>${D.quotes.length ? `<table class="r"><thead><tr><th>الرقم</th><th>العنوان</th><th>الإجمالي</th><th>صالح حتى</th><th>الحالة</th><th></th></tr></thead><tbody>
+        ${D.quotes.map((q) => { const exp = q.status === 'مرسل' && q.valid_until && q.valid_until < D.today; return `<tr><td data-l="الرقم" class="num">${esc(q.number)}</td><td data-l="العنوان">${esc(q.title || '')}</td><td data-l="الإجمالي"><b>${money(q.total)}</b></td><td data-l="صالح حتى">${date(q.valid_until)}</td><td data-l="الحالة">${pill(exp ? 'منتهي' : q.status)}</td>
+          <td data-l=""><div class="row"><button class="btn line sm" data-doc="quote/${q.id}">عرض</button>${q.status === 'مرسل' && !exp ? `<button class="btn teal sm" data-acc="${q.id}">قبول</button><button class="btn line sm" data-rej="${q.id}">رفض</button>` : ''}</div></td></tr>`; }).join('')}</tbody></table>`
+        : '<div class="empty">لا عروض أسعار حالياً.</div>'}</section>
+      <section><h2>العقود <span class="cnt">${D.contracts.length}</span></h2>${D.contracts.length ? `<table class="r"><thead><tr><th>الرقم</th><th>العنوان</th><th>المدة</th><th>القيمة الشهرية</th><th>الحالة</th><th></th></tr></thead><tbody>
+        ${D.contracts.map((k) => `<tr><td data-l="الرقم" class="num">${esc(k.number)}</td><td data-l="العنوان">${esc(k.title || k.package || '')}</td><td data-l="المدة">${date(k.start_date)} ← ${date(k.end_date)}</td><td data-l="شهرياً">${money(k.monthly_value)}</td><td data-l="الحالة">${pill(k.status)}</td>
+          <td data-l=""><div class="row"><button class="btn line sm" data-doc="contract/${k.id}">عرض</button>${url(k.file_link) !== '#' ? `<a class="btn line sm" href="${url(k.file_link)}" target="_blank" rel="noopener">النسخة الموقّعة</a>` : ''}</div></td></tr>`).join('')}</tbody></table>`
+        : '<div class="empty">لا عقود بعد.</div>'}</section>`;
+      el.querySelectorAll('[data-doc]').forEach((b) => { b.onclick = () => showDoc(b, b.dataset.doc); });
+      el.querySelectorAll('[data-acc]').forEach((b) => { b.onclick = () => answerQuote(b.dataset.acc, 'accept'); });
+      el.querySelectorAll('[data-rej]').forEach((b) => { b.onclick = () => answerQuote(b.dataset.rej, 'reject'); });
+    } else if (tab === 'work') {
+      el.innerHTML = `<section><h2>المشاريع <span class="cnt">${D.projects.length}</span></h2>${D.projects.length ? D.projects.map((p) => { const pc = p.tasks ? Math.round(p.done / p.tasks * 100) : 0; return `<div class="post">
+        <div class="meta">${pill(p.status)}<span>${esc(p.type || '')}</span>${p.due_date ? `<span>التسليم ${date(p.due_date)}</span>` : ''}</div>
+        <b style="display:block;margin:6px 0">${esc(p.name)}</b>
+        <div class="prog" title="${pc}%"><i style="width:${pc}%"></i></div>
+        <div class="small muted" style="margin-top:4px"><span class="num">${p.done}</span> من <span class="num">${p.tasks}</span> مهام منجزة · <span class="num">${pc}%</span></div>
+        ${p.recent.length ? `<div class="small" style="margin-top:6px">آخر ما أُنجز: ${p.recent.map((r) => esc(r.title)).join(' · ')}</div>` : ''}
+        <div class="row" style="margin-top:8px"><button class="btn line sm" data-pr="${p.id}">طلب على هذا المشروع</button></div></div>`; }).join('') : '<div class="empty">لا مشاريع حالياً.</div>'}</section>`;
+      el.querySelectorAll('[data-pr]').forEach((b) => { b.onclick = () => newRequest(Number(b.dataset.pr)); });
+    } else if (tab === 'req') {
+      el.innerHTML = `<section><h2>طلباتي وردودي <span class="cnt">${D.requests.length}</span></h2>${D.requests.length ? `<table class="r"><thead><tr><th>التاريخ</th><th>النوع</th><th>الموضوع</th><th>الحالة</th></tr></thead><tbody>
+        ${D.requests.map((q) => `<tr><td data-l="التاريخ">${date(q.created_at)}</td><td data-l="النوع">${esc(q.type)}</td><td data-l="الموضوع">${esc(q.subject || '')}</td><td data-l="الحالة">${pill(q.status)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">لا طلبات بعد — استخدم «طلب أو ملاحظة لفريقك».</div>'}</section>`;
+    } else {
+      el.innerHTML = `<section><h2>الفواتير <span class="cnt">${D.invoices.length}</span></h2>${D.invoices.length ? `<table class="r"><thead><tr><th>الرقم</th><th>التاريخ</th><th>الاستحقاق</th><th>الإجمالي</th><th>المتبقي</th><th>الحالة</th><th></th></tr></thead><tbody>
+        ${D.invoices.map((i) => `<tr><td data-l="الرقم" class="num">${esc(i.number)}</td><td data-l="التاريخ">${date(i.issue_date)}</td><td data-l="الاستحقاق">${date(i.due_date)}</td><td data-l="الإجمالي">${money(i.total)}</td><td data-l="المتبقي"><b>${money(remain(i))}</b></td><td data-l="الحالة">${pill(late(i) ? 'متأخرة' : i.status)}</td>
+          <td data-l=""><div class="row"><button class="btn line sm" data-inv="${i.id}">التفاصيل</button>${remain(i) > 0 ? `<button class="btn teal sm" data-proof="${i.id}">أرسل إثبات التحويل</button>` : ''}</div></td></tr>`).join('')}</tbody></table>`
+        : '<div class="empty">لا فواتير صادرة.</div>'}</section>
+      ${D.bank_line ? `<section><h2>بيانات التحويل</h2><div class="bank">${esc(D.bank_line)}</div><p class="small muted" style="margin:8px 0 0">بعد التحويل أرسل الإثبات من زر «أرسل إثبات التحويل» بجانب الفاتورة.</p></section>` : ''}
+      <section><h2>المدفوعات <span class="cnt">${D.payments.length}</span></h2>${D.payments.length ? `<table class="r"><thead><tr><th>التاريخ</th><th>الفاتورة</th><th>المبلغ</th><th>الطريقة</th></tr></thead><tbody>
+        ${D.payments.map((p) => `<tr><td data-l="التاريخ">${date(p.paid_at)}</td><td data-l="الفاتورة" class="num">${esc(p.invoice || '—')}</td><td data-l="المبلغ"><b>${money(p.amount)}</b></td><td data-l="الطريقة">${esc(p.method || '')}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">لا مدفوعات مسجلة.</div>'}</section>`;
+      el.querySelectorAll('[data-inv]').forEach((b) => { b.onclick = () => invoiceView(D.invoices.find((x) => x.id === Number(b.dataset.inv))); });
+      el.querySelectorAll('[data-proof]').forEach((b) => { b.onclick = () => proof(Number(b.dataset.proof)); });
+    }
+  }
+
+  function invoiceView(i) {
+    modal(`فاتورة ${i.number}`, `<table><tbody>
+      <tr><td class="muted">تاريخ الإصدار</td><td>${date(i.issue_date)}</td></tr><tr><td class="muted">تاريخ الاستحقاق</td><td>${date(i.due_date)}</td></tr>
+      ${i.description ? `<tr><td class="muted">الوصف</td><td style="white-space:pre-wrap">${esc(i.description)}</td></tr>` : ''}
+      <tr><td class="muted">قبل الضريبة</td><td>${money(i.subtotal)}</td></tr><tr><td class="muted">ضريبة القيمة المضافة</td><td>${money(i.vat)}</td></tr>
+      <tr><td class="muted">الإجمالي</td><td><b>${money(i.total)}</b></td></tr><tr><td class="muted">المسدَّد</td><td>${money(i.paid)}</td></tr>
+      <tr><td class="muted">المتبقي</td><td><b>${money(remain(i))}</b></td></tr><tr><td class="muted">الحالة</td><td>${pill(late(i) ? 'متأخرة' : i.status)}</td></tr>
+      ${i.tax_ref ? `<tr><td class="muted">رقم الفاتورة الضريبية</td><td class="num">${esc(i.tax_ref)}</td></tr>` : ''}</tbody></table>
+      <p class="small muted">الفاتورة الضريبية الرسمية تصلك من النظام المحاسبي. للاستفسار تواصل مع فريقك.</p>
+      ${remain(i) > 0 ? `<button class="btn teal" style="width:100%" id="pf">أرسل إثبات التحويل</button>` : ''}`, (m, close) => { const b = $('#pf', m); if (b) b.onclick = () => { close(); proof(i.id); }; });
+  }
+
+  function proof(id) {
+    const i = D.invoices.find((x) => x.id === id);
+    modal(`إثبات تحويل — فاتورة ${i.number}`, `<form id="pf" novalidate>
+      <p>المتبقي على الفاتورة: <b>${money(remain(i))}</b></p>
+      <label class="f"><span>صورة الإيصال أو PDF *</span><input class="inp" type="file" name="file" accept="image/*,application/pdf" required></label>
+      <label class="f"><span>ملاحظة (المبلغ المحوّل، البنك…)</span><textarea class="inp" name="note" maxlength="600"></textarea></label>
+      <p class="hint">تتحقق المالية من وصول المبلغ ثم تسجّل الدفعة، وتظهر في «المدفوعات».</p>
+      <button class="btn teal" style="width:100%" type="submit">إرسال</button></form>`, (m, close) => {
+      $('#pf', m).onsubmit = (e) => {
+        e.preventDefault(); const file = e.target.file.files[0];
+        if (!file) return toast('أرفق الإيصال', true);
+        busy(e.target.querySelector('[type=submit]'), async () => {
+          const f = await fileB64(file);
+          await api('client/proof', { invoice_id: id, ...f, note: e.target.note.value }); close(); toast('أُرسل الإثبات للمالية ✓'); await load();
+        });
+      };
+    });
+  }
+
+  function revise(id) {
+    modal('طلب تعديل على المنشور', `<label class="f"><span>ما التعديل المطلوب؟ *</span><textarea class="inp" id="rn" maxlength="1500" placeholder="مثال: غيّر العنوان إلى… واستخدم صورة المنتج الجديدة"></textarea></label>
+      <button class="btn" style="width:100%" id="rs">إرسال التعديلات</button>`, (m, close) => {
+      $('#rs', m).onclick = (e) => busy(e.currentTarget, async () => { await api('client/content/' + id, { action: 'revise', note: $('#rn', m).value }); close(); toast('أُرسلت التعديلات للفريق ✓'); await load(); });
+    });
+  }
+
+  function answerQuote(id, action) {
+    const q = D.quotes.find((x) => x.id === Number(id)); const acc = action === 'accept';
+    modal(acc ? `قبول عرض ${q.number}` : `رفض عرض ${q.number}`, `<p>${acc ? `بقبولك يبدأ فريقنا تجهيز العقد لعرض <b>${esc(q.title || '')}</b> بإجمالي <b>${money(q.total)}</b>.` : 'يسعدنا معرفة السبب لنعدّل العرض بما يناسبك.'}</p>
+      <label class="f"><span>${acc ? 'ملاحظة (اختياري)' : 'السبب أو ما تريد تعديله'}</span><textarea class="inp" id="qn" maxlength="1000"></textarea></label>
+      <button class="btn ${acc ? 'teal' : 'terra'}" style="width:100%" id="qs">${acc ? 'تأكيد القبول' : 'تأكيد الرفض'}</button>`, (m, close) => {
+      $('#qs', m).onclick = (e) => busy(e.currentTarget, async () => { await api('client/quote/' + id, { action, note: $('#qn', m).value }); close(); toast(acc ? 'شكراً! أُبلغ فريقك بقبول العرض ✓' : 'أُبلغ الفريق ✓'); await load(); });
+    });
+  }
+
+  async function showDoc(btn, path) {
+    await busy(btn, async () => {
+      const d = await api('client/doc/' + path);
+      modal(d.title, `<div class="docv">${d.html}</div><p style="margin-top:12px"><button class="btn line" id="pr">طباعة / حفظ PDF</button></p>`, (m) => {
+        $('#pr', m).onclick = () => {
+          const w = window.open('', '_blank'); if (!w) return toast('اسمح بالنوافذ المنبثقة للطباعة', true);
+          w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(d.title)}</title><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet"><style>body{font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;line-height:1.8;padding:24px;color:#082A37}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;padding:6px}</style></head><body>${d.html}<script>onload=()=>setTimeout(()=>print(),400)<\/script></body></html>`);
+          w.document.close();
+        };
+      });
+    });
+  }
+
+  function newRequest(projectId) {
+    const pr = projectId ? D.projects.find((p) => p.id === projectId) : null;
+    modal(pr ? `طلب على «${pr.name}»` : 'طلب أو ملاحظة لفريقك', `<form id="rq" novalidate>
+      <label class="f"><span>النوع</span><select class="inp" name="type">${D.req_types.map((t) => `<option>${esc(t)}</option>`).join('')}</select></label>
+      <label class="f"><span>الموضوع *</span><input class="inp" name="subject" maxlength="150" required></label>
+      <label class="f"><span>التفاصيل</span><textarea class="inp" name="body" maxlength="3000"></textarea></label>
+      <button class="btn gold" style="width:100%" type="submit">إرسال</button></form>`, (m, close) => {
+      $('#rq', m).onsubmit = (e) => {
+        e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); if (pr) f.project_id = pr.id;
+        busy(e.target.querySelector('[type=submit]'), async () => { await api('client/request', f); close(); toast('وصل طلبك لفريقك ✓'); tab = 'req'; await load(); });
+      };
+    });
+  }
+
+  boot('client', { title: 'بوابة العميل', sub: 'فواتيرك، عروضك وعقودك، واعتماد محتواك في مكان واحد.', help: 'إن لم يصلك رمز فتواصل مع مدير حسابك لتحديث رقمك.' }, load);
+})();
+</script>
+</body>
+</html>
