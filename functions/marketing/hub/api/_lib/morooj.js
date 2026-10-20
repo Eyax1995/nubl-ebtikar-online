@@ -247,6 +247,17 @@ export async function finishLegacy(db, user) {
     await mark('payroll', p.old, r.meta.last_row_id).run();
   }
   out.hr = { employees: em.length, advances: ad.length, payroll: pr.length };
+  // 5) الحملات الإعلانية (v12) — العميل يُعاد ربطه، والمسؤولون يُتركون (مستخدمو مروج ليسوا في النسخة الاحتياطية)
+  const CL = Object.fromEntries((await rows('clients')).filter((c) => c.nid).map((c) => [c.old, c.nid]));
+  const cp = (await rows('campaigns')).filter((r) => !r.nid);
+  for (const c of cp) {
+    const d = c.d;
+    const r = await db.prepare(`INSERT INTO campaigns (name, platform, client_id, objective, status, start_date, end_date, budget, spend, impressions, clicks, leads, conversions, revenue, notes, org, created_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'morooj', ?)`).bind(d.name || 'حملة', d.platform || null, CL[String(d.client_id)] || null, d.objective || null, d.status || 'مخطط',
+      d.start_date || null, d.end_date || null, num(d.budget), num(d.spend), num(d.impressions), num(d.clicks), num(d.leads), num(d.conversions), num(d.revenue), d.notes || null, user.id).run();
+    await mark('campaigns', c.old, r.meta.last_row_id).run();
+  }
+  out.campaigns = cp.length;
   return out;
 }
 

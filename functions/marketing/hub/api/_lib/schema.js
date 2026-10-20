@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -147,6 +147,12 @@ export const DDL = [
   `CREATE TABLE IF NOT EXISTS advances (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT, date TEXT, employee_id INTEGER, amount REAL DEFAULT 0, installment REAL DEFAULT 0,
     paid_back REAL DEFAULT 0, reason TEXT, cash_account INTEGER, status TEXT DEFAULT 'قائمة', notes TEXT, org TEXT DEFAULT 'nubl', created_by INTEGER,
     created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  // v12: الحملات الإعلانية — المؤشرات (CTR، CPL، CPA، ROAS) تُحسب في الواجهة من الأرقام الخام
+  `CREATE TABLE IF NOT EXISTS campaigns (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, platform TEXT, client_id INTEGER, objective TEXT,
+    status TEXT DEFAULT 'مخطط', start_date TEXT, end_date TEXT, budget REAL DEFAULT 0, spend REAL DEFAULT 0, impressions INTEGER DEFAULT 0, clicks INTEGER DEFAULT 0,
+    leads INTEGER DEFAULT 0, conversions INTEGER DEFAULT 0, revenue REAL DEFAULT 0, owner_id INTEGER, notes TEXT, org TEXT DEFAULT 'nubl', created_by INTEGER,
+    created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  'CREATE INDEX IF NOT EXISTS ix_campaigns_client ON campaigns(client_id)',
 ];
 
 // الجهات داخل المنصة (فصل الأعمال حسب طبيعة العملاء — الفريق والإدارة واحدة)
@@ -154,7 +160,7 @@ export const ORGS = {
   nubl: { name: 'نُبل وابتكار للتسويق', short: 'نُبل وابتكار', sector: 'القطاع الربحي' },
   morooj: { name: 'مروج الحجاز للأعمال التجارية', short: 'مروج الحجاز', sector: 'القطاع غير الربحي' },
 };
-export const ORG_ENTITIES = ['leads', 'deals', 'activities', 'visits', 'clients', 'catalog', 'quotes', 'contracts', 'invoices', 'payments', 'expenses', 'projects', 'tasks', 'content', 'plans'];
+export const ORG_ENTITIES = ['leads', 'deals', 'activities', 'visits', 'clients', 'catalog', 'quotes', 'contracts', 'invoices', 'payments', 'expenses', 'projects', 'tasks', 'content', 'plans', 'campaigns'];
 
 // ترحيلات تُطبّق مرة واحدة على قواعد قائمة (فشل أي سطر = العمود موجود مسبقاً)
 export const MIGRATIONS = [
@@ -217,7 +223,7 @@ function ORG_MIGRATIONS() {
     contracts: [['clients', 'client_id']], invoices: [['clients', 'client_id']],
     payments: [['clients', 'client_id'], ['invoices', 'invoice_id']], expenses: [['clients', 'client_id']],
     projects: [['clients', 'client_id']], tasks: [['clients', 'client_id'], ['projects', 'project_id']],
-    content: [['clients', 'client_id']], plans: [['clients', 'client_id']],
+    content: [['clients', 'client_id']], plans: [['clients', 'client_id']], campaigns: [['clients', 'client_id']],
   };
   for (const [t, ps] of Object.entries(PARENTS)) {
     const expr = `COALESCE(${ps.map(([pt, c]) => `(SELECT org FROM ${pt} WHERE id = NEW.${c})`).join(', ')}, org)`;
@@ -226,7 +232,8 @@ function ORG_MIGRATIONS() {
     out.push(`CREATE TRIGGER IF NOT EXISTS tg_${t}_org_upd AFTER UPDATE OF ${ps.map(([, c]) => c).join(', ')} ON ${t} WHEN ${when} BEGIN UPDATE ${t} SET org = ${expr} WHERE id = NEW.id; END`);
   }
   // نقل عميل بين الجهتين ينقل كل ما يخصه
-  const kids = ['deals', 'activities', 'visits', 'quotes', 'contracts', 'invoices', 'payments', 'expenses', 'projects', 'tasks', 'content', 'plans'];
+  const kids = ['deals', 'activities', 'visits', 'quotes', 'contracts', 'invoices', 'payments', 'expenses', 'projects', 'tasks', 'content', 'plans', 'campaigns'];
+  out.push('DROP TRIGGER IF EXISTS tg_clients_org_move'); // يُعاد إنشاؤه كلما زادت قائمة التوابع
   out.push(`CREATE TRIGGER IF NOT EXISTS tg_clients_org_move AFTER UPDATE OF org ON clients WHEN NEW.org IS NOT OLD.org BEGIN ${kids.map((k) => `UPDATE ${k} SET org = NEW.org WHERE client_id = NEW.id;`).join(' ')} END`);
   return out;
 }
@@ -348,6 +355,12 @@ export const ENTITIES = {
     cols: ['name', 'phone', 'email', 'city', 'rate', 'months', 'base', 'bank_name', 'iban', 'status', 'notes'],
     search: ['name', 'phone', 'email', 'city'],
     perms: { ...ALL, finance: 'rw', sales: 'r', account: 'r' }, order: "status = 'نشط' DESC, name",
+  },
+  // ---- التسويق: الحملات الإعلانية (v12) ----
+  campaigns: {
+    cols: ['name', 'platform', 'client_id', 'objective', 'status', 'start_date', 'end_date', 'budget', 'spend', 'impressions', 'clicks', 'leads', 'conversions', 'revenue', 'owner_id', 'notes'],
+    search: ['name', 'platform', 'notes'],
+    perms: { ...ALL, account: 'rw', sales: 'r', finance: 'r' }, order: "status = 'نشطة' DESC, start_date DESC, id DESC",
   },
   // ---- المحاسبة والموارد البشرية (v11) — لكل جهة حساباتها وموظفوها ----
   accounts: {

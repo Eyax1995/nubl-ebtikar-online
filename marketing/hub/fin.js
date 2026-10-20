@@ -256,6 +256,6 @@
     const card = $('#mrj-card'); card ? card.after(c) : ($('#view .grid.g2 > div:last-child') || $('#view')).appendChild(c);
     $('#mrj-sv').onclick = async () => { const f = $('form', c); const body = {}; K.forEach(([k]) => body[k] = f[k].value.trim()); await api('settings', { method: 'PUT', body }); S.meta = await api('meta'); toast('تم الحفظ'); };
     $('#mrj-fin').onclick = async () => { try { const r = await api('import/morooj-finish', { method: 'POST' }); const f = r.finance || {};
-      toast(`المحاسبة: ${f.accounts?.total || 0} حساب · ${f.journals || 0} قيد · ${f.hr?.employees || 0} موظف · ${f.hr?.payroll || 0} راتب · ${f.hr?.advances || 0} سلفة`); } catch (e) { toast(e.message, 1); } };
+      toast(`المحاسبة: ${f.accounts?.total || 0} حساب · ${f.journals || 0} قيد · ${f.hr?.employees || 0} موظف · ${f.hr?.payroll || 0} راتب · ${f.hr?.advances || 0} سلفة · ${f.campaigns || 0} حملة`); invalidate('campaigns'); } catch (e) { toast(e.message, 1); } };
   }
 })();
