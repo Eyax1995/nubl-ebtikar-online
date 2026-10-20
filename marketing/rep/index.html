@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#082A37">
+<title>بوابة المندوب — نُبل وابتكار للتسويق</title>
+<link rel="icon" href="/marketing/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/marketing/portal/portal.css?v=1">
+</head>
+<body>
+<div id="app"><div class="login"><div class="lcard"><img src="/marketing/logo.png" alt=""><p>جارٍ التحميل…</p></div></div></div>
+<script src="/marketing/portal/portal.js?v=1"></script>
+<script>
+'use strict';
+(() => {
+  const { $, esc, money, date, pill, api, toast, modal, busy, boot, logout, waLink, tabs } = P;
+  let D = null; let tab = (location.hash || '').slice(1) || 'home';
+
+  async function load() { D = await api('rep'); draw(); }
+
+  function draw() {
+    const t = D.totals; const r = D.rep;
+    const openDeals = D.deals.filter((d) => d.open).length;
+    $('#app').innerHTML = `
+    <header class="hd"><div class="wrap">
+      <div class="top"><a class="brand" href="/marketing/" target="_blank" rel="noopener"><img src="/marketing/logo-white.png" alt="نُبل وابتكار"><span>${esc(D.company)}<br>بوابة المندوب</span></a>
+        <div class="acts"><button class="ghost" id="lo">خروج</button></div></div>
+      <h1>أهلاً ${esc(r.name)}</h1>
+      <div class="sub">رمزك <b class="num">${esc(r.code)}</b> · نسبتك <b class="num">${r.rate}%</b> ${r.base === 'gross' ? 'من المبلغ شامل الضريبة' : 'من المبلغ قبل الضريبة'} · لمدة <b class="num">${r.months}</b> شهراً من أول عقد</div>
+    </div></header>
+    <div class="wrap">
+      <div class="cards">
+        <div class="c o"><span>مستحقة (بانتظار الاعتماد)</span><b>${money(t.due)}</b></div>
+        <div class="c"><span>معتمدة (جاهزة للصرف)</span><b>${money(t.approved)}</b></div>
+        <div class="c g"><span>تم صرفها</span><b>${money(t.paid)}</b></div>
+        <div class="c"><span>عملاؤك</span><b class="num">${D.clients.length}</b><small>${D.leads.filter((l) => !l.converted).length} محتمل · ${openDeals} صفقة مفتوحة</small></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn gold" id="addLead">＋ سجّل عميلاً جديداً</button>
+        <button class="btn teal" id="payReq" ${t.approved > 0 && !D.payout_pending ? '' : 'disabled'}>${D.payout_pending ? 'طلب الصرف قيد المعالجة' : 'اطلب صرف المعتمد'}</button>
+      </div>
+      ${tabs([['home', 'العملاء والصفقات'], ['comm', 'العمولات'], ['mat', 'مواد للمشاركة'], ['acc', 'بيانات التحويل']], tab)}
+      <div id="pane"></div>
+    </div>
+    <div class="foot">${esc(D.company)} · جدة · <a href="${waLink(D.wa, 'السلام عليكم، أنا المندوب ' + r.name + ' (' + r.code + ')')}" target="_blank" rel="noopener">تواصل مع الفريق</a></div>`;
+    $('#lo').onclick = logout;
+    $('#addLead').onclick = addLead;
+    $('#payReq').onclick = payReq;
+    document.querySelectorAll('.tab').forEach((b) => { b.onclick = () => { tab = b.dataset.tab; history.replaceState(null, '', '#' + tab); document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b)); pane(); }; });
+    pane();
+  }
+
+  function pane() {
+    const el = $('#pane');
+    if (tab === 'comm') {
+      el.innerHTML = `<section><h2>حركات العمولة <span class="cnt">${D.rows.length}</span></h2>${D.rows.length ? `<table class="r"><thead><tr><th>التاريخ</th><th>العميل</th><th>المحصّل (الأساس)</th><th>العمولة</th><th>الحالة</th></tr></thead><tbody>
+        ${D.rows.map((x) => `<tr><td data-l="التاريخ">${date(x.earned_at)}</td><td data-l="العميل">${esc(x.client || '')}</td><td data-l="الأساس">${money(x.base_amount)}</td><td data-l="العمولة"><b>${money(x.amount)}</b></td><td data-l="الحالة">${pill(x.status)}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="empty">تظهر عمولاتك هنا تلقائياً فور تحصيل أي دفعة من عملائك.</div>'}</section>
+      ${D.payouts.length ? `<section><h2>الصرفيات <span class="cnt">${D.payouts.length}</span></h2><table class="r"><thead><tr><th>رقم الصرف</th><th>التاريخ</th><th>البنود</th><th>المبلغ</th><th>الطريقة</th></tr></thead><tbody>
+        ${D.payouts.map((p) => `<tr><td data-l="الرقم" class="num">${esc(p.number)}</td><td data-l="التاريخ">${date(p.paid_at)}</td><td data-l="البنود" class="num">${p.count}</td><td data-l="المبلغ"><b>${money(p.total)}</b></td><td data-l="الطريقة">${esc(p.method || '')}</td></tr>`).join('')}</tbody></table></section>` : ''}
+      <section><h2>كيف تُحتسب عمولتك</h2><ul class="small muted" style="margin:0;padding-inline-start:18px">
+        <li>تُستحق عند تحصيل كل دفعة من عميلك بنسبة <b class="num">${D.rep.rate}%</b>، ولا عمولة على مبلغ لم يُحصَّل.</li>
+        <li>تشمل العقد الأول وتجديداته لمدة <b class="num">${D.rep.months}</b> شهراً من بداية أول عقد للعميل.</li>
+        <li>تعتمد المالية المستحق ثم تصرفه، ويصلك إشعار واتساب عند كل استحقاق وكل صرف.</li>
+        <li>العميل يُنسب لمن سجّله أولاً، فسجّل عملاءك هنا قبل أن يتواصلوا معنا.</li></ul>
+        <p style="margin:12px 0 0"><button class="btn line sm" onclick="print()">طباعة / حفظ PDF</button></p></section>`;
+    } else if (tab === 'mat') {
+      const msg = (m) => `السلام عليكم، أشاركك ${m.title} من نُبل وابتكار للتسويق: ${m.url}\nوللاستفسار تواصل معي مباشرة — ${D.rep.name}`;
+      el.innerHTML = `<section><h2>مواد جاهزة لعملائك</h2><p class="small muted" style="margin:-4px 0 12px">أرسلها لعميلك من جوالك، ثم سجّله في «سجّل عميلاً جديداً» حتى تُنسب لك عمولته.</p>
+        <div class="mat">${D.materials.map((m, i) => `<div class="mi"><img src="${esc(m.img)}" alt="" loading="lazy"><div><b>${esc(m.title)}</b><p>${esc(m.desc)}</p>
+          <div class="row"><a class="btn wa sm" href="https://wa.me/?text=${encodeURIComponent(msg(m))}" target="_blank" rel="noopener">إرسال بواتساب</a>
+          <button class="btn line sm" data-copy="${i}">نسخ الرابط</button><a class="btn line sm" href="${esc(m.url)}" target="_blank" rel="noopener">فتح</a></div></div></div>`).join('')}</div></section>`;
+      el.querySelectorAll('[data-copy]').forEach((b) => { b.onclick = async () => { try { await navigator.clipboard.writeText(D.materials[b.dataset.copy].url); toast('نُسخ الرابط'); } catch { toast('انسخ الرابط من زر «فتح»', true); } }; });
+    } else if (tab === 'acc') {
+      el.innerHTML = `<section><h2>بيانات التحويل</h2>
+        ${D.rep.iban ? `<div class="bank"><b>${esc(D.rep.bank_name)}</b><br><span class="num">${esc(D.rep.iban)}</span></div>` : '<div class="bank">لم تُضف بيانات التحويل بعد — أضفها حتى نصرف عمولاتك.</div>'}
+        <p style="margin:12px 0 0"><button class="btn line" id="bank">${D.rep.iban ? 'تحديث البيانات' : 'إضافة الآيبان'}</button></p>
+        <p class="small muted">لحمايتك: أي تغيير يُبلَّغ للمالية وتتأكد منه معك هاتفياً قبل الصرف.</p></section>
+      <section><h2>طلباتك <span class="cnt">${D.requests.length}</span></h2>${D.requests.length ? `<table class="r"><thead><tr><th>التاريخ</th><th>النوع</th><th>التفاصيل</th><th>الحالة</th></tr></thead><tbody>
+        ${D.requests.map((q) => `<tr><td data-l="التاريخ">${date(q.created_at)}</td><td data-l="النوع">${esc(q.type)}</td><td data-l="التفاصيل">${esc(q.subject || '')}</td><td data-l="الحالة">${pill(q.status)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">لا طلبات بعد.</div>'}</section>`;
+      $('#bank').onclick = bankForm;
+    } else {
+      el.innerHTML = `<section><h2>عملاؤك <span class="cnt">${D.clients.length}</span></h2>${D.clients.length ? `<table class="r"><thead><tr><th>العميل</th><th>تستمر عمولتك حتى</th></tr></thead><tbody>
+        ${D.clients.map((c) => `<tr><td data-l="العميل"><b>${esc(c.name)}</b></td><td data-l="حتى">${c.rep_until ? date(c.rep_until) : '<span class="muted">تبدأ مع أول عقد</span>'}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="empty">حين يتعاقد أحد عملائك المحتملين يظهر هنا.</div>'}</section>
+      <section><h2>الصفقات <span class="cnt">${D.deals.length}</span></h2>${D.deals.length ? `<table class="r"><thead><tr><th>الصفقة</th><th>الجهة</th><th>المرحلة</th><th>آخر تحديث</th></tr></thead><tbody>
+        ${D.deals.map((d) => `<tr><td data-l="الصفقة">${esc(d.title)}</td><td data-l="الجهة">${esc(d.party || '')}</td><td data-l="المرحلة">${pill(d.stage)}</td><td data-l="التحديث">${date(d.updated_at || d.created_at)}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="empty">لا صفقات مفتوحة باسمك بعد.</div>'}</section>
+      <section><h2>العملاء المحتملون الذين سجّلتهم <span class="cnt">${D.leads.length}</span></h2>${D.leads.length ? `<table class="r"><thead><tr><th>الاسم</th><th>الحالة</th><th>مرحلة الصفقة</th><th>تاريخ التسجيل</th></tr></thead><tbody>
+        ${D.leads.map((l) => `<tr><td data-l="الاسم"><b>${esc(l.name)}</b></td><td data-l="الحالة">${pill(l.converted ? 'محوّل لعميل' : l.status)}</td><td data-l="الصفقة">${l.stage ? pill(l.stage) : '<span class="muted">—</span>'}</td><td data-l="التسجيل">${date(l.created_at)}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="empty">سجّل أول عميل من زر «سجّل عميلاً جديداً» وسيتابعه فريق المبيعات فوراً.</div>'}</section>`;
+    }
+  }
+
+  function addLead() {
+    modal('تسجيل عميل جديد', `<form id="lf" novalidate>
+      <div class="grid2"><label class="f"><span>اسم المسؤول *</span><input class="inp" name="name" required maxlength="120"></label>
+      <label class="f"><span>جوال العميل *</span><input class="inp num" name="phone" type="tel" inputmode="tel" placeholder="05XXXXXXXX" required></label></div>
+      <div class="grid2"><label class="f"><span>اسم المنشأة</span><input class="inp" name="company" maxlength="120"></label>
+      <label class="f"><span>المدينة</span><input class="inp" name="city" value="جدة" maxlength="60"></label></div>
+      <label class="f"><span>القطاع</span><select class="inp" name="sector"><option value="">—</option>${D.sectors.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
+      <label class="f"><span>ما الذي يحتاجه العميل؟</span><textarea class="inp" name="notes" maxlength="1200" placeholder="مثال: يريد إدارة حسابات التواصل لمطعمه، الميزانية تقريبية…"></textarea></label>
+      <p class="hint">يُنسب العميل لك إن لم يكن مسجلاً لدينا من قبل، ويتواصل معه فريق المبيعات ويُبلغك بالتقدّم هنا.</p>
+      <button class="btn gold" style="width:100%" type="submit">تسجيل العميل</button></form>`, (m, close) => {
+      $('#lf', m).onsubmit = (e) => {
+        e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+        busy(e.target.querySelector('[type=submit]'), async () => { await api('rep/lead', f); close(); toast('سُجّل العميل باسمك ✓'); tab = 'home'; await load(); });
+      };
+    });
+  }
+
+  function payReq() {
+    modal('طلب صرف العمولات المعتمدة', `<p>سيُرفع طلب صرف <b>${money(D.totals.approved)}</b> إلى المالية${D.rep.iban ? ` على حساب <b class="num">${esc(D.rep.iban)}</b>` : ''}.</p>
+      ${D.rep.iban ? '' : '<div class="bank" style="margin-bottom:10px">أضف رقم الآيبان أولاً من تبويب «بيانات التحويل».</div>'}
+      <label class="f"><span>ملاحظة (اختياري)</span><textarea class="inp" id="pn" maxlength="600"></textarea></label>
+      <button class="btn teal" style="width:100%" id="ps" ${D.rep.iban ? '' : 'disabled'}>إرسال الطلب</button>`, (m, close) => {
+      $('#ps', m).onclick = (e) => busy(e.currentTarget, async () => { await api('rep/payout', { note: $('#pn', m).value }); close(); toast('أُرسل طلب الصرف للمالية ✓'); await load(); });
+    });
+  }
+
+  function bankForm() {
+    modal('بيانات التحويل', `<form id="bf" novalidate>
+      <label class="f"><span>اسم البنك</span><input class="inp" name="bank_name" value="${esc(D.rep.bank_name)}" maxlength="80" required></label>
+      <label class="f"><span>رقم الآيبان</span><input class="inp num" name="iban" placeholder="SA00 0000 0000 0000 0000 0000" maxlength="34" autocomplete="off" required></label>
+      <p class="hint">يجب أن يكون الحساب باسمك. يبدأ الآيبان السعودي بـ SA ويليه 22 رقماً.</p>
+      <button class="btn" style="width:100%" type="submit">حفظ</button></form>`, (m, close) => {
+      $('#bf', m).onsubmit = (e) => {
+        e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+        busy(e.target.querySelector('[type=submit]'), async () => { await api('rep/bank', f); close(); toast('حُفظت البيانات وأُبلغت المالية ✓'); await load(); });
+      };
+    });
+  }
+
+  boot('rep', { title: 'بوابة المندوب', sub: 'سجّل عملاءك، تابع صفقاتهم، واطلب صرف عمولاتك.', help: 'لست مسجلاً كمندوب؟ تواصل معنا لتنضم.' }, load);
+})();
+</script>
+</body>
+</html>

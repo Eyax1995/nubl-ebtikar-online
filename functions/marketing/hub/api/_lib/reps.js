@@ -96,7 +96,7 @@ export async function syncClient(db, env, clientId, origin) {
 }
 
 // ---------- كشف الحساب ----------
-async function statement(db, repId) {
+export async function statement(db, repId) {
   const rep = await db.prepare('SELECT id, name, phone, rate, months, base, status FROM reps WHERE id = ?').bind(repId).first();
   if (!rep) return null;
   const { results: rows } = await db.prepare(`SELECT c.id, c.earned_at, c.base_amount, c.rate, c.amount, c.status, c.note, c.payout_id, cl.name AS client
@@ -205,7 +205,7 @@ export async function commissionsRoute(db, env, request, user, a, b) {
     await db.prepare('UPDATE reps SET portal_hash = ?, portal_prefix = ? WHERE id = ?').bind(await sha256(tok), tok.slice(0, 8), rep.id).run();
     await audit(db, user, 'portal', 'reps', rep.id);
     const url = portalUrl(origin, tok);
-    if (d.send) await tellRep(db, rep, 'كشف حساب عمولاتك لدى نُبل وابتكار للتسويق', `تابع عملاءك وعمولاتك المستحقة والمصروفة من الرابط الخاص بك (لا تشاركه): ${url}`, url);
+    if (d.send) await tellRep(db, rep, 'بوابة المندوب لدى نُبل وابتكار للتسويق', `سجّل عملاءك وتابع عمولاتك واطلب صرفها من بوابتك — ادخل برقم جوالك ويصلك رمز على واتساب: https://nubl-ebtikar.online/marketing/rep/ · أو كشف الحساب المباشر (لا تشاركه): ${url}`, 'https://nubl-ebtikar.online/marketing/rep/');
     return json({ url });
   }
 

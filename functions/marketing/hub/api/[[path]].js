@@ -26,6 +26,7 @@ import { sendReport, buildReport, toWA } from './_lib/reports.js';
 import { accrueForPayment, voidForPayment, refreshForPayment, syncClient, publicRep, commissionsRoute } from './_lib/reps.js';
 import { backupsRoute } from './_lib/backup.js';
 import { auditRoute } from './_lib/auditlog.js';
+import { portalRoute, portalsAdminRoute } from './_lib/portal.js';
 import { SECTIONS, ROUTE_SECTION, allowed, permsFor, sectionAllowed, parseSections } from './_lib/sections.js';
 
 export async function onRequest(ctx) {
@@ -43,6 +44,7 @@ export async function onRequest(ctx) {
     }
     if (parts[0] === 'public' && parts[1] === 'lead' && method === 'POST') return await publicLead(db, request, env);
     if (parts[0] === 'public' && parts[1] === 'rep' && method === 'GET') return await publicRep(db, request); // كشف حساب المندوب برابطه الخاص
+    if (parts[0] === 'portal') return await portalRoute(db, env, request, parts); // بوابتا المندوب والعميل (دخول برمز واتساب)
     if (parts[0] === 'hook') return await hookRoute(db, env, request, parts[1]);
     if (parts[0] === 'xq' && parts[1] === 'bridge') return await xqBridge(db, env, request, ctx); // من منصة الدعاية والإعلان — موقّع HMAC
     if (parts[0] === 'auth' && parts[1] === 'login' && method === 'POST') return await login(db, request);
@@ -120,6 +122,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'notifications': return notificationsRoute(db, env, request, user, parts[1]);
       case 'tokens': return tokensRoute(db, request, user, parts[1]);
       case 'commissions': return commissionsRoute(db, env, request, user, parts[1], parts[2]);
+      case 'portals': return portalsAdminRoute(db, env, request, user, parts[1], parts[2]);
       case 'studio': return studioRoute(db, env, request, user, parts, {
         need, inScope,
         toContract: async (qid) => {
