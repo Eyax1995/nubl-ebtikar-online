@@ -522,12 +522,14 @@ async function listView(ent, opts = {}) {
     <button class="btn btn-g btn-s" id="csv">تصدير CSV</button>
     ${can(ent, 'w') && !opts.noAdd ? `<button class="btn btn-p" id="add">${I.plus} ${def.one} جديد</button>` : ''}
   </div><div id="tbl"><div class="empty">جارٍ التحميل…</div></div>`;
+  const seq = S.renderSeq, tbl = $('#tbl');
   const load = async () => {
     const qs = new URLSearchParams({ limit: 200, offset: st.offset });
     if (st.q) qs.set('q', st.q);
     for (const [k, val] of Object.entries({ ...st.f, ...(opts.fixed || {}) })) if (val !== '' && val != null) qs.set('f_' + k, val);
     const refsNeeded = [...new Set(listF.filter((f) => f.t === 'ref' && f.ref !== 'users').map((f) => f.ref))];
     const [d] = await Promise.all([api(`e/${ent}?${qs}`), ...refsNeeded.map((r) => refs(r).catch(() => []))]);
+    if (seq !== S.renderSeq || !tbl.isConnected) return;
     S.lastRows = d.rows;
     if (!d.rows.length) { $('#tbl').innerHTML = `<div class="tbl-wrap"><div class="empty"><div class="star"></div><br>لا توجد سجلات${st.q || Object.values(st.f).some(Boolean) ? ' مطابقة' : ' بعد'}</div></div>`; return; }
     $('#tbl').innerHTML = `<div class="tbl-wrap"><table class="t"><thead><tr>${listF.map((f) => `<th>${f.l}</th>`).join('')}${opts.rowActions ? '<th></th>' : ''}</tr></thead>
@@ -572,7 +574,14 @@ async function rerender() {
   const r = ROUTES[name];
   if (!r) { $('#view').innerHTML = '<div class="empty">الصفحة غير موجودة</div>'; return; }
   $('#ptitle').textContent = r.title || ENT[r.ent]?.title || '';
-  try { await r.render(id, sub); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  // رمز العرض: عرض أقدم ينتهي بعد الأحدث لا يُظهر خطأه، وإن كتب فوق الأحدث المنتهي يُعاد رسم الأحدث
+  const seq = S.renderSeq = (S.renderSeq || 0) + 1;
+  const stale = () => seq !== S.renderSeq;
+  try { await r.render(id, sub, seq); } catch (e) {
+    if (!stale()) { console.error(e); $('#view').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  }
+  if (stale()) { if (S.renderDone === S.renderSeq) rerender(); return; }
+  S.renderDone = seq;
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', () => S.meta && rerender());
