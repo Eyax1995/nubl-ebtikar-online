@@ -22,14 +22,14 @@ export const ENTITY_SECTION = {
   invoices: 'finance', payments: 'finance', expenses: 'finance', accounts: 'finance', journals: 'finance', reps: 'finance',
   tasks: 'ops', templates: 'ops', projects: 'ops', content: 'ops', seasons: 'ops',
   campaigns: 'marketing', plans: 'marketing',
-  employees: 'hr', payroll: 'hr', advances: 'hr',
+  employees: 'hr', payroll: 'hr', advances: 'hr', jobs: 'hr', applications: 'hr',
   articles: 'knowledge',
 };
 
 // قسم مسارات الإجراءات الخاصة (خارج e/<كيان>)
 export const ROUTE_SECTION = {
   fin: 'finance', debts: 'finance', commissions: 'finance', invoices: 'finance', reports: 'finance',
-  hr: 'hr', leads: 'crm', timeline: 'crm', quotes: 'clients', contracts: 'clients', studio: 'clients', xq: 'clients', templates: 'ops', store: 'store',
+  hr: 'hr', applications: 'hr', leads: 'crm', timeline: 'crm', quotes: 'clients', contracts: 'clients', studio: 'clients', xq: 'clients', templates: 'ops', store: 'store',
 };
 
 // NULL = كل الأقسام · '' = بلا أي قسم · 'crm,ops' = هذه فقط

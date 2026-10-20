@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -162,6 +162,17 @@ export const DDL = [
   'CREATE INDEX IF NOT EXISTS ix_audit_at ON audit(at)',
   'CREATE INDEX IF NOT EXISTS ix_audit_user ON audit(user_id, id)',
   'CREATE INDEX IF NOT EXISTS ix_audit_entity ON audit(entity, entity_id)',
+  // v16: التوظيف — الوظائف المعلنة وطلبات التقديم من صفحة «انضم إلينا» (انظر _lib/hiring.js)
+  `CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, summary TEXT, details TEXT, location TEXT,
+    modes TEXT, skills TEXT, tools TEXT, extra_q TEXT, status TEXT DEFAULT 'مفتوحة', sort INTEGER DEFAULT 0, org TEXT DEFAULT 'nubl',
+    created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS applications (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT, job_id INTEGER, job_title TEXT, name TEXT NOT NULL, phone TEXT,
+    email TEXT, city TEXT, experience TEXT, skills TEXT, tools TEXT, portfolio TEXT, cv_link TEXT, cv_name TEXT, cv_mime TEXT, cv_size INTEGER, cv_chunks INTEGER DEFAULT 0,
+    mode TEXT, salary TEXT, start_when TEXT, answer TEXT, status TEXT DEFAULT 'جديد', rating INTEGER, notes TEXT, owner_id INTEGER, ip_hash TEXT, submits INTEGER DEFAULT 1,
+    org TEXT DEFAULT 'nubl', created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  'CREATE INDEX IF NOT EXISTS ix_apps_job ON applications(job_id, status)',
+  'CREATE INDEX IF NOT EXISTS ix_apps_phone ON applications(phone, job_id)',
+  `CREATE TABLE IF NOT EXISTS app_files (app_id INTEGER NOT NULL, seq INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (app_id, seq))`,
 ];
 
 // الجهات داخل المنصة (فصل الأعمال حسب طبيعة العملاء — الفريق والإدارة واحدة)
@@ -214,6 +225,16 @@ export const MIGRATIONS = [
   'CREATE TRIGGER IF NOT EXISTS tg_advances_org_ins AFTER INSERT ON advances WHEN NEW.employee_id IS NOT NULL BEGIN UPDATE advances SET org = COALESCE((SELECT org FROM employees WHERE id = NEW.employee_id), org) WHERE id = NEW.id; END',
   // v15: صلاحيات الأقسام لكل مستخدم (NULL = كل الأقسام) — انظر _lib/sections.js
   'ALTER TABLE users ADD COLUMN sections TEXT',
+  // v16: أول وظيفة معلنة (من نموذج Google للمصممة — 20 أكتوبر 2026) تُزرع مرة واحدة إن لم توجد وظائف
+  `INSERT INTO jobs (slug, title, summary, details, location, modes, skills, tools, extra_q, status, sort)
+    SELECT 'designer', 'مصممة جرافيك ومونتاج ومحتوى',
+    'نبحث عن مصممة تجمع التصميم والمونتاج وكتابة المحتوى العربي، لتنضم إلى فريق يعمل لعلامات حقيقية من الفكرة إلى المطبوع.',
+    'نُبل وابتكار للخدمات التسويقية — الذراع التسويقية لمؤسسة نُبل وابتكار للأعمال التجارية في جدة. التقديم يستغرق خمس دقائق، ومعرض الأعمال هو أهم ما ننظر إليه.',
+    'جدة — حي الحمدانية', '["حضوري في جدة","عن بُعد","مرن"]',
+    '["تصميم منشورات التواصل","مونتاج الفيديو والريلز","كتابة المحتوى العربي","تصميم المطبوعات","الموشن جرافيك","الهويات البصرية"]',
+    '["Photoshop","Illustrator","InDesign","Premiere Pro","After Effects","CapCut","Figma","Canva"]',
+    'أفضل عمل صممتِه ولماذا؟ (سطران)', 'مفتوحة', 10
+    WHERE NOT EXISTS (SELECT 1 FROM jobs)`,
   // v10: الجهة (نُبل وابتكار = القطاع الربحي · مروج الحجاز = القطاع غير الربحي) + وراثتها آلياً من العميل/العميل المحتمل
   ...ORG_MIGRATIONS(),
 ];
@@ -393,6 +414,16 @@ export const ENTITIES = {
   advances: {
     cols: ['number', 'date', 'employee_id', 'amount', 'installment', 'paid_back', 'reason', 'cash_account', 'status', 'notes', 'org'],
     search: ['number', 'reason'], perms: { admin: 'rwd', finance: 'rwd', manager: 'r', executive: 'r' }, order: 'date DESC, id DESC',
+  },
+  // ---- التوظيف (v16): الوظائف المعلنة وطلبات التقديم — بلا حذف (تُغلق الوظيفة ويُستبعد الطلب) ----
+  jobs: {
+    cols: ['slug', 'title', 'summary', 'details', 'location', 'modes', 'skills', 'tools', 'extra_q', 'status', 'sort', 'org'],
+    search: ['title', 'summary', 'slug'], perms: { admin: 'rw', manager: 'rw', executive: 'r' }, order: "status = 'مفتوحة' DESC, sort, id DESC",
+  },
+  applications: {
+    cols: ['number', 'job_id', 'job_title', 'name', 'phone', 'email', 'city', 'experience', 'skills', 'tools', 'portfolio', 'cv_link', 'mode', 'salary', 'start_when',
+      'answer', 'status', 'rating', 'notes', 'owner_id', 'org'],
+    search: ['name', 'phone', 'email', 'city', 'number', 'notes'], perms: { admin: 'rw', manager: 'rw', executive: 'r' }, order: 'id DESC',
   },
   users: {
     cols: ['name', 'email', 'phone', 'role', 'title', 'active', 'commission_rate'],

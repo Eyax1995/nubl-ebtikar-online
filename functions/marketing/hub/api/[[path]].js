@@ -28,6 +28,7 @@ import { backupsRoute } from './_lib/backup.js';
 import { auditRoute } from './_lib/auditlog.js';
 import { portalRoute, portalsAdminRoute } from './_lib/portal.js';
 import { SECTIONS, ROUTE_SECTION, allowed, permsFor, sectionAllowed, parseSections } from './_lib/sections.js';
+import { publicJobs, publicApply, applicationCv } from './_lib/hiring.js';
 
 export async function onRequest(ctx) {
   const { request, env, params } = ctx;
@@ -45,6 +46,8 @@ export async function onRequest(ctx) {
     if (parts[0] === 'public' && parts[1] === 'lead' && method === 'POST') return await publicLead(db, request, env);
     if (parts[0] === 'public' && parts[1] === 'rep' && method === 'GET') return await publicRep(db, request); // كشف حساب المندوب برابطه الخاص
     if (parts[0] === 'portal') return await portalRoute(db, env, request, parts); // بوابتا المندوب والعميل (دخول برمز واتساب)
+    if (parts[0] === 'public' && parts[1] === 'jobs' && method === 'GET') return await publicJobs(db); // صفحة «انضم إلينا»
+    if (parts[0] === 'public' && parts[1] === 'apply' && method === 'POST') return await publicApply(db, env, request);
     if (parts[0] === 'hook') return await hookRoute(db, env, request, parts[1]);
     if (parts[0] === 'xq' && parts[1] === 'bridge') return await xqBridge(db, env, request, ctx); // من منصة الدعاية والإعلان — موقّع HMAC
     if (parts[0] === 'auth' && parts[1] === 'login' && method === 'POST') return await login(db, request);
@@ -139,6 +142,9 @@ async function dispatch(db, env, request, user, parts) {
       case 'export': return exportAll(db, user);
       case 'backups': return backupsRoute(db, request, user, parts[1]);
       case 'audit': return auditRoute(db, request, user, parts[1]);
+      case 'applications':
+        if (parts[2] === 'cv' && request.method === 'GET') { need(user, 'applications', 'r'); return applicationCv(db, user, parts[1]); }
+        return bad('إجراء غير معروف', 404);
       case 'timeline': return timeline(db, user, parts[1], parts[2]);
       case 'ai': return aiRoute(env, db, request, user);
       case 'wa': return waInboxRoute(env, request, user, parts[1], parts[2]);
