@@ -2,10 +2,11 @@
 // يُستدعى من المنصة (POST /templates/:id/run) ومن بوت تلجرام بنفس المنطق تماماً.
 import { HttpError, today, addDays, audit } from './core.js';
 import { ENTITIES } from './schema.js';
+import { allowed } from './sections.js';
 import { SECTORS } from './seed.js';
 import { notifyUser, taskLine, openTaskKb, h } from './telegram.js';
 
-export const canDo = (user, entity, op) => (ENTITIES[entity]?.perms[user.role] || '').includes(op);
+export const canDo = (user, entity, op) => allowed(user, entity, op); // الدور + صلاحيات الأقسام
 
 export function parseTpl(row) {
   if (!row) return null;

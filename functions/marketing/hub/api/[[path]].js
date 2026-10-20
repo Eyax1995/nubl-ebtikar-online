@@ -26,6 +26,7 @@ import { sendReport, buildReport, toWA } from './_lib/reports.js';
 import { accrueForPayment, voidForPayment, refreshForPayment, syncClient, publicRep, commissionsRoute } from './_lib/reps.js';
 import { backupsRoute } from './_lib/backup.js';
 import { auditRoute } from './_lib/auditlog.js';
+import { SECTIONS, ROUTE_SECTION, allowed, permsFor, sectionAllowed, parseSections } from './_lib/sections.js';
 
 export async function onRequest(ctx) {
   const { request, env, params } = ctx;
@@ -99,6 +100,8 @@ export async function onRequest(ctx) {
 }
 
 async function dispatch(db, env, request, user, parts) {
+    // صلاحيات الأقسام: مسارات الإجراءات الخاصة تتبع قسمها (مسارات e/<كيان> تُفحص في need)
+    if (!sectionAllowed(user, ROUTE_SECTION[parts[0]])) return bad(`لا تملك صلاحية قسم «${SECTIONS[ROUTE_SECTION[parts[0]]]}»`, 403);
     switch (parts[0]) {
       case 'meta': return meta(db, user);
       case 'orgs': return json(await orgSummary(db, user));
@@ -152,7 +155,8 @@ async function entityCall(db, env, request, user, method, entity, id, data) {
 }
 
 // ======================================================================
-const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, title: u.title, must_change: !!u.must_change, tg_linked: !!u.tg_chat_id, tg_username: u.tg_username || null });
+const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, title: u.title, must_change: !!u.must_change, tg_linked: !!u.tg_chat_id, tg_username: u.tg_username || null,
+  sections: u.role === 'admin' ? null : parseSections(u.sections) });
 function sameOrigin(request) {
   const o = request.headers.get('origin');
   if (!o) return true;
@@ -161,7 +165,7 @@ function sameOrigin(request) {
 async function body(request) {
   try { return await request.json(); } catch { throw new HttpError(400, 'بيانات غير صالحة'); }
 }
-const can = (user, entity, op) => (ENTITIES[entity]?.perms[user.role] || '').includes(op);
+const can = (user, entity, op) => allowed(user, entity, op); // الدور + صلاحيات الأقسام (sections.js)
 function need(user, entity, op) { if (!can(user, entity, op)) throw new HttpError(403, 'لا تملك صلاحية لهذا الإجراء'); }
 const isBoss = (u) => u.role === 'admin' || u.role === 'manager';
 function strip(user, row) {
@@ -201,8 +205,8 @@ async function meta(db, user) {
   const { results: users } = await db.prepare('SELECT id, name, role, title, active, (tg_chat_id IS NOT NULL) AS tg FROM users ORDER BY active DESC, name').all();
   const settings = await publicSettings(db);
   const perms = {};
-  for (const [k, v] of Object.entries(ENTITIES)) perms[k] = v.perms[user.role] || '';
-  return json({ user: publicUser(user), users, roles: ROLES, perms, settings, sectors: SECTORS });
+  for (const k of Object.keys(ENTITIES)) perms[k] = permsFor(user, k);
+  return json({ user: publicUser(user), users, roles: ROLES, perms, settings, sectors: SECTORS, sections: SECTIONS });
 }
 
 // ---------- CRUD عام ----------
@@ -250,7 +254,7 @@ async function entityRoute(db, request, user, entity, id, env) {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '500', 10) || 500, 2000);
     const offset = parseInt(url.searchParams.get('offset') || '0', 10) || 0;
     const w = where.length ? ' WHERE ' + where.join(' AND ') : '';
-    const sel = entity === 'users' ? 'id, name, email, phone, role, title, active, commission_rate, last_login, created_at, tg_username, (tg_chat_id IS NOT NULL) AS tg_linked'
+    const sel = entity === 'users' ? 'id, name, email, phone, role, title, active, commission_rate, last_login, created_at, tg_username, (tg_chat_id IS NOT NULL) AS tg_linked, sections'
       : entity === 'files' ? 'id, name, mime, size' : '*';
     const { results } = await db.prepare(`SELECT ${sel} FROM ${entity}${w} ORDER BY ${def.order} LIMIT ? OFFSET ?`)
       .bind(...args, limit, offset).all();
@@ -821,6 +825,22 @@ async function usersRoute(db, request, user, id, action) {
       if (String(e.message).includes('UNIQUE')) return bad('البريد مستخدم مسبقاً');
       throw e;
     }
+  }
+  // صلاحيات الأقسام: { sections: null } = كل الأقسام، أو مصفوفة رموز من SECTIONS
+  if (id && action === 'sections' && request.method === 'PUT') {
+    const d = await body(request);
+    const t = await db.prepare('SELECT id, role FROM users WHERE id = ?').bind(id).first();
+    if (!t) return bad('المستخدم غير موجود', 404);
+    if (t.role === 'admin') return bad('المدير العام يملك كل الأقسام دائماً');
+    let val = null;
+    if (Array.isArray(d.sections)) {
+      const bad1 = d.sections.filter((s) => !SECTIONS[s]);
+      if (bad1.length) return bad('قسم غير معروف: ' + bad1.join('، '));
+      val = Object.keys(SECTIONS).filter((s) => d.sections.includes(s)).join(',');
+    } else if (d.sections != null) return bad('صيغة الأقسام غير صالحة');
+    await db.prepare('UPDATE users SET sections = ? WHERE id = ?').bind(val, id).run();
+    await audit(db, user, 'sections', 'users', id, val === null ? 'كل الأقسام' : val || 'بلا أقسام');
+    return json({ id: Number(id), sections: parseSections(val) });
   }
   if (id && action === 'reset' && request.method === 'POST') {
     const pw = tempPassword(); const h = await hashPassword(pw);

@@ -62,7 +62,7 @@ export async function currentUser(db, request) {
   const token = getCookie(request, COOKIE);
   if (!token) return null;
   const row = await db.prepare(
-    `SELECT u.id, u.name, u.email, u.role, u.title, u.must_change, u.active, u.commission_rate, u.tg_chat_id, u.tg_username, s.expires_at
+    `SELECT u.id, u.name, u.email, u.role, u.title, u.must_change, u.active, u.commission_rate, u.tg_chat_id, u.tg_username, u.sections, s.expires_at
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?`).bind(token).first();
   if (!row || !row.active || row.expires_at < new Date().toISOString()) return null;
   row.token = token;

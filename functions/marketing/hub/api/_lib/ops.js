@@ -2,6 +2,7 @@
 // المسارات: GET|PUT people/<task_id> · GET|POST reminders · PUT|DELETE reminders/<id> · GET agenda?from=&to=&user=
 import { json, bad, HttpError, today } from './core.js';
 import { ENTITIES } from './schema.js';
+import { allowed } from './sections.js';
 import { notifyUser } from './telegram.js';
 
 const ROLES_P = ['مكلّف', 'مراجع', 'مطّلع', 'طرف خارجي'];
@@ -10,7 +11,7 @@ const REM_ENT = ['tasks', 'leads', 'deals', 'activities', 'clients', 'contracts'
 const ENT_AR = { tasks: 'مهمة', leads: 'عميل محتمل', deals: 'صفقة', activities: 'تواصل', clients: 'عميل', contracts: 'عقد', invoices: 'فاتورة', quotes: 'عرض سعر', projects: 'مشروع', content: 'منشور', visits: 'زيارة' };
 const LINK = { tasks: () => '#/tasks', leads: (id) => `#/lead/${id}`, clients: (id) => `#/client/${id}`, contracts: (id) => `#/contract/${id}`, invoices: (id) => `#/invoice/${id}`, quotes: (id) => `#/quote/${id}`, deals: () => '#/pipeline', content: () => '#/content', activities: () => '#/activities', projects: () => '#/projects', visits: () => '#/visits' };
 const isBoss = (u) => ['admin', 'manager'].includes(u.role);
-const canRead = (u, ent) => (ENTITIES[ent]?.perms?.[u.role] || '').includes('r');
+const canRead = (u, ent) => allowed(u, ent, 'r');
 const h = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 async function body(request) { try { return await request.json(); } catch { return {}; } }

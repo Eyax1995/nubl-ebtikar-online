@@ -73,7 +73,7 @@ class Bot {
   clear(chat, userId) { return this.setState(chat, userId, {}); }
 
   async userByChat(chat) {
-    return this.db.prepare('SELECT id, name, email, role, title, active FROM users WHERE tg_chat_id = ? AND active = 1').bind(String(chat)).first();
+    return this.db.prepare('SELECT id, name, email, role, title, active, sections FROM users WHERE tg_chat_id = ? AND active = 1').bind(String(chat)).first();
   }
 
   // ---------------------------------------------------------------- نقطة الدخول

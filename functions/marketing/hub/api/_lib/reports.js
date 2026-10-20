@@ -4,10 +4,11 @@
 // وخارجها قالب خدمي مختصر يدعو العضو للرد بـ«تقرير» فتنفتح النافذة ويصله التقرير كاملاً).
 import { getSettings, today, addDays } from './core.js';
 import { ENTITIES } from './schema.js';
+import { allowed } from './sections.js';
 import { tgToken, tgCall, waBridge, h as hx } from './telegram.js';
 
 const BOSS = ['admin', 'manager', 'executive'];
-const can = (u, ent, op = 'r') => (ENTITIES[ent]?.perms[u.role] || '').includes(op);
+const can = (u, ent, op = 'r') => allowed(u, ent, op);
 const cut = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 const nf = (x) => new Intl.NumberFormat('en-US').format(Math.round(Number(x) || 0));
 export const ksaHour = () => (new Date().getUTCHours() + 3) % 24;

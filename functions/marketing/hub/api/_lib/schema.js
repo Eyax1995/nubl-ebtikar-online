@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -212,6 +212,8 @@ export const MIGRATIONS = [
   "ALTER TABLE expenses ADD COLUMN status TEXT DEFAULT 'مرحّل'", 'ALTER TABLE invoices ADD COLUMN revenue_account INTEGER',
   'CREATE TRIGGER IF NOT EXISTS tg_payroll_org_ins AFTER INSERT ON payroll WHEN NEW.employee_id IS NOT NULL BEGIN UPDATE payroll SET org = COALESCE((SELECT org FROM employees WHERE id = NEW.employee_id), org) WHERE id = NEW.id; END',
   'CREATE TRIGGER IF NOT EXISTS tg_advances_org_ins AFTER INSERT ON advances WHEN NEW.employee_id IS NOT NULL BEGIN UPDATE advances SET org = COALESCE((SELECT org FROM employees WHERE id = NEW.employee_id), org) WHERE id = NEW.id; END',
+  // v15: صلاحيات الأقسام لكل مستخدم (NULL = كل الأقسام) — انظر _lib/sections.js
+  'ALTER TABLE users ADD COLUMN sections TEXT',
   // v10: الجهة (نُبل وابتكار = القطاع الربحي · مروج الحجاز = القطاع غير الربحي) + وراثتها آلياً من العميل/العميل المحتمل
   ...ORG_MIGRATIONS(),
 ];

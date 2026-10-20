@@ -88,6 +88,49 @@
     await load(false);
   }
   ROUTES.audit = { title: 'سجل التدقيق', render: auditView };
+
+  /* ---------- (ج) صلاحيات الأقسام لكل مستخدم — فوق صلاحيات الأدوار ----------
+     الخادم يحجب الكيانات ومساراتها (sections.js)، وS.meta.perms تصل مصفّاة فتختفي عناصر القائمة تلقائياً.
+     عناصر القائمة التي لا تحمل كياناً (متاحة لكل الأدوار) تُربط بقسمها فقط بعلامة «§قسم» — لا بصلاحية كيان، حتى لا تختفي عن أدوار كانت تراها. */
+  const secOk = (sec) => { const u = me(); return u.role === 'admin' || u.sections == null || u.sections.includes(sec); };
+  const LINK = { debts: 'finance', studio: 'clients', xreq: 'clients' };
+  NAV.forEach(([, items]) => items.forEach((i) => { if (LINK[i[0]] && !i[3]) i[3] = '§' + LINK[i[0]]; }));
+  const navBase = navAllowed;
+  navAllowed = (perm) => (typeof perm === 'string' && perm[0] === '§' ? secOk(perm.slice(1)) : navBase(perm));
+
+  async function sectionsCard() {
+    if (me().role !== 'admin' || $('#sec-card')) return;
+    const SEC = S.meta.sections || {}; const keys = Object.keys(SEC);
+    const c = document.createElement('div'); c.className = 'card'; c.id = 'sec-card'; c.style.marginTop = '14px';
+    $('#view').appendChild(c);
+    const { rows } = await api('e/users');
+    const list = (u) => (u.sections == null ? null : String(u.sections).split(',').filter(Boolean));
+    const draw = () => {
+      const us = rows.filter((u) => u.role !== 'admin');
+      c.innerHTML = `<h3>صلاحيات الأقسام</h3>
+        <p class="muted small" style="margin-bottom:10px">تُضاف فوق صلاحيات الدور ولا تستبدلها: إلغاء قسم يُخفيه من القائمة ويمنع بياناته في الخادم (403) حتى لو كان الدور يسمح بها. «كل الأقسام» هو الوضع الافتراضي. المدير العام يملك كل الأقسام دائماً.</p>
+        ${us.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>العضو</th>${keys.map((k) => `<th style="white-space:nowrap">${esc(SEC[k])}</th>`).join('')}<th></th></tr></thead><tbody>${us.map((u) => {
+          const l = list(u);
+          return `<tr data-u="${u.id}"><td><b>${esc(u.name)}</b><div class="small muted">${esc(S.meta.roles[u.role] || u.role)}${u.active ? '' : ' · موقوف'}</div>
+            <div class="small">${l == null ? '<span class="pill t">كل الأقسام</span>' : `<span class="pill o">${l.length ? `${l.length} من ${keys.length}` : 'بلا أقسام'}</span>`}</div></td>
+            ${keys.map((k) => `<td style="text-align:center"><input type="checkbox" data-s="${k}" aria-label="${esc(SEC[k])}" ${l == null || l.includes(k) ? 'checked' : ''}></td>`).join('')}
+            <td>${l == null ? '' : `<button class="btn btn-g btn-s" data-all="${u.id}">كل الأقسام</button>`}</td></tr>`;
+        }).join('')}</tbody></table></div>` : '<div class="empty">لا أعضاء غير المدير العام</div>'}`;
+      const save = async (u, sections) => {
+        try { const r = await api(`users/${u.id}/sections`, { method: 'PUT', body: { sections } }); u.sections = r.sections == null ? null : r.sections.join(','); toast(`تم تحديث أقسام ${u.name}`); }
+        catch (e) { toast(e.message, 1); }
+        draw();
+      };
+      c.querySelectorAll('tr[data-u]').forEach((tr) => {
+        const u = rows.find((x) => x.id == tr.dataset.u);
+        tr.querySelectorAll('[data-s]').forEach((cb) => cb.onchange = () => save(u, [...tr.querySelectorAll('[data-s]:checked')].map((x) => x.dataset.s)));
+        const all = tr.querySelector('[data-all]'); if (all) all.onclick = () => save(u, null);
+      });
+    };
+    draw();
+  }
+  const tr0 = ROUTES.team;
+  if (tr0) { const base = tr0.render; tr0.render = async (...a) => { await base(...a); await sectionsCard(); }; }
   const adm = NAV.find((x) => x[0] === 'الإدارة');
   if (adm && !adm[1].some((i) => i[0] === 'audit')) adm[1].splice(adm[1].length - 1, 0, ['audit', 'سجل التدقيق', 'doc', '#admin']);
 

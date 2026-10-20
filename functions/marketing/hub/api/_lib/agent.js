@@ -2,6 +2,7 @@
 // كل مفتاح يعمل بصلاحيات صاحبه نفسها (الدور + نطاق السجلات)، ونطاقه «قراءة» أو «قراءة وكتابة».
 import { json, bad, randomToken, audit } from './core.js';
 import { ENTITIES, ROLES } from './schema.js';
+import { allowed, permsFor } from './sections.js';
 
 const PREFIX = 'nhk_';
 const enc = new TextEncoder();
@@ -24,7 +25,7 @@ export async function tokenUser(db, raw) {
   const hash = await sha256(raw);
   const row = await db.prepare(
     `SELECT t.id AS token_id, t.scope, t.expires_at AS token_expires, t.revoked_at, t.last_used_at,
-            u.id, u.name, u.email, u.role, u.title, u.must_change, u.active, u.commission_rate, u.tg_chat_id, u.tg_username
+            u.id, u.name, u.email, u.role, u.title, u.must_change, u.active, u.commission_rate, u.tg_chat_id, u.tg_username, u.sections
      FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?`).bind(hash).first();
   if (!row || row.revoked_at || !row.active || row.must_change) return null;
   if (row.token_expires && row.token_expires < new Date().toISOString()) return null;
@@ -40,7 +41,7 @@ export async function tokenUser(db, raw) {
 // مسارات لا يصلها المفتاح أبداً (إدارة الحساب والأسرار)
 export function tokenBlocked(user, parts, method) {
   const p = parts[0];
-  if (['auth', 'tokens', 'users', 'settings', 'export', 'import', 'telegram'].includes(p)) return 'هذا المسار متاح من داخل المنصة فقط';
+  if (['auth', 'tokens', 'users', 'settings', 'export', 'import', 'telegram', 'backups'].includes(p)) return 'هذا المسار متاح من داخل المنصة فقط';
   if (p === 'notifications' && ['prefs', 'bridge', 'bridge-test', 'test'].includes(parts[1])) return 'هذا المسار متاح من داخل المنصة فقط';
   if (p === 'commissions' && method !== 'GET') return 'اعتماد العمولات وصرفها وروابط المناديب من داخل المنصة فقط';
   if (user.scope !== 'write' && method !== 'GET' && !(p === 'notifications' && parts[1] === 'read')) return 'المفتاح للقراءة فقط';
@@ -206,7 +207,7 @@ async function runTool(db, env, user, name, a, call) {
   switch (name) {
     case 'hub_describe': {
       const ents = {};
-      for (const [k, v] of Object.entries(ENTITIES)) { if (k === 'users') continue; const p = v.perms[user.role] || ''; if (p) ents[k] = { perms: p, fields: v.cols, search: v.search }; }
+      for (const [k, v] of Object.entries(ENTITIES)) { if (k === 'users') continue; const p = permsFor(user, k); if (p) ents[k] = { perms: p, fields: v.cols, search: v.search }; }
       const meta = await must(call, 'GET', 'meta');
       return textOut({ user: { name: user.name, role: user.role, role_label: ROLES[user.role] }, key_scope: user.scope, entities: ents,
         team: (meta.users || []).filter((u) => u.active).map((u) => ({ id: u.id, name: u.name, role: u.role })), sectors: meta.sectors });
@@ -217,7 +218,7 @@ async function runTool(db, env, user, name, a, call) {
     }
     case 'hub_search': {
       const q = String(a.q || '').trim(); if (!q) throw new Error('اكتب نص البحث');
-      const targets = ['leads', 'clients', 'deals', 'quotes', 'contracts', 'invoices', 'tasks', 'projects'].filter((e) => (ENTITIES[e].perms[user.role] || '').includes('r'));
+      const targets = ['leads', 'clients', 'deals', 'quotes', 'contracts', 'invoices', 'tasks', 'projects'].filter((e) => allowed(user, e, 'r'));
       const res = {};
       await Promise.all(targets.map(async (e) => { const r = await call('GET', `e/${e}?${qs({ q, limit: 10 })}`); if (r.status < 400 && r.data.rows?.length) res[e] = r.data.rows; }));
       return textOut(Object.keys(res).length ? res : 'لا نتائج');
