@@ -23,6 +23,7 @@ import { bearerOf, tokenUser, tokenBlocked, tokensRoute, mcpHandle } from './_li
 import { studioRoute } from './_lib/studio.js';
 import { sendReport, buildReport, toWA } from './_lib/reports.js';
 import { accrueForPayment, voidForPayment, refreshForPayment, syncClient, publicRep, commissionsRoute } from './_lib/reps.js';
+import { backupsRoute } from './_lib/backup.js';
 
 export async function onRequest(ctx) {
   const { request, env, params } = ctx;
@@ -128,6 +129,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'files': return filesRoute(db, request, user, parts[1]);
       case 'import': return importRoute(db, request, user, parts[1]);
       case 'export': return exportAll(db, user);
+      case 'backups': return backupsRoute(db, request, user, parts[1]);
       case 'timeline': return timeline(db, user, parts[1], parts[2]);
       case 'ai': return aiRoute(env, db, request, user);
       case 'wa': return waInboxRoute(env, request, user, parts[1], parts[2]);

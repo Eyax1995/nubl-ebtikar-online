@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -153,6 +153,11 @@ export const DDL = [
     leads INTEGER DEFAULT 0, conversions INTEGER DEFAULT 0, revenue REAL DEFAULT 0, owner_id INTEGER, notes TEXT, org TEXT DEFAULT 'nubl', created_by INTEGER,
     created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
   'CREATE INDEX IF NOT EXISTS ix_campaigns_client ON campaigns(client_id)',
+  // v13: النسخ الاحتياطي اليومي — JSON مضغوط gzip مقسّم على صفوف (انظر _lib/backup.js)
+  `CREATE TABLE IF NOT EXISTS backups (id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT, kind TEXT DEFAULT 'daily', status TEXT DEFAULT 'running',
+    tables INTEGER DEFAULT 0, rows INTEGER DEFAULT 0, raw_size INTEGER DEFAULT 0, size INTEGER DEFAULT 0, chunks INTEGER DEFAULT 0, error TEXT,
+    user_id INTEGER, created_at TEXT DEFAULT (datetime('now')), done_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS backup_chunks (backup_id INTEGER NOT NULL, seq INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (backup_id, seq))`,
 ];
 
 // الجهات داخل المنصة (فصل الأعمال حسب طبيعة العملاء — الفريق والإدارة واحدة)
