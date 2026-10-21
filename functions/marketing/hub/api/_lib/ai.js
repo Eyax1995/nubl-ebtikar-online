@@ -14,12 +14,12 @@ function extractJSON(text) {
 // بث (stream) من Claude: لا مهلة خمول على الاتصال الطويل، ويُجمَّع النص كاملاً
 async function claude(env, system, user, max) {
   if (!env.ANTHROPIC_API_KEY) return { ok: false, skip: true, error: 'ANTHROPIC_API_KEY غير مضاف' };
-  const model = env.CLAUDE_MODEL || 'claude-sonnet-4-5';
+  const model = env.CLAUDE_MODEL || 'claude-haiku-5-5';
   try {
     const r = await fetch(`${env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com'}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model, max_tokens: max, temperature: 0.4, stream: true, system, messages: [{ role: 'user', content: user }] }),
+      body: JSON.stringify({ model, max_tokens: max, stream: true, system, messages: [{ role: 'user', content: user }] }), // بلا temperature: نماذج Claude الحديثة ترفضه (`temperature` is deprecated)
     });
     const ct = r.headers.get('content-type') || '';
     if (!r.ok || !ct.includes('event-stream')) {
@@ -78,7 +78,7 @@ async function workers(env, system, user, max) {
 // فحص سريع لمحرك Claude يعيد سبب الفشل إن وُجد (للإعداد والمتابعة)
 export async function aiPing(env) {
   const r = await claude(env, 'رد بكلمة واحدة.', 'قل: جاهز', 20);
-  return r.ok ? { ok: true, engine: r.engine } : { ok: false, error: r.error, model: env.CLAUDE_MODEL || 'claude-sonnet-4-5' };
+  return r.ok ? { ok: true, engine: r.engine } : { ok: false, error: r.error, model: env.CLAUDE_MODEL || 'claude-haiku-5-5' };
 }
 export const aiReady = (env) => !!(env.ANTHROPIC_API_KEY || env.GEMINI_API_KEY || env.AI);
 

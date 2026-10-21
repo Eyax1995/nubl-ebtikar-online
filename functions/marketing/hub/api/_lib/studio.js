@@ -16,6 +16,15 @@ const PILLARS = ['تعليمي', 'عرض / بيع', 'خلف الكواليس', '
 const parse = (s, d) => { try { return typeof s === 'string' ? JSON.parse(s) : s || d; } catch { return d; } };
 const str = (v, n = 2000) => (v == null ? '' : String(v)).slice(0, n);
 const arr = (v) => (Array.isArray(v) ? v : []);
+// قصّ عند حد كلمة لا في منتصفها
+const clip = (v, n) => { const t = str(v, 5000).trim(); if (t.length <= n) return t; const c = t.slice(0, n - 1); const i = c.lastIndexOf(' '); return (i > n * 0.6 ? c.slice(0, i) : c).replace(/[s،,—-]+$/, '') + '…'; };
+// مرحلة الجدول الزمني: المدة قصيرة (عمود ضيق)، وما بعد «—» في المدة تفصيل يُنقل إلى عمود المرحلة الأعرض
+const tline = (t) => {
+  let phase = str(t.phase, 300).trim(), dur = str(t.duration, 400).trim();
+  const m = dur.match(/^(.{2,40}?)s+[—–-]s+(.+)$/);
+  if (m && dur.length > 30) { dur = m[1].trim(); phase = phase ? `${phase} — ${m[2].trim()}` : m[2].trim(); }
+  return { phase: clip(phase, 300), duration: clip(dur, 60) };
+};
 
 async function readBody(request) { try { return await request.json(); } catch { return {}; } }
 async function runAI(env, system, user, opts) {
@@ -66,7 +75,7 @@ const QUOTE_SCHEMA = `{
    "addons":  { "title": "خيارات إضافية للنمو (اختيارية)", "items": [ { "name": "...", "desc": "...", "catalog_code": "...", "price": 0, "unit": "شهر أو فارغ", "from": false } ] },
    "perk": "ميزة عند التعاقد (اختياري)"
  },
- "timeline": [ { "phase": "المرحلة أو المطلوب من العميل", "duration": "المدة" } ],
+ "timeline": [ { "phase": "المرحلة أو المطلوب من العميل (التفاصيل هنا)", "duration": "المدة فقط بكلمات قليلة، مثل: 5–7 أيام عمل" } ],
  "terms": ["**التأسيس**: شروط الدفع ...", "جولتا تعديل ...", "ضريبة القيمة المضافة ١٥٪ مضافة، وتصدر فاتورة ضريبية نظامية."],
  "validity_days": 14,
  "setup_split": [50, 50]
@@ -119,7 +128,7 @@ export function normalizeQuoteDoc(raw, catalog, vat) {
       addons: { title: str(P.addons?.title, 120), items: normItems(P.addons?.items, cmap, 'addons') },
       perk: str(P.perk, 400), perk_label: str(P.perk_label, 60),
     },
-    timeline: arr(raw.timeline).slice(0, 10).map((t) => ({ phase: str(t.phase, 300), duration: str(t.duration, 60) })).filter((t) => t.phase),
+    timeline: arr(raw.timeline).slice(0, 10).map(tline).filter((t) => t.phase),
     timeline_heading: str(raw.timeline_heading, 100),
     terms: arr(raw.terms).slice(0, 10).map((t) => str(t, 400)),
     validity_days: Math.max(3, Math.min(60, Number(raw.validity_days) || 14)),
@@ -263,7 +272,7 @@ async function aiContract(db, env, user, quoteId, d, h) {
     scope: arr(data.scope).slice(0, 15).map((x) => ({ item: str(x.item, 150), details: str(x.details, 600) })).filter((x) => x.item),
     deliverables: arr(data.deliverables).slice(0, 12).map((x) => str(x, 300)),
     client_duties: arr(data.client_duties).slice(0, 6).map((x) => str(x, 300)),
-    timeline: arr(data.timeline).length ? arr(data.timeline).slice(0, 10).map((t) => ({ phase: str(t.phase, 300), duration: str(t.duration, 60) })) : qdoc.timeline,
+    timeline: arr(data.timeline).length ? arr(data.timeline).slice(0, 10).map(tline) : qdoc.timeline,
     special_terms: arr(data.special_terms).slice(0, 8).map((x) => str(x, 400)),
     setup_split: qdoc.setup_split, totals, quote_number: q.number, engine,
   };
