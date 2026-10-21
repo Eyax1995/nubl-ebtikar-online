@@ -3,3 +3,6 @@
 /careers  /marketing/careers 302
 # رابط متابعة العميل (track.js): /t/<مفتاح موقّع> ← صفحة المتابعة
 /t/:key   /marketing/track/?k=:key 302
+# حجز جلسات التشخيص (sessions.js): الصفحة العامة ورابط إدارة الحجز الموقّع
+/book       /marketing/book/ 302
+/book/s/:key  /marketing/book/?s=:key 302

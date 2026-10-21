@@ -28,7 +28,7 @@ export const ENTITY_SECTION = {
 
 // قسم مسارات الإجراءات الخاصة (خارج e/<كيان>)
 export const ROUTE_SECTION = {
-  fin: 'finance', debts: 'finance', commissions: 'finance', invoices: 'finance', reports: 'finance',
+  sessions: 'crm', fin: 'finance', debts: 'finance', commissions: 'finance', invoices: 'finance', reports: 'finance',
   hr: 'hr', applications: 'hr', leads: 'crm', timeline: 'crm', quotes: 'clients', contracts: 'clients', studio: 'clients', xq: 'clients', templates: 'ops', store: 'store',
 };
 

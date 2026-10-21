@@ -6,6 +6,7 @@ import { processReminders } from '../marketing/hub/api/_lib/ops.js';
 import { maybeSendReports } from '../marketing/hub/api/_lib/reports.js';
 import { maybeBackup } from '../marketing/hub/api/_lib/backup.js';
 import { trackTick } from '../marketing/hub/api/_lib/track.js';
+import { sessionsTick } from '../marketing/hub/api/_lib/sessions.js';
 import { notifyRoles } from '../marketing/hub/api/_lib/telegram.js';
 
 const PHONE_ID = '1368158866379375';
@@ -33,6 +34,9 @@ export async function onRequestGet({ request, env }) {
   // مسار العميل: تذكير قبل انتهاء العروض بيومين، تعليم المنتهي، وإرسال طابور رسائل العملاء
   let track = null;
   try { track = await trackTick(env.DB, env); } catch (e) { track = { error: e.message }; }
+  // جلسات التشخيص: تذكيرات الفريق والعميل (24 ساعة وساعة) وطلب تسجيل النتيجة
+  let sessions = null;
+  try { sessions = await sessionsTick(env.DB, env); } catch (e) { sessions = { error: e.message }; }
 
   const issues = [];
   // 1) رقم واتساب على Meta
@@ -75,5 +79,5 @@ export async function onRequestGet({ request, env }) {
   if (alerted || sig !== (prev.sig || '')) {
     await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('health_alert', JSON.stringify(sig ? { sig, at: alerted ? now : prev.at || now } : {})).run();
   }
-  return Response.json({ ok: !sig, issues, alerted, reminders, reports, backup, track, time: new Date().toISOString() }, { headers: { 'cache-control': 'no-store' } });
+  return Response.json({ ok: !sig, issues, alerted, reminders, reports, backup, track, sessions, time: new Date().toISOString() }, { headers: { 'cache-control': 'no-store' } });
 }

@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 18;
+export const SCHEMA_VERSION = 19;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -187,6 +187,14 @@ export const DDL = [
   `CREATE TABLE IF NOT EXISTS push_subs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, endpoint TEXT NOT NULL UNIQUE, p256dh TEXT NOT NULL, auth TEXT NOT NULL,
     ua TEXT, fails INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), last_ok TEXT)`,
   'CREATE INDEX IF NOT EXISTS ix_push_user ON push_subs(user_id)',
+  // v19: جلسات التشخيص — الحجز الذاتي، الاستبيان وتحليله، Google Meet، التذكيرات (انظر _lib/sessions.js). الأوقات بتوقيت الرياض «YYYY-MM-DD HH:MM»
+  `CREATE TABLE IF NOT EXISTS diag_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT, lead_id INTEGER, client_id INTEGER, start_at TEXT NOT NULL, end_at TEXT,
+    mode TEXT DEFAULT 'video', status TEXT DEFAULT 'محجوزة', name TEXT, company TEXT, phone TEXT, email TEXT, city TEXT, sector TEXT, notes_client TEXT, source TEXT,
+    host_id INTEGER, meet_link TEXT, gcal_id TEXT, survey TEXT, survey_at TEXT, brief TEXT, brief_engine TEXT, brief_at TEXT, notes TEXT, outcome TEXT, cancel_reason TEXT,
+    rem_team24 INTEGER DEFAULT 0, rem_team1 INTEGER DEFAULT 0, rem_client24 INTEGER DEFAULT 0, rem_client1 INTEGER DEFAULT 0, rem_outcome INTEGER DEFAULT 0,
+    org TEXT DEFAULT 'nubl', created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  'CREATE INDEX IF NOT EXISTS ix_diag_start ON diag_sessions(start_at, status)',
+  'CREATE INDEX IF NOT EXISTS ix_diag_lead ON diag_sessions(lead_id)',
 ];
 
 // الجهات داخل المنصة (فصل الأعمال حسب طبيعة العملاء — الفريق والإدارة واحدة)
@@ -287,7 +295,7 @@ function ORG_MIGRATIONS() {
 }
 
 // إعدادات سرية لا تُرسل للواجهة أبداً
-export const SECRET_SETTINGS = ['tg_token', 'tg_secret', 'tg_cron_key', 'wa_bridge_token', 'hook_token', 'xq_secret', 'track_secret', 'vapid_private'];
+export const SECRET_SETTINGS = ['tg_token', 'tg_secret', 'tg_cron_key', 'wa_bridge_token', 'hook_token', 'xq_secret', 'track_secret', 'vapid_private', 'google_refresh', 'google_state'];
 
 // الأدوار
 export const ROLES = {
@@ -489,5 +497,7 @@ export const DEFAULT_SETTINGS = {
   // التقارير الدورية لكل عضو (واتساب + تلجرام) — reports.js
   reports_enabled: '1',
   client_notify: '1', // إشعارات العملاء على واتساب (track.js) — '0' يوقفها مع بقاء تسجيل الأحداث
+  // حجز جلسات التشخيص (sessions.js): الأيام 0=الأحد…6=السبت، الساعات بتوقيت الرياض، المدة والفاصل بالدقائق، الإشعار المسبق بالساعات
+  book_days: '6,0,1,2,3,4', book_from: '12:00', book_to: '21:00', book_len: '45', book_gap: '15', book_notice_h: '12', book_horizon_d: '14', book_capacity: '1',
   report_times: '08:00,17:00',
 };

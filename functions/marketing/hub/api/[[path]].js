@@ -31,6 +31,8 @@ import { SECTIONS, ROUTE_SECTION, allowed, permsFor, sectionAllowed, parseSectio
 import { publicJobs, publicApply, applicationCv } from './_lib/hiring.js';
 import { trackHooks, quoteMoved, newRequest, publicTrack, trackRoute } from './_lib/track.js';
 import { pushRoute } from './_lib/push.js';
+import { publicBook, sessionsRoute } from './_lib/sessions.js';
+import { googleRoute } from './_lib/google.js';
 
 export async function onRequest(ctx) {
   const { request, env, params } = ctx;
@@ -50,6 +52,7 @@ export async function onRequest(ctx) {
     if (parts[0] === 'portal') return await portalRoute(db, env, request, parts); // بوابتا المندوب والعميل (دخول برمز واتساب)
     if (parts[0] === 'public' && parts[1] === 'jobs' && method === 'GET') return await publicJobs(db); // صفحة «انضم إلينا»
     if (parts[0] === 'public' && parts[1] === 'track') return await publicTrack(db, env, request, parts); // رابط متابعة العميل الموقّع
+    if (parts[0] === 'public' && parts[1] === 'book') return await publicBook(db, env, request, parts, (p) => ctx.waitUntil(p)); // حجز جلسات التشخيص
     if (parts[0] === 'public' && parts[1] === 'apply' && method === 'POST') return await publicApply(db, env, request);
     if (parts[0] === 'hook') return await hookRoute(db, env, request, parts[1]);
     if (parts[0] === 'xq' && parts[1] === 'bridge') return await xqBridge(db, env, request, ctx); // من منصة الدعاية والإعلان — موقّع HMAC
@@ -147,6 +150,8 @@ async function dispatch(db, env, request, user, parts) {
       case 'audit': return auditRoute(db, request, user, parts[1]);
       case 'track': return trackRoute(db, env, request, user, parts[1], parts[2], need);
       case 'push': return pushRoute(db, env, request, user, parts[1]);
+      case 'sessions': return sessionsRoute(db, env, request, user, parts[1], parts[2], need);
+      case 'google': return googleRoute(db, env, request, user, parts[1]);
       case 'applications':
         if (parts[2] === 'cv' && request.method === 'GET') { need(user, 'applications', 'r'); return applicationCv(db, user, parts[1]); }
         return bad('إجراء غير معروف', 404);

@@ -165,7 +165,7 @@ ${catalogBrief(cat)}
 
 اكتب عرض السعر بهذه البنية تماماً:
 ${QUOTE_SCHEMA}`;
-  const { data, engine } = await runAI(env, `${BRAND}\n${QUOTE_RULES}`, user_msg, { max: 7000 });
+  const { data, engine } = await runAI(env, `${BRAND}\n${QUOTE_RULES}`, user_msg, { max: 7000, tier: 'deep' });
   const doc = normalizeQuoteDoc(data, cat, s.vat_rate || 15);
   if (!doc.pricing.setup.items.length && !doc.pricing.monthly.items.length) throw new HttpError(422, 'لم يُنتج الذكاء بنوداً مسعّرة — أضف تفاصيل أكثر للاحتياج');
   const clientId = party.client?.id || null; const leadId = party.lead?.id || null;
@@ -265,7 +265,7 @@ async function aiContract(db, env, user, quoteId, d, h) {
   const client = await db.prepare('SELECT * FROM clients WHERE id = ?').bind(c.client_id).first();
   const { totals: _t, ...qclean } = qdoc;
   const { data, engine } = await runAI(env, `${BRAND}\nأنت تصيغ الأجزاء المتغيرة من عقد خدمات تسويقية بناءً على عرض سعر معتمد. البنود القانونية القياسية (الدفع، الملكية، السرية، الإنهاء، النظام الواجب التطبيق…) مكتوبة مسبقاً ولا تكتبها. التزم بما ورد في العرض حرفياً في الكميات والمدد، ولا تضف التزامات أو أسعاراً جديدة.`,
-    `العميل: ${client?.name || ''} · القطاع: ${client?.sector || ''}\nعرض السعر المعتمد ${q.number}:\n${JSON.stringify(qclean)}\n${d.notes ? `\nملاحظات إضافية من الفريق: ${str(d.notes, 1500)}` : ''}\n\nأعد:\n${CONTRACT_SCHEMA}`, { max: 4000 });
+    `العميل: ${client?.name || ''} · القطاع: ${client?.sector || ''}\nعرض السعر المعتمد ${q.number}:\n${JSON.stringify(qclean)}\n${d.notes ? `\nملاحظات إضافية من الفريق: ${str(d.notes, 1500)}` : ''}\n\nأعد:\n${CONTRACT_SCHEMA}`, { max: 4000, tier: 'deep' });
   const months = Math.max(1, totals.months || Number(c.months) || 1);
   const cdoc = {
     subject: qdoc.subject, intro: str(data.intro, 800),
@@ -350,8 +350,8 @@ ${d.audience ? `الجمهور: ${str(d.audience, 800)}` : ''}${d.platforms?.len
 `;
   // توليد متوازٍ لنصفي الخطة (الاستراتيجية + التنفيذ) — يختصر الزمن للنصف تقريباً
   const [A, B] = await Promise.all([
-    runAI(env, sys, `${brief}\nاكتب الجزء الاستراتيجي من الخطة فقط بهذه البنية:\n${PLAN_SCHEMA_A}`, { max: 4500 }),
-    runAI(env, sys, `${brief}\nاكتب الجزء التنفيذي من الخطة فقط (القسم الاستراتيجي يكتبه زميل بالتوازي على المعطيات نفسها) بهذه البنية:\n${PLAN_SCHEMA_B}`, { max: 5000 }),
+    runAI(env, sys, `${brief}\nاكتب الجزء الاستراتيجي من الخطة فقط بهذه البنية:\n${PLAN_SCHEMA_A}`, { max: 4500, tier: 'top' }),
+    runAI(env, sys, `${brief}\nاكتب الجزء التنفيذي من الخطة فقط (القسم الاستراتيجي يكتبه زميل بالتوازي على المعطيات نفسها) بهذه البنية:\n${PLAN_SCHEMA_B}`, { max: 5000, tier: 'deep' }),
   ]);
   const data = { ...B.data, ...A.data };
   const engine = A.engine === B.engine ? A.engine : `${A.engine} + ${B.engine}`;

@@ -2,7 +2,7 @@
 // الأسرار تُضبط في لوحة Cloudflare Pages ← Settings ← Variables and Secrets:
 //   WA_TOKEN         توكن System User لواتساب (إرسال الرسائل)
 //   ANTHROPIC_API_KEY مفتاح Claude (المحرك الأساسي للرد الآلي عند ضبطه)
-//   CLAUDE_MODEL     (اختياري) الافتراضي claude-sonnet-4-5
+//   CLAUDE_MODEL_CHAT (اختياري) نموذج ردود العملاء، الافتراضي claude-sonnet-5-5 ثم claude-haiku-5-5
 //   GEMINI_API_KEY   مفتاح Gemini (احتياطي)
 //   WA_VERIFY_TOKEN  رمز التحقق الذي يُكتب في إعداد Webhook لدى Meta
 //   META_APP_SECRET  (اختياري) سرّ التطبيق للتحقق من توقيع Meta
@@ -172,26 +172,30 @@ function buildPrompt(ev, session, history) {
 // ترتيب المحركات: Claude (إن ضُبط ANTHROPIC_API_KEY) ← Gemini ← Workers AI داخل Cloudflare — أي عطل ينتقل للتالي تلقائياً
 async function claude(env, system, user, fast) {
   if (!env.ANTHROPIC_API_KEY) return { ok: false, error: 'no key', skip: true };
-  const model = env.CLAUDE_MODEL || 'claude-haiku-5-5';
+  // ردود العملاء: Sonnet 5.5 بجهد منخفض (عربية أجود بتكلفة قليلة مع التخزين المؤقت)، وعند تعذّره Haiku 5.5 الأرخص والأسرع
+  const models = [env.CLAUDE_MODEL_CHAT || 'claude-sonnet-5-5', 'claude-haiku-5-5'];
   // تقسيم التعليمات: الجزء الثابت (المعرفة والأسلوب) يُخزَّن مؤقتاً لدى Claude فيصبح الرد أسرع وأرخص، والجزء المتغير (السياق) بعده
   const cut = ['\n\n# سياق هذه المحادثة', '\n\n# مهمتك الآن'].map((m) => system.indexOf(m)).filter((i) => i > 0).sort((a, b) => a - b)[0];
   const sys = cut ? [{ type: 'text', text: system.slice(0, cut), cache_control: { type: 'ephemeral' } }, { type: 'text', text: system.slice(cut) }]
     : [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
   let lastErr = '';
-  for (let i = 0; i < (fast ? 1 : 2); i++) {
+  for (const model of (fast ? models.slice(0, 1) : models)) {
+    const fb = model.startsWith('claude-sonnet-'); // رفض الأمان يُعاد على نموذج بديل داخل الطلب نفسه
     try {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model, max_tokens: 1200, system: sys, messages: [{ role: 'user', content: user }] }),
+        headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01',
+          ...(fb ? { 'anthropic-beta': 'server-side-fallback-2026-07-01' } : {}) },
+        // effort منخفض: رد محادثة لا يحتاج تفكيراً عميقاً، والهامش 3000 يتسع للتفكير القصير والرد
+        body: JSON.stringify({ model, max_tokens: 3000, output_config: { effort: 'low' }, ...(fb ? { fallbacks: 'default' } : {}),
+          system: sys, messages: [{ role: 'user', content: user }] }),
       });
       const d = await r.json().catch(() => ({}));
       const text = (d.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();
-      if (r.ok && text) return { ok: true, text, engine: 'claude:' + model };
-      lastErr = (d.error && d.error.message) || `HTTP ${r.status}`;
-      if (r.status === 400 || r.status === 401 || r.status === 403 || r.status === 404) break; // خطأ إعداد: لا فائدة من الإعادة
-    } catch (e) { lastErr = e.message; }
-    if (i < 1) await new Promise((res) => setTimeout(res, 2000));
+      if (r.ok && text && d.stop_reason !== 'refusal') return { ok: true, text, engine: 'claude:' + (d.model || model) };
+      lastErr = `${model}: ` + ((d.error && d.error.message) || (d.stop_reason === 'refusal' ? 'رفض' : `HTTP ${r.status}`));
+      if (r.status === 401 || r.status === 403) break; // المفتاح نفسه مرفوض: لا فائدة من نموذج آخر
+    } catch (e) { lastErr = `${model}: ${e.message}`; }
   }
   return { ok: false, error: 'claude: ' + lastErr.slice(0, 300) };
 }

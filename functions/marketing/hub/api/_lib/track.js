@@ -32,13 +32,13 @@ async function secret(db) {
   }
   return s;
 }
-async function sign(db, base) {
+export async function sign(db, base) {
   const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(await secret(db)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('HMAC', k, new TextEncoder().encode('track:' + base));
   return [...new Uint8Array(sig)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 // العميل المحتمل هو الأصل (يبقى رابطه نفسه بعد التحويل لعميل)، والعميل المُنشأ مباشرة رابطه بحرف C
-async function subjectOf(db, { lead_id, client_id }) {
+export async function subjectOf(db, { lead_id, client_id }) {
   let lead = lead_id ? await db.prepare('SELECT * FROM leads WHERE id = ?').bind(lead_id).first() : null;
   let client = client_id ? await db.prepare('SELECT * FROM clients WHERE id = ?').bind(client_id).first() : null;
   if (!lead && client?.lead_id) lead = await db.prepare('SELECT * FROM leads WHERE id = ?').bind(client.lead_id).first();
@@ -51,7 +51,7 @@ export async function trackLink(db, ref) {
   const s = await subjectOf(db, ref); if (!s) return null;
   return `${SITE}/t/${s.base}.${await sign(db, s.base)}`;
 }
-async function subjectFromKey(db, key) {
+export async function subjectFromKey(db, key) {
   const m = /^([LC])(\d{1,9})\.([a-f0-9]{16})$/.exec(String(key || ''));
   if (!m) return null;
   const base = m[1] + m[2];
@@ -85,7 +85,7 @@ export async function recordEvent(db, env, e) {
   let queued = 0;
   const st = await getSettings(db);
   if (e.client_text && st.client_notify !== '0') {
-    const link = `${SITE}/t/${s.base}.${await sign(db, s.base)}`;
+    const link = e.link || `${SITE}/t/${s.base}.${await sign(db, s.base)}`; // جلسات التشخيص ترسل رابط إدارة الجلسة
     for (const to of await recipients(db, s)) {
       const text = to.role === 'rep'
         ? `تحديث على عميلك «${subjectName(s)}»: ${e.client_text}`
@@ -170,7 +170,7 @@ export async function templateReady(db, env, force) {
   else if (r.ok) {
     const c = await graph(env, `${WABA_ID}/message_templates`, {
       name: TPL, language: 'ar', category: 'UTILITY',
-      components: [{ type: 'BODY', text: 'مرحباً {{1}}،\n{{2}}\n\nلمتابعة حالة طلبك وعروضك: {{3}}\n\nفريق نُبل وابتكار للخدمات التسويقية',
+      components: [{ type: 'BODY', text: 'مرحباً {{1}}،\n{{2}}\n\nللتفاصيل والمتابعة: {{3}}\n\nفريق نُبل وابتكار للخدمات التسويقية',
         example: { body_text: [['محمد', 'عرض السعر Q-2026-0001 جاهز للاطلاع، ويمكنك قبوله مباشرة من رابط المتابعة.', 'https://nubl-ebtikar.online/t/L1.0123456789abcdef']] } }],
     });
     status = c.ok ? (c.data.status || 'PENDING') : 'CREATE_FAILED: ' + String(c.data?.error?.error_user_msg || c.data?.error?.message || '').slice(0, 200);
@@ -188,7 +188,7 @@ export async function flushOutbox(db, env, { limit = 20 } = {}) {
     const hello = m.name ? `مرحباً ${String(m.name).split(/\s+/)[0]}،` : 'مرحباً،';
     let res = null, mode = null;
     if (await windowOpen(env, m.to_phone)) {
-      res = await sendText(env, env.WA_PHONE_ID || FROM_PHONE_ID, m.to_phone, `${hello}\n${m.text}\n\nلمتابعة حالة طلبك وعروضك: ${m.link}\n\nفريق نُبل وابتكار للخدمات التسويقية`);
+      res = await sendText(env, env.WA_PHONE_ID || FROM_PHONE_ID, m.to_phone, `${hello}\n${m.text}\n\nللتفاصيل والمتابعة: ${m.link}\n\nفريق نُبل وابتكار للخدمات التسويقية`);
       mode = 'text';
     } else {
       if (tplOk === null) tplOk = await templateReady(db, env);

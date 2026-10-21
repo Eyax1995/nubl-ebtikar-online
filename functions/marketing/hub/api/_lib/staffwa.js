@@ -187,7 +187,7 @@ async function aiCommand(env, db, ev, user, text) {
 الفريق: ${users.map((x) => `${x.id}:${x.name}`).join('، ')}
 الرسالة: «${text}»`;
   let a;
-  try { a = (await aiJSON(env, sys, usr, { max: 900 })).data || {}; } catch (e) { return say(env, ev, 'لم أفهم الطلب 🙏 اكتب «مساعدة» لعرض الأوامر.'); }
+  try { a = (await aiJSON(env, sys, usr, { max: 900, tier: 'fast' })).data || {}; } catch (e) { return say(env, ev, 'لم أفهم الطلب 🙏 اكتب «مساعدة» لعرض الأوامر.'); }
   const id = Number(a.task_id) || null;
   switch (a.action) {
     case 'list': return sendList(env, db, ev, user);
