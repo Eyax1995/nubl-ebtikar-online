@@ -29,6 +29,8 @@ import { auditRoute } from './_lib/auditlog.js';
 import { portalRoute, portalsAdminRoute } from './_lib/portal.js';
 import { SECTIONS, ROUTE_SECTION, allowed, permsFor, sectionAllowed, parseSections } from './_lib/sections.js';
 import { publicJobs, publicApply, applicationCv } from './_lib/hiring.js';
+import { trackHooks, quoteMoved, newRequest, publicTrack, trackRoute } from './_lib/track.js';
+import { pushRoute } from './_lib/push.js';
 
 export async function onRequest(ctx) {
   const { request, env, params } = ctx;
@@ -47,6 +49,7 @@ export async function onRequest(ctx) {
     if (parts[0] === 'public' && parts[1] === 'rep' && method === 'GET') return await publicRep(db, request); // كشف حساب المندوب برابطه الخاص
     if (parts[0] === 'portal') return await portalRoute(db, env, request, parts); // بوابتا المندوب والعميل (دخول برمز واتساب)
     if (parts[0] === 'public' && parts[1] === 'jobs' && method === 'GET') return await publicJobs(db); // صفحة «انضم إلينا»
+    if (parts[0] === 'public' && parts[1] === 'track') return await publicTrack(db, env, request, parts); // رابط متابعة العميل الموقّع
     if (parts[0] === 'public' && parts[1] === 'apply' && method === 'POST') return await publicApply(db, env, request);
     if (parts[0] === 'hook') return await hookRoute(db, env, request, parts[1]);
     if (parts[0] === 'xq' && parts[1] === 'bridge') return await xqBridge(db, env, request, ctx); // من منصة الدعاية والإعلان — موقّع HMAC
@@ -129,12 +132,12 @@ async function dispatch(db, env, request, user, parts) {
       case 'studio': return studioRoute(db, env, request, user, parts, {
         need, inScope,
         toContract: async (qid) => {
-          const r = await quoteAction(db, new Request(request.url, { method: 'POST' }), user, qid, 'to-contract');
+          const r = await quoteAction(db, new Request(request.url, { method: 'POST' }), user, qid, 'to-contract', env);
           const j = await r.json(); if (!r.ok) throw new HttpError(r.status, j.error || 'تعذّر إنشاء العقد'); return j.contract_id;
         },
       });
       case 'leads': return leadAction(db, request, user, parts[1], parts[2]);
-      case 'quotes': return quoteAction(db, request, user, parts[1], parts[2]);
+      case 'quotes': return quoteAction(db, request, user, parts[1], parts[2], env);
       case 'contracts': return contractAction(db, request, user, parts[1], parts[2], env);
       case 'invoices': return invoiceAction(db, request, user, parts[1], parts[2], env);
       case 'files': return filesRoute(db, request, user, parts[1]);
@@ -142,6 +145,8 @@ async function dispatch(db, env, request, user, parts) {
       case 'export': return exportAll(db, user);
       case 'backups': return backupsRoute(db, request, user, parts[1]);
       case 'audit': return auditRoute(db, request, user, parts[1]);
+      case 'track': return trackRoute(db, env, request, user, parts[1], parts[2], need);
+      case 'push': return pushRoute(db, env, request, user, parts[1]);
       case 'applications':
         if (parts[2] === 'cv' && request.method === 'GET') { need(user, 'applications', 'r'); return applicationCv(db, user, parts[1]); }
         return bad('إجراء غير معروف', 404);
@@ -426,6 +431,11 @@ async function afterSave(db, user, entity, id, rec, before, env) {
   }
   try { await saveNotices(db, env, user, entity, id, rec, before); } catch (e) { console.warn('notices', e.message); }
   try { await repHooks(db, env, user, entity, id, rec, before); } catch (e) { console.warn('reps', e.message); }
+  // مسار العميل: انتقال العرض/العقد/الفاتورة بين المراحل، والطلب الجديد → حدث في المنصة + إشعار واتساب للعميل والمندوب
+  try {
+    await trackHooks(db, env, user, entity, id, rec, before);
+    if (entity === 'leads' && !before) await newRequest(db, env, id, rec.source, user);
+  } catch (e) { console.warn('track', e.message); }
 }
 
 // ---------- المناديب والعمولات: ربط آلي ----------
@@ -521,7 +531,7 @@ async function leadAction(db, request, user, id, action) {
   return bad('إجراء غير معروف', 404);
 }
 
-async function quoteAction(db, request, user, id, action) {
+async function quoteAction(db, request, user, id, action, env) {
   if (action === 'to-contract' && request.method === 'POST') {
     need(user, 'contracts', 'w'); need(user, 'quotes', 'r');
     const q = await inScope(db, user, 'quotes', id);
@@ -547,6 +557,7 @@ async function quoteAction(db, request, user, id, action) {
     if (q.deal_id) stmts.push(db.prepare("UPDATE deals SET stage = 'مكسوبة', probability = 100, closed_at = ?, client_id = ?, value = ?, updated_at = datetime('now') WHERE id = ?").bind(today(), clientId, net, q.deal_id));
     stmts.push(db.prepare('UPDATE clients SET package = COALESCE(package, ?), start_date = COALESCE(start_date, ?), renewal_date = ? WHERE id = ?').bind(pkg, start, addDays(addMonths(start, months), -30), clientId));
     await db.batch(stmts);
+    if (q.status !== 'مقبول') { try { await quoteMoved(db, env, { ...q, client_id: clientId }, q.status, 'مقبول', user, 'المنصة'); } catch (e) { console.warn('track', e.message); } }
     await audit(db, user, 'to-contract', 'quotes', q.id, number);
     return json({ contract_id: cid, number });
   }
@@ -985,6 +996,7 @@ async function upsertLead(db, env, d, defSource, opts = {}) {
     VALUES (?,?,?,?,?,?,?,'جديد',date('now'),?)`).bind(name, d.company || null, phone, d.email || null, d.city || null,
     d.sector || null, source, note || null).run();
   const id = r.meta.last_row_id;
+  try { await newRequest(db, env, id, source, null); } catch (e) { console.warn('track', e.message); }
   const s = await getSettings(db);
   await notifyRoles(db, env, s.lead_notify_roles || 'admin,manager,sales', `🆕 عميل محتمل جديد من ${hx(source)}\n<b>${hx(name)}</b>${d.company ? ' — ' + hx(d.company) : ''}${note ? `\n${hx(note.slice(0, 400))}` : ''}`, { kind: 'lead', link: `#lead/${id}` });
   return { id, existed: false, logged: true };

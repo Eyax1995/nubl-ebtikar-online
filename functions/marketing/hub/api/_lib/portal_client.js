@@ -11,6 +11,7 @@ import { quoteBlocks, contractBlocks, quoteTotals } from './docs.js';
 import { renderHtml } from './docx.js';
 import { legacyQuoteDoc } from './studio.js';
 import { pbody, clip, addRequest } from './portal.js';
+import { quoteMoved } from './track.js';
 
 const parse = (s, d) => { try { return typeof s === 'string' ? JSON.parse(s) : s || d; } catch { return d; } };
 const fmt = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
@@ -121,6 +122,7 @@ export async function clientPortalRoute(db, env, request, ses, sub) {
     await addRequest(db, ses, { type: accept ? 'قبول عرض' : 'رفض عرض', subject: `${qt.number} — ${qt.title || ''}`, body: note, entity: 'quotes', entity_id: qt.id });
     await logActivity(db, client.id, `${accept ? '✅ قبول' : '❌ رفض'} عرض السعر ${qt.number}`, note);
     await audit(db, who(client), accept ? 'accept' : 'reject', 'quotes', qt.id, 'بوابة العميل');
+    try { await quoteMoved(db, env, qt, 'مرسل', accept ? 'مقبول' : 'مرفوض', null, 'بوابة العميل'); } catch (e) { console.warn('track', e.message); }
     await tellTeam(db, env, client, `${accept ? '✅' : '❌'} العميل <b>${hx(client.name)}</b> ${accept ? 'قبل' : 'رفض'} عرض السعر ${hx(qt.number)} (${fmt(qt.total)} ر.س) من البوابة${note ? `\n«${hx(note.slice(0, 300))}»` : ''}`,
       `#quote/${qt.id}`, [qt.created_by]);
     if (accept) await notifyRoles(db, env, ['admin', 'manager', 'sales'], `🎉 قبول عرض ${hx(qt.number)} من <b>${hx(client.name)}</b> عبر البوابة — حوّله لعقد`, { kind: 'deal', link: `#quote/${qt.id}` }, client.account_manager_id);

@@ -8,6 +8,7 @@ import { notifyRoles, h as hx } from './telegram.js';
 import { statement } from './reps.js';
 import { SECTORS } from './seed.js';
 import { normPhone, pbody, clip, addRequest } from './portal.js';
+import { newRequest } from './track.js';
 
 const SITE = 'https://nubl-ebtikar.online/marketing/';
 const fmt = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
@@ -70,6 +71,7 @@ export async function repPortalRoute(db, env, request, ses, sub) {
     await db.prepare("INSERT INTO activities (kind, lead_id, subject, notes, at) VALUES ('إحالة', ?, ?, ?, datetime('now'))")
       .bind(id, `إحالة من المندوب ${rep.name}`, clip(d.notes, 1200) || null).run();
     await audit(db, { id: null, name: 'بوابة المندوب: ' + rep.name }, 'create', 'leads', id, `بوابة المندوب: ${rep.name}`);
+    try { await newRequest(db, env, id, 'إحالة', null); } catch (e) { console.warn('track', e.message); } // رسالة «استلمنا طلبك» للعميل ونسخة للمندوب
     const s = await getSettings(db);
     await notifyRoles(db, env, s.lead_notify_roles || 'admin,manager,sales',
       `🤝 عميل محتمل جديد من المندوب <b>${hx(rep.name)}</b>\n<b>${hx(name)}</b>${d.company ? ' — ' + hx(clip(d.company, 120)) : ''}${d.notes ? `\n${hx(clip(d.notes, 300))}` : ''}`,

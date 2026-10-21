@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#082A37">
+<title>متابعة طلبك — نُبل وابتكار للخدمات التسويقية</title>
+<link rel="icon" href="/marketing/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/marketing/portal/portal.css?v=1">
+<style>
+  .hd h1{margin:14px 0 2px;font-size:clamp(20px,4.5vw,28px)}
+  .hd p{margin:0;opacity:.85;font-size:14px}
+  .sec{margin-top:16px}
+  .sec h2{font-size:16px;color:var(--navy);margin:0 0 10px}
+  .steps{list-style:none;margin:-48px 0 0;padding:16px;background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);position:relative;z-index:2;
+    display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+  .steps li{text-align:center;font-size:12.5px;color:var(--muted);position:relative;padding-top:38px;font-weight:600}
+  .steps li i{position:absolute;top:0;inset-inline-start:50%;transform:translateX(50%);width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+    background:#EEF2F3;color:var(--muted);font-style:normal;font-size:14px;z-index:1}
+  .steps li:not(:last-child):after{content:'';position:absolute;top:14px;inset-inline-start:calc(50% + 17px);width:calc(100% - 34px);height:2px;background:#E6EDF0}
+  .steps li.done{color:var(--ok)}.steps li.done i{background:var(--teal);color:#fff}
+  .steps li.done:not(:last-child):after{background:var(--teal)}
+  .steps li.now{color:var(--deep)}.steps li.now i{background:var(--gold);color:#fff;box-shadow:0 0 0 5px #DC9C4733}
+  .now-msg{margin:12px 0 0;padding:12px 14px;background:#FBF6EC;border-radius:12px;font-size:14px}
+  .q{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+  .q h3{margin:0 0 4px;font-size:15px}
+  .q .meta{font-size:13px;color:var(--muted)}
+  .q .acts{display:flex;gap:8px;flex-wrap:wrap}
+  .btn.ok{background:var(--teal)}.btn.ok:hover{background:var(--ok)}
+  .btn.line{background:#fff;color:var(--navy);border:1px solid var(--line)}
+  .btn.line:hover{background:#F4F7F8}
+  .ev{display:flex;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line);font-size:14px}
+  .ev:last-child{border:0}
+  .ev time{color:var(--muted);font-size:12.5px;white-space:nowrap}
+  .wa{position:fixed;bottom:18px;inset-inline-end:18px;background:#25D366;color:#fff;border-radius:99px;padding:12px 18px;font-weight:700;text-decoration:none;box-shadow:0 8px 24px #25d36655;z-index:20}
+  @media (max-width:640px){
+    .steps{grid-template-columns:1fr;gap:0;padding:12px 16px}
+    .steps li{text-align:start;padding:8px 42px 8px 0;min-height:42px;display:flex;align-items:center}
+    .steps li i{top:6px;inset-inline-start:0;transform:none}
+    .steps li:not(:last-child):after{top:36px;inset-inline-start:14px;width:2px;height:calc(100% - 30px)}
+  }
+</style>
+</head>
+<body>
+<div id="app"><div class="login"><div class="lcard"><img src="/marketing/logo.png" alt=""><p>جارٍ تحميل طلبك…</p></div></div></div>
+<a class="wa" id="wa" href="https://wa.me/966563413040" target="_blank" rel="noopener" hidden>تواصل معنا</a>
+<script>
+'use strict';
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = (v) => Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const date = (d) => { if (!d) return ''; const [y, m, x] = String(d).slice(0, 10).split('-'); return `${+x}/${+m}/${y}`; };
+  const KEY = new URLSearchParams(location.search).get('k') || '';
+  const API = '/marketing/hub/api/public/track/' + encodeURIComponent(KEY);
+  const PILL = { 'مرسل': ['بانتظار ردكم', 'y'], 'مقبول': ['مقبول', 'g'], 'مرفوض': ['مرفوض', 'r'], 'منتهي': ['منتهي', ''], 'مصدرة': ['مستحقة', 'y'], 'مدفوعة جزئياً': ['مدفوعة جزئياً', 'y'], 'مدفوعة': ['مدفوعة', 'g'], 'موقّع': ['موقّع', 'g'], 'نشط': ['قيد التنفيذ', 'g'], 'متأخرة': ['متأخرة', 'r'] };
+  const pill = (s) => { const [t, c] = PILL[s] || [s, '']; return `<span class="pill ${c}">${esc(t)}</span>`; };
+  const NEXT = ['', 'سيتواصل معك فريقنا لتحديد موعد جلسة التشخيص.', 'نُعدّ عرض السعر المناسب لك بناءً على التشخيص.', 'عرض السعر بانتظار موافقتك — راجعه واقبله من الأسفل.', 'نجهّز العقد والفاتورة الأولى للتوقيع.', 'بعد اعتماد العقد نبدأ التنفيذ مباشرة.', ''];
+  let D = null;
+
+  function toast(m, bad) { const t = document.createElement('div'); t.className = 'toast' + (bad ? ' bad' : ''); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); }
+  function modal(title, body, foot = '') {
+    const m = document.createElement('div'); m.className = 'mask';
+    m.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><button class="x" aria-label="إغلاق">×</button><h3>${esc(title)}</h3>${body}${foot ? `<div class="row" style="margin-top:14px">${foot}</div>` : ''}</div>`;
+    const close = () => m.remove(); m.onclick = (e) => { if (e.target === m) close(); }; $('.x', m).onclick = close;
+    document.body.appendChild(m); return { el: m, close };
+  }
+  async function call(path = '', opts) {
+    const r = await fetch(API + path, opts ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(opts) } : { cache: 'no-store' });
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'تعذّر تحميل البيانات'); return d;
+  }
+
+  function draw() {
+    const d = D; const cur = d.current;
+    $('#app').innerHTML = `<header class="hd"><div class="wrap">
+        <div class="top"><a class="brand" href="/marketing/" target="_blank" rel="noopener"><img src="/marketing/brand/logo-h-onnavy.svg" alt="نُبل وابتكار للخدمات التسويقية" height="34"></a></div>
+        <h1>متابعة طلبك${d.name ? ` — ${esc(d.name)}` : ''}</h1><p>كل مراحل العمل معك في مكان واحد، وتصلك التحديثات على واتساب.</p></div></header>
+      <main class="wrap">
+        <ol class="steps" aria-label="مراحل العمل">${d.stages.map((s, i) => `<li class="${s.done ? 'done' : i === cur ? 'now' : ''}" ${i === cur ? 'aria-current="step"' : ''}><i>${s.done ? '✓' : i + 1}</i>${esc(s.label)}</li>`).join('')}</ol>
+        ${NEXT[cur] ? `<p class="now-msg">⏳ <b>المرحلة الحالية: ${esc(d.stages[cur]?.label || '')}</b> — ${NEXT[cur]}</p>` : '<p class="now-msg">🎉 اكتملت كل المراحل — شكراً لثقتك.</p>'}
+        <section class="sec"><h2>عروض الأسعار</h2>${d.quotes.length ? d.quotes.map((q) => `<div class="c" style="margin-bottom:10px"><div class="q">
+            <div><h3>${esc(q.title || 'عرض سعر')}</h3><div class="meta"><span class="num">${esc(q.number)}</span> · ${money(q.total)} ر.س شامل الضريبة${q.valid_until ? ` · صالح حتى ${date(q.valid_until)}` : ''}</div></div>
+            <div>${pill(q.status)}</div></div>
+            <div class="acts" style="margin-top:10px"><button class="btn line" data-view="${q.id}">عرض التفاصيل</button>
+            ${q.can_act ? `<button class="btn ok" data-acc="${q.id}">قبول العرض</button><button class="btn line" data-rej="${q.id}">لديّ ملاحظات</button>` : ''}</div></div>`).join('')
+          : '<div class="c empty">لا توجد عروض بعد — نجهّز عرضك بعد جلسة التشخيص.</div>'}</section>
+        ${d.contracts.length ? `<section class="sec"><h2>العقود</h2>${d.contracts.map((c) => `<div class="c q" style="margin-bottom:8px"><div><h3>${esc(c.title || 'عقد')}</h3><div class="meta num">${esc(c.number)}${c.start_date ? ` · يبدأ ${date(c.start_date)}` : ''}</div></div>${pill(c.status)}</div>`).join('')}</section>` : ''}
+        ${d.invoices.length ? `<section class="sec"><h2>الفواتير</h2>${d.invoices.map((i) => `<div class="c q" style="margin-bottom:8px"><div><h3>${esc(i.description || 'فاتورة')}</h3><div class="meta"><span class="num">${esc(i.number)}</span> · ${money(i.total)} ر.س${Number(i.paid) ? ` · المدفوع ${money(i.paid)}` : ''}${i.due_date ? ` · الاستحقاق ${date(i.due_date)}` : ''}</div></div>${pill(i.status)}</div>`).join('')}</section>` : ''}
+        ${d.events.length ? `<section class="sec"><h2>آخر التحديثات</h2><div class="c">${d.events.map((e) => `<div class="ev"><time>${date(e.created_at)}</time><span>${esc(e.client_text)}</span></div>`).join('')}</div></section>` : ''}
+      </main><footer class="foot">نُبل وابتكار للخدمات التسويقية — جدة · هذا الرابط خاص بك، لا تشاركه إلا مع من يهمه الأمر.</footer>`;
+    const wa = $('#wa'); wa.hidden = false; wa.href = `https://wa.me/${d.wa}?text=${encodeURIComponent(`السلام عليكم، بخصوص طلبي${d.name ? ` (${d.name})` : ''}`)}`;
+    document.querySelectorAll('[data-view]').forEach((b) => b.onclick = () => view(+b.dataset.view));
+    document.querySelectorAll('[data-acc]').forEach((b) => b.onclick = () => respond(+b.dataset.acc, 'accept'));
+    document.querySelectorAll('[data-rej]').forEach((b) => b.onclick = () => respond(+b.dataset.rej, 'note'));
+  }
+  async function view(id) {
+    const m = modal('عرض السعر', '<div class="empty">جارٍ التحميل…</div>');
+    try { const r = await call('/doc/' + id); $('.modal h3', m.el).textContent = r.title; $('.empty', m.el).outerHTML = `<div class="docv">${r.html}</div>`; $('.modal', m.el).style.maxWidth = '820px'; }
+    catch (e) { $('.empty', m.el).textContent = e.message; }
+  }
+  function respond(id, action) {
+    const q = D.quotes.find((x) => x.id === id); const acc = action === 'accept';
+    const m = modal(acc ? 'قبول عرض السعر' : 'ملاحظاتك على العرض',
+      `<p class="small">${acc ? `بقبولك العرض <b class="num">${esc(q.number)}</b> بقيمة <b>${money(q.total)} ر.س</b> شامل الضريبة نبدأ تجهيز العقد والفاتورة الأولى.` : 'اكتب ملاحظاتك أو ما تريد تعديله، وسيتواصل معك فريقنا لتحديث العرض.'}</p>
+       <textarea class="inp" rows="3" id="note" placeholder="${acc ? 'ملاحظة (اختياري)' : 'ملاحظاتك'}" style="width:100%"></textarea>`,
+      `<button class="btn ${acc ? 'ok' : ''}" id="go">${acc ? 'تأكيد القبول' : 'إرسال الملاحظات'}</button>`);
+    $('#go', m.el).onclick = async (e) => {
+      const note = $('#note', m.el).value.trim(); if (!acc && !note) return toast('اكتب ملاحظاتك أولاً', 1);
+      e.target.disabled = true;
+      try { await call('/quote/' + id, { action, note }); m.close(); toast(acc ? 'شكراً لك — وصلتنا موافقتك' : 'وصلتنا ملاحظاتك وسنتواصل معك'); await load(); }
+      catch (err) { toast(err.message, 1); e.target.disabled = false; }
+    };
+  }
+  async function load() {
+    try { D = await call(); draw(); }
+    catch (e) { $('#app').innerHTML = `<div class="login"><div class="lcard"><img src="/marketing/logo.png" alt=""><p>${esc(e.message)}</p><a class="btn" href="https://wa.me/966563413040" target="_blank" rel="noopener">تواصل معنا على واتساب</a></div></div>`; }
+  }
+  load();
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 // واجهة Telegram Bot API — الإرسال والإشعارات (بلا مكتبات خارجية)
 import { getSettings } from './core.js';
+import { sendPush } from './push.js';
 
 export const HUB_URL = 'https://nubl-ebtikar.online/marketing/hub/';
 
@@ -102,6 +103,8 @@ export async function notifyUser(db, env, userId, text, keyboard, opts = {}) {
     // 3) مركز الإشعارات داخل المنصة — دائماً
     await db.prepare('INSERT INTO notifications (user_id, kind, title, body, link, channels) VALUES (?,?,?,?,?,?)')
       .bind(u.id, kind, title, bodyTxt || null, link || null, channels.join(',')).run();
+    // 4) إشعار دفع لأجهزته (تطبيق الجوال وسطح المكتب) — يعمل والمنصة مغلقة، ويجلب الجهاز النص من المنصة بجلسته
+    if (!opts.skipPush && (await sendPush(db, env, u.id))) ok = true;
     return ok;
   } catch (e) { console.warn('notify', e.message); return false; }
 }

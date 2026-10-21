@@ -33,6 +33,9 @@ function sectionBlocks(sec) {
 const priceCell = (i, unit) => ({ text: i.price == null || i.price === '' ? 'يُحدد' : Number(i.price) === 0 ? 'مشمول' : arMoney((Number(i.qty) || 1) * Number(i.price)) + (unit ? ` / ${unit}` : ''), align: 'center' });
 const itemCell = (i) => ({ text: i.name + (Number(i.qty) > 1 ? ` (×${arDigits(i.qty)})` : ''), sub: i.desc || '' });
 
+// تاريخ سياسة «الخيارات بلا أسعار»: ما قبله يحتفظ بأسعار خياراته كما أُرسلت
+const ADDON_POLICY_FROM = '2026-10-20 00:00:00'; // يشمل عرض سديم Q-2026-0022 (مسودة لم تُرسل) ولا يمس أي عرض أُرسل قبله
+export const addonPrices = (q, addons) => addons?.show_prices === true || (addons?.show_prices !== false && !!q?.created_at && String(q.created_at) < ADDON_POLICY_FROM);
 export function quoteBlocks(q, doc, ctx) {
   const s = ctx.settings || {}; const vat = Number(s.vat_rate || 15);
   const t = quoteTotals(doc, vat); const n = { i: 0 };
@@ -68,8 +71,15 @@ export function quoteBlocks(q, doc, ctx) {
     }
     if (P.addons?.items?.length) {
       b.push({ t: 'h2', text: P.addons.title || 'خيارات إضافية للنمو (اختيارية)' });
-      b.push({ t: 'table', cols: [{ label: 'الخيار', w: 6.46 }, { label: 'السعر (ر.س)', w: 1.85, align: 'center' }],
-        rows: P.addons.items.map((i) => [itemCell(i), { text: (i.from ? 'من ' : '') + (i.price ? arMoney(i.price) : 'يُحدد') + (i.unit ? ` / ${i.unit}` : ''), align: 'center' }]) });
+      // سياسة العروض (قرار إياد 21 أكتوبر 2026): الخيارات غير الملزمة تُدرج بلا أسعار، ويُثبت في العقد ما اختاره العميل ومبلغه.
+      // العروض الأقدم تحتفظ بأسعار خياراتها كما أُرسلت، و show_prices يفرض إظهارها في أي عرض.
+      if (addonPrices(q, P.addons)) {
+        b.push({ t: 'table', cols: [{ label: 'الخيار', w: 6.46 }, { label: 'السعر (ر.س)', w: 1.85, align: 'center' }],
+          rows: P.addons.items.map((i) => [itemCell(i), { text: (i.from ? 'من ' : '') + (i.price ? arMoney(i.price) : 'يُحدد') + (i.unit ? ` / ${i.unit}` : ''), align: 'center' }]) });
+      } else {
+        b.push({ t: 'table', cols: [{ label: 'الخيار', w: 8.31 }], rows: P.addons.items.map((i) => [itemCell(i)]) });
+        b.push({ t: 'p', text: 'خيارات غير ملزمة: اختر منها ما يناسبك، وتُحدد قيمة ما تختاره في العقد عند الاتفاق.' });
+      }
     }
     if (P.perk) b.push({ t: 'callout', label: P.perk_label || 'ميزة عند التعاقد', text: P.perk });
   }

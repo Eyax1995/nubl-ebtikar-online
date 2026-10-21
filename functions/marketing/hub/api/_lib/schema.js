@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 18;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -173,6 +173,20 @@ export const DDL = [
   'CREATE INDEX IF NOT EXISTS ix_apps_job ON applications(job_id, status)',
   'CREATE INDEX IF NOT EXISTS ix_apps_phone ON applications(phone, job_id)',
   `CREATE TABLE IF NOT EXISTS app_files (app_id INTEGER NOT NULL, seq INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (app_id, seq))`,
+  // v18: مسار العميل — أحداث مراحل العرض/العقد/الفاتورة، وطابور رسائل واتساب للعميل والمندوب (انظر _lib/track.js)
+  `CREATE TABLE IF NOT EXISTS track_events (id INTEGER PRIMARY KEY AUTOINCREMENT, lead_id INTEGER, client_id INTEGER, quote_id INTEGER, event TEXT NOT NULL,
+    title TEXT, detail TEXT, client_text TEXT, by_user INTEGER, via TEXT, org TEXT DEFAULT 'nubl', created_at TEXT DEFAULT (datetime('now')))`,
+  'CREATE INDEX IF NOT EXISTS ix_tev_lead ON track_events(lead_id, id)',
+  'CREATE INDEX IF NOT EXISTS ix_tev_client ON track_events(client_id, id)',
+  'CREATE INDEX IF NOT EXISTS ix_tev_quote ON track_events(quote_id, event)',
+  `CREATE TABLE IF NOT EXISTS client_msgs (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER, lead_id INTEGER, client_id INTEGER, to_phone TEXT NOT NULL,
+    to_name TEXT, role TEXT DEFAULT 'client', text TEXT NOT NULL, link TEXT, status TEXT DEFAULT 'pending', mode TEXT, error TEXT, tries INTEGER DEFAULT 0,
+    dedupe TEXT UNIQUE, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT)`,
+  'CREATE INDEX IF NOT EXISTS ix_cmsg_status ON client_msgs(status, id)',
+  // v18: إشعارات الدفع لأجهزة الفريق (Web Push — تطبيق الجوال المثبّت وسطح المكتب)
+  `CREATE TABLE IF NOT EXISTS push_subs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, endpoint TEXT NOT NULL UNIQUE, p256dh TEXT NOT NULL, auth TEXT NOT NULL,
+    ua TEXT, fails INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), last_ok TEXT)`,
+  'CREATE INDEX IF NOT EXISTS ix_push_user ON push_subs(user_id)',
 ];
 
 // الجهات داخل المنصة (فصل الأعمال حسب طبيعة العملاء — الفريق والإدارة واحدة)
@@ -273,7 +287,7 @@ function ORG_MIGRATIONS() {
 }
 
 // إعدادات سرية لا تُرسل للواجهة أبداً
-export const SECRET_SETTINGS = ['tg_token', 'tg_secret', 'tg_cron_key', 'wa_bridge_token', 'hook_token', 'xq_secret'];
+export const SECRET_SETTINGS = ['tg_token', 'tg_secret', 'tg_cron_key', 'wa_bridge_token', 'hook_token', 'xq_secret', 'track_secret', 'vapid_private'];
 
 // الأدوار
 export const ROLES = {
@@ -474,5 +488,6 @@ export const DEFAULT_SETTINGS = {
   sign_title: 'مدير قطاع التسويق',
   // التقارير الدورية لكل عضو (واتساب + تلجرام) — reports.js
   reports_enabled: '1',
+  client_notify: '1', // إشعارات العملاء على واتساب (track.js) — '0' يوقفها مع بقاء تسجيل الأحداث
   report_times: '08:00,17:00',
 };

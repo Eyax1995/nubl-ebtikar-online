@@ -1,3 +1,5 @@
 # روابط قصيرة للإعلانات المطبوعة والرقمية (Cloudflare Pages)
 /jobs     /marketing/careers 302
 /careers  /marketing/careers 302
+# رابط متابعة العميل (track.js): /t/<مفتاح موقّع> ← صفحة المتابعة
+/t/:key   /marketing/track/?k=:key 302

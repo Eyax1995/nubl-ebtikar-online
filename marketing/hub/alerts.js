@@ -72,9 +72,9 @@
     if (!('Notification' in window) || Notification.permission !== 'default') return;
     try { if (localStorage.getItem('nubl_notif_asked')) return; localStorage.setItem('nubl_notif_asked', '1'); } catch { return; }
     const c = container(); const el = document.createElement('div'); el.className = 'pop ask';
-    el.innerHTML = `<span class="ic">🔔</span><div class="tx"><b>فعّل إشعارات سطح المكتب</b><p>لتصلك المهام والتنبيهات حتى لو كانت المنصة في تبويب آخر.</p>
+    el.innerHTML = `<span class="ic">🔔</span><div class="tx"><b>فعّل إشعارات المنصة</b><p>لتصلك المهام والتنبيهات على هذا الجهاز حتى والمنصة مغلقة.</p>
       <div class="acts"><button class="btn btn-p btn-s" data-y>تفعيل</button><button class="btn btn-g btn-s" data-n>لاحقاً</button></div></div>`;
-    $('[data-y]', el).onclick = async () => { dismiss(el); try { const p = await Notification.requestPermission(); toast(p === 'granted' ? 'فُعّلت إشعارات سطح المكتب' : 'لم تُفعَّل — يمكنك السماح من إعدادات المتصفح'); } catch { /* */ } };
+    $('[data-y]', el).onclick = async () => { dismiss(el); try { const p = await Notification.requestPermission(); if (p === 'granted') window.nublPush?.subscribe().catch(() => {}); toast(p === 'granted' ? 'فُعّلت إشعارات سطح المكتب' : 'لم تُفعَّل — يمكنك السماح من إعدادات المتصفح'); } catch { /* */ } };
     $('[data-n]', el).onclick = () => dismiss(el);
     c.appendChild(el);
   }
