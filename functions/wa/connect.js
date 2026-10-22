@@ -7,7 +7,7 @@
 import { BUSINESS_PHONE, forgetPhoneId } from './_lib/phone.js';
 
 const APP_ID = '1399023689070366';
-const ES_CONFIG_ID = '4412556615723535'; // إعداد Embedded Signup (Facebook Login for Business) — ليس سراً، يظهر في الصفحة
+const ES_CONFIG_ID = '1676326380744691'; // إعداد Embedded Signup (Facebook Login for Business) — ليس سراً، يظهر في الصفحة
 const GRAPH_V = 'v23.0';
 const G = `https://graph.facebook.com/${GRAPH_V}`;
 const WEBHOOK_FIELDS = ['messages', 'smb_message_echoes', 'history', 'smb_app_state_sync'];

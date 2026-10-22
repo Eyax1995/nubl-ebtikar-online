@@ -13,7 +13,7 @@ export async function onRequestGet({ request, env }) {
     const j = async (u) => { try { return await (await fetch(u)).json(); } catch (e) { return { error: { message: e.message } }; } };
     out.diag = {
       app: await j(`https://graph.facebook.com/v23.0/1399023689070366?fields=name,app_domains,category,link,namespace,restrictions,supported_platforms,website_url&access_token=${at}`),
-      config: await j(`https://graph.facebook.com/v23.0/4412556615723535?access_token=${at}`),
+      config: await j(`https://graph.facebook.com/v23.0/1676326380744691?access_token=${at}`),
       roles: await j(`https://graph.facebook.com/v23.0/1399023689070366/roles?access_token=${at}`),
       permissions: await j(`https://graph.facebook.com/v23.0/1399023689070366/permissions?access_token=${at}`),
     };
