@@ -10,7 +10,7 @@
 // الربط: env.WA_DB = قاعدة nubl-wa-assistant (مستقلة)، env.DB = قاعدة منصة hub (للتسجيل والتنبيهات فقط)
 import { COMMON, KB } from './kb.js';
 import { MARKETING_EXTRA } from './marketing.js';
-import { notifyRoles, h as hx } from '../../marketing/hub/api/_lib/telegram.js';
+import { notifyRoles, notifyUser, h as hx } from '../../marketing/hub/api/_lib/telegram.js';
 import { getSettings } from '../../marketing/hub/api/_lib/core.js';
 import { findStaff, handleStaffMessage } from '../../marketing/hub/api/_lib/staffwa.js';
 
@@ -39,6 +39,9 @@ function describe(m) {
     const md = m[m.type] || {};
     return '[أرسل ' + MEDIA[m.type] + (md.filename ? ': ' + md.filename : '') + ']' + (md.caption ? ' ' + md.caption : '');
   }
+  // «unsupported»: أنواع لا يسلّمها واتساب لواجهة Cloud API أصلاً (عرض لمرة واحدة، استطلاع، ملاحظة فيديو، دعوة حدث…)
+  // — محتواها لا يصلنا ولا يمكن جلبه، لكنه يظهر في تطبيق واتساب أعمال على جوال الرقم (وضع التعايش)
+  if (m.type === 'unsupported') return '[رسالة لا تعرضها واجهة واتساب — غالباً صورة أو فيديو «عرض لمرة واحدة» أو استطلاع أو ملاحظة فيديو أو دعوة حدث؛ تظهر فقط في تطبيق واتساب أعمال على جوال الرقم 0563413040]';
   return '[رسالة من نوع ' + m.type + ']';
 }
 
@@ -54,6 +57,7 @@ export function mediaInfo(m) {
   } else if (m.type === 'contacts') {
     o.t = 'contacts'; o.ct = (m.contacts || []).slice(0, 5).map((c) => ({ n: (c.name && c.name.formatted_name) || '', p: ((c.phones || [])[0] || {}).phone || '', w: ((c.phones || [])[0] || {}).wa_id || '' }));
   } else if (m.type === 'interactive' || m.type === 'button') o.t = 'button';
+  else if (m.type === 'unsupported') o.t = 'unsupported';
   return Object.keys(o).length ? o : null;
 }
 
@@ -129,9 +133,27 @@ async function saveSession(env, s) {
     .bind(s.session_key, s.dept, s.wa_id, s.customer_name || '', s.handoff_until || '', s.history, s.waiting_alert_at || null).run();
 }
 
-// تنبيه الإدارة (واتساب ثم تلجرام عبر منصة hub) — لا يُفشل الرد أبداً
-async function alertStaff(env, text, link = '#wa') {
-  try { if (env.DB) await notifyRoles(env.DB, env, 'admin', text, { kind: 'lead', link }); } catch (e) { console.warn('alert', e.message); }
+// تنبيه الإدارة (واتساب ثم تلجرام عبر منصة hub) — لا يُفشل الرد أبداً؛ except: من وصلته الرسالة نفسها بالتحويل الفوري
+async function alertStaff(env, text, link = '#wa', except = null) {
+  try { if (env.DB) await notifyRoles(env.DB, env, 'admin', text, { kind: 'lead', link }, except); } catch (e) { console.warn('alert', e.message); }
+}
+
+// تحويل كل رسالة واردة من العملاء فوراً لأرقام الإدارة الخاصة (بطلب إياد 22 أكتوبر 2026)
+// المستلمون: الإعداد wa_forward_user_ids (معرّفات مستخدمي المنصة مفصولة بفواصل، الافتراضي إياد = 1؛ فارغ = إيقاف)
+// يُرسل بقنوات المستخدم (واتساب ثم تلجرام ثم المنصة) حتى ليلاً — ويعيد المعرّفات حتى لا يتكرر لهم تنبيه المحادثة نفسها
+async function forwardIncoming(env, ev, name) {
+  try {
+    if (!env.DB) return [];
+    const s = await getSettings(env.DB);
+    const ids = String(s.wa_forward_user_ids ?? '1').split(',').map((x) => parseInt(x, 10)).filter((x) => x > 0);
+    if (!ids.length) return [];
+    const phone = String(ev.wa_id || '');
+    const text = `📩 <b>واتساب التسويق</b> — ${hx(name || phone)} · ${hx(phone)}\n${hx(String(ev.text || '').slice(0, 1200))}`
+      + (ev.media && ev.media.t && ev.media.t !== 'button' && ev.media.t !== 'unsupported' ? '\n📎 المرفق في صندوق واتساب بالمنصة' : '')
+      + `\n💬 فتح المحادثة: https://wa.me/${phone}`;
+    for (const id of ids) await notifyUser(env.DB, env, id, text, null, { kind: 'wa_in', link: `#/wa/${phone}`, title: '📩 رسالة واتساب واردة', urgent: true });
+    return ids;
+  } catch (e) { console.warn('forward', e.message); return []; }
 }
 
 // تسجيل عميل التسويق كعميل محتمل في hub (مكرر الرقم يُدمج، ومرة كل 12 ساعة)
@@ -285,6 +307,8 @@ async function handleLive(env, origin, ev) {
 
   history.push({ r: 'customer', t: ev.text, at: new Date(now).toISOString() });
   await registerLead(env, origin, ev, ev.text);
+  const fwd = await forwardIncoming(env, ev, s.customer_name);
+  const skipAlert = fwd.length === 1 ? fwd[0] : null; // وصلته الرسالة كاملة بالتحويل فلا يتكرر له التنبيه
 
   const paused = s.handoff_until && Date.parse(s.handoff_until) > now;
   if (paused) {
@@ -292,9 +316,20 @@ async function handleLive(env, origin, ev) {
     const lastAlert = s.waiting_alert_at ? Date.parse(s.waiting_alert_at) : 0;
     if (now - lastAlert > WAIT_ALERT_MIN * 60 * 1000) {
       s.waiting_alert_at = new Date(now).toISOString();
-      await alertStaff(env, `⏳ عميل ينتظر رداً على واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'}\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\n${hx(ev.text.slice(0, 300))}\n↩️ ردّ من صندوق واتساب في المنصة`, `#/wa/${ev.wa_id}`);
+      await alertStaff(env, `⏳ عميل ينتظر رداً على واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'}\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\n${hx(ev.text.slice(0, 300))}\n↩️ ردّ من صندوق واتساب في المنصة`, `#/wa/${ev.wa_id}`, skipAlert);
     }
     await saveSession(env, s);
+    return;
+  }
+
+  // رسالة لا يسلّم واتساب محتواها للواجهة: لا تُعرض على الذكاء الاصطناعي (كان يرد على نص «unsupported»)، بل نطلب إعادتها بشكل عادي
+  if (ev.type === 'unsupported') {
+    const ask = 'وصلتنا رسالتك 🌷 لكنها من نوع لا يظهر لدينا (مثل الصور أو الفيديو بخاصية «عرض لمرة واحدة» أو الاستطلاعات). نرجو إرسالها مرة أخرى كرسالة أو صورة عادية، وسيتابع معك فريقنا.';
+    const sentU = await sendText(env, ev.phone_number_id, ev.wa_id, ask);
+    history.push({ r: 'bot', t: ask, at: new Date().toISOString() });
+    s.history = JSON.stringify(history.slice(-MAX_TURNS));
+    await saveSession(env, s);
+    await logEvent(env, { dept: ev.dept, wa_id: ev.wa_id, kind: 'reply', reply: ask, status: sentU.ok ? 'sent' : 'send_failed', detail: JSON.stringify({ engine: 'unsupported', send_error: sentU.data?.error?.message || null }).slice(0, 1500) });
     return;
   }
 
@@ -323,10 +358,10 @@ async function handleLive(env, origin, ev) {
     detail: JSON.stringify({ engine: ai.engine || null, ai_error: ai.ok ? null : ai.error, handoff, wamid: sent.data?.messages?.[0]?.id || null, send_error: sent.data?.error?.message || null }).slice(0, 1500),
   });
   if (handoff) {
-    await alertStaff(env, `🙋 تحويل محادثة واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'} لموظف\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\nآخر رسالة: ${hx(ev.text.slice(0, 300))}${ai.ok ? '' : '\n⚠️ عطل مؤقت في الذكاء الاصطناعي'}`, `#/wa/${ev.wa_id}`);
+    await alertStaff(env, `🙋 تحويل محادثة واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'} لموظف\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\nآخر رسالة: ${hx(ev.text.slice(0, 300))}${ai.ok ? '' : '\n⚠️ عطل مؤقت في الذكاء الاصطناعي'}`, `#/wa/${ev.wa_id}`, skipAlert);
   } else if (!row.session_key) {
     // أول رسالة من رقم جديد: تنبيه فوري حتى لو تولّى الرد الآلي المحادثة
-    await alertStaff(env, `💬 محادثة جديدة على واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'}\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\n${hx(ev.text.slice(0, 300))}\n🤖 ${sent.ok ? 'ردّ الرد الآلي، ويمكنك المتابعة من صندوق واتساب في المنصة' : 'تعذّر إرسال الرد الآلي — ردّ بنفسك من المنصة'}`, `#/wa/${ev.wa_id}`);
+    await alertStaff(env, `💬 محادثة جديدة على واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'}\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\n${hx(ev.text.slice(0, 300))}\n🤖 ${sent.ok ? 'ردّ الرد الآلي، ويمكنك المتابعة من صندوق واتساب في المنصة' : 'تعذّر إرسال الرد الآلي — ردّ بنفسك من المنصة'}`, `#/wa/${ev.wa_id}`, skipAlert);
   }
 }
 

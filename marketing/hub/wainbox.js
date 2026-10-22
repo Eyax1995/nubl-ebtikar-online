@@ -187,6 +187,7 @@ async function waLoadThread(id, quiet) {
       <button class="btn btn-s btn-g" id="wa-sum" title="ملخص المحادثة بذكاء نُبل">${I.ai}<span class="wa-hide-m"> ملخص</span></button>
       <button class="btn btn-s ${on ? 'btn-g' : 'btn-p'}" id="wa-bot" title="${on ? 'إيقاف الرد الآلي' : 'تشغيل الرد الآلي'}">🤖<span class="wa-hide-m"> ${on ? 'إيقاف الرد الآلي' : 'تشغيل الرد الآلي'}</span></button>
       ${d.can_clear ? `<button class="btn btn-s btn-g" id="wa-clr" title="حذف المحادثة من صندوق المنصة">${I.trash}<span class="wa-hide-m"> حذف المحادثة</span></button>` : ''}
+      <button class="btn btn-s btn-g" id="wa-qr" title="باركود يفتح المحادثة على جوالك">📱<span class="wa-hide-m"> على الجوال</span></button>
       <a class="btn btn-wa btn-s" href="tel:${esc(waPhone(d.wa_id))}" title="اتصال">${I.phone}</a></div>
     <div class="wa-bar small ${on ? 'muted' : 'off'}">${on ? 'الرد الآلي يعمل لهذه المحادثة.' : `الرد الآلي متوقف حتى ${waTime(d.bot_paused_until)} — أنت من يرد.`}${d.window_open ? ` · <span class="wa-win">${I.clock} نافذة الرد الحر مفتوحة</span>` : ''}</div>
     ${(() => { const pins = d.messages.filter((m) => m.pin).reverse(); return pins.length ? `<button type="button" class="wa-pinbar" id="wa-pinbar" data-i="0"><span class="wa-pin-ic">${WA_PIN}</span><span class="wa-pin-t"><b>رسالة مثبتة${pins.length > 1 ? ` <small class="num">(1 من ${pins.length})</small>` : ''}</b><span>${esc(waBrief(pins[0]))}</span></span></button>` : ''; })()}
@@ -226,6 +227,7 @@ async function waLoadThread(id, quiet) {
   const sumBtn = () => waSummary(id);
   $('#wa-sum').onclick = sumBtn; if ($('#wa-sum2')) $('#wa-sum2').onclick = sumBtn;
   $('#wa-media').onclick = () => waMediaPanel(id);
+  $('#wa-qr').onclick = () => waQrModal(d.wa_id, d.name);
   const clr = $('#wa-clr');
   if (clr) clr.onclick = async () => {
     if (!(await confirmBox('حذف هذه المحادثة من صندوق المنصة؟<br><small>تختفي كل رسائلها الحالية من القائمة، وتعود المحادثة تلقائياً إذا راسلك العميل مجدداً. لا تُحذف من جوال العميل.</small>'))) return;
@@ -574,6 +576,36 @@ async function waSettingsModal() {
 }
 
 // التسجيل في القائمة والمسارات
+// باركود لفتح المحادثة على الجوال: يُمسح بكاميرا جوال رقم التسويق (واتساب أعمال) فتُفتح محادثة العميل —
+// وفيها تظهر الرسائل التي لا يسلّمها واتساب للمنصة (عرض لمرة واحدة، استطلاع، ملاحظة فيديو…)
+let WA_QR_LIB = null;
+function waQrLib() {
+  return WA_QR_LIB ||= new Promise((res, rej) => {
+    if (window.qrcode) return res(window.qrcode);
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+    sc.onload = () => (window.qrcode ? res(window.qrcode) : rej(new Error('qr')));
+    sc.onerror = () => { WA_QR_LIB = null; rej(new Error('qr')); };
+    document.head.appendChild(sc);
+  });
+}
+async function waQrModal(waId, name) {
+  const url = 'https://wa.me/' + String(waId || '').replace(/\D/g, '');
+  const m = modal({ title: '📱 فتح المحادثة على الجوال',
+    body: `<div style="text-align:center"><div id="wa-qr-box" style="width:240px;height:240px;margin:6px auto;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:12px;padding:8px">جارٍ التجهيز…</div>
+      <p style="margin:8px 0 4px"><b>${esc(name || waPhone(waId))}</b> · <span class="num" dir="ltr">${esc(waPhone(waId))}</span></p>
+      <p class="small muted">امسح الباركود بكاميرا الجوال الذي عليه رقم التسويق 0563413040 (واتساب أعمال) لتُفتح محادثة العميل —
+      وفيها تظهر الرسائل التي لا تصل للمنصة مثل «العرض لمرة واحدة» والاستطلاعات وملاحظات الفيديو.</p>
+      <p class="small"><a href="${esc(url)}" target="_blank" rel="noopener" dir="ltr">${esc(url)}</a></p></div>`,
+    foot: '<button class="btn btn-g" data-x>إغلاق</button>' });
+  $('[data-x]', m.el).onclick = m.close;
+  try {
+    const q = (await waQrLib())(0, 'M'); q.addData(url); q.make();
+    $('#wa-qr-box', m.el).innerHTML = q.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+    const svg = $('#wa-qr-box svg', m.el); if (svg) { svg.style.width = '100%'; svg.style.height = '100%'; }
+  } catch { $('#wa-qr-box', m.el).textContent = 'تعذّر إنشاء الباركود — استخدم الرابط أدناه'; }
+}
+
 ROUTES.wa = { title: 'صندوق واتساب', render: waView };
 (() => {
   const g = NAV.find((x) => x[0] === 'المبيعات و CRM');
