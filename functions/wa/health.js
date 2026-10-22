@@ -43,7 +43,7 @@ export async function onRequestGet({ request, env }) {
   if (!env.WA_TOKEN) issues.push('توكن واتساب غير مضبوط في إعدادات الموقع');
   else {
     try {
-      const r = await fetch(`https://graph.facebook.com/v23.0/${PHONE_ID}?fields=status,quality_rating,code_verification_status`, { headers: { authorization: 'Bearer ' + env.WA_TOKEN } });
+      const r = await fetch(`https://graph.facebook.com/v23.0/${env.WA_PHONE_ID || PHONE_ID}?fields=status,quality_rating,code_verification_status`, { headers: { authorization: 'Bearer ' + env.WA_TOKEN } });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) issues.push('تعذّر الوصول لرقم واتساب على Meta: ' + ((d.error && d.error.message) || r.status));
       else {

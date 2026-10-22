@@ -13,7 +13,7 @@ export async function onRequestGet({ env }) {
       const b = await (await fetch(`https://graph.facebook.com/v23.0/${BUSINESS_ID}?fields=verification_status`, auth)).json();
       out.verification_status = b.verification_status || null;
       if (b.error) out.error = b.error.message;
-      const p = await (await fetch(`https://graph.facebook.com/v23.0/${PHONE_ID}?fields=health_status,status,platform_type,is_on_biz_app,code_verification_status,quality_rating,verified_name,name_status`, auth)).json();
+      const p = await (await fetch(`https://graph.facebook.com/v23.0/${env.WA_PHONE_ID || PHONE_ID}?fields=health_status,status,platform_type,is_on_biz_app,code_verification_status,quality_rating,verified_name,name_status`, auth)).json();
       // وضع التعايش: is_on_biz_app=true يعني أن الرقم يعمل في تطبيق واتساب أعمال على الجوال والمنصة معاً
       out.phone = { status: p.status || null, platform_type: p.platform_type || null, is_on_biz_app: p.is_on_biz_app ?? null,
         code_verification_status: p.code_verification_status || null, quality_rating: p.quality_rating || null, verified_name: p.verified_name || null, name_status: p.name_status || null };

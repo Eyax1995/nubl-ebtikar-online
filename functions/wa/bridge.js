@@ -17,7 +17,7 @@ async function windowOpen(env, to) {
 }
 
 async function sendTemplate(env, to, title, details) {
-  const r = await fetch(`${env.WA_GRAPH_URL || 'https://graph.facebook.com/v23.0'}/${FROM_PHONE_ID}/messages`, {
+  const r = await fetch(`${env.WA_GRAPH_URL || 'https://graph.facebook.com/v23.0'}/${env.WA_PHONE_ID || FROM_PHONE_ID}/messages`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.WA_TOKEN },
     body: JSON.stringify({
@@ -40,7 +40,7 @@ export async function onRequestPost({ request, env }) {
   if (await windowOpen(env, to)) {
     mode = 'text';
     const text = (d.kind === 'report' ? [d.body || ''] : [`🔔 ${d.title || 'إشعار من منصة التسويق'}`, d.body || '', d.link ? `↗ ${d.link}` : '']).filter(Boolean).join('\n').slice(0, 4000);
-    r = await sendText(env, FROM_PHONE_ID, to, text);
+    r = await sendText(env, env.WA_PHONE_ID || FROM_PHONE_ID, to, text);
   } else {
     mode = 'template';
     const title = clip(d.title || 'إشعار من منصة التسويق', 200) || 'إشعار';
