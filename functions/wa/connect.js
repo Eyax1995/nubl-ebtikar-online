@@ -7,13 +7,14 @@
 import { BUSINESS_PHONE, forgetPhoneId } from './_lib/phone.js';
 
 const APP_ID = '1399023689070366';
+const ES_CONFIG_ID = '4412556615723535'; // إعداد Embedded Signup (Facebook Login for Business) — ليس سراً، يظهر في الصفحة
 const GRAPH_V = 'v23.0';
 const G = `https://graph.facebook.com/${GRAPH_V}`;
 const WEBHOOK_FIELDS = ['messages', 'smb_message_echoes', 'history', 'smb_app_state_sync'];
 
 export async function onRequestGet({ request, env }) {
   const q = new URL(request.url).searchParams;
-  const cfg = (q.get('c') || env.WA_ES_CONFIG_ID || '').replace(/\D/g, '');
+  const cfg = (q.get('c') || env.WA_ES_CONFIG_ID || ES_CONFIG_ID).replace(/\D/g, '');
   const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
 <title>ربط واتساب — نبل وابتكار للتسويق</title>
