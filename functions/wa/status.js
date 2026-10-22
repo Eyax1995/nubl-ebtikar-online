@@ -2,11 +2,23 @@
 const BUSINESS_ID = '907479692454066'; // المحفظة الموثّقة
 const PHONE_ID = '1368158866379375'; // رقم التسويق 0563413040
 
-export async function onRequestGet({ env }) {
+export async function onRequestGet({ request, env }) {
   const out = {
     configured: { WA_DB: !!env.WA_DB, WA_TOKEN: !!env.WA_TOKEN, GEMINI_API_KEY: !!env.GEMINI_API_KEY, WA_VERIFY_TOKEN: !!env.WA_VERIFY_TOKEN, META_APP_SECRET: !!env.META_APP_SECRET },
     verification_status: null, webhook_subscribed: null, error: null,
   };
+  // تشخيص مؤقت لصفحة الربط (?diag=1): حالة تطبيق Meta ونطاقاته وإعداد Embedded Signup — بلا أسرار
+  if (new URL(request.url).searchParams.get('diag') && env.META_APP_SECRET) {
+    const at = encodeURIComponent('1399023689070366|' + env.META_APP_SECRET);
+    const j = async (u) => { try { return await (await fetch(u)).json(); } catch (e) { return { error: { message: e.message } }; } };
+    out.diag = {
+      app: await j(`https://graph.facebook.com/v23.0/1399023689070366?fields=name,app_domains,category,link,namespace,restrictions,supported_platforms,website_url&access_token=${at}`),
+      config: await j(`https://graph.facebook.com/v23.0/4412556615723535?access_token=${at}`),
+      roles: await j(`https://graph.facebook.com/v23.0/1399023689070366/roles?access_token=${at}`),
+      permissions: await j(`https://graph.facebook.com/v23.0/1399023689070366/permissions?access_token=${at}`),
+    };
+    if (out.diag.roles && out.diag.roles.data) out.diag.roles = { count: out.diag.roles.data.length, roles: out.diag.roles.data.map((r) => r.role) };
+  }
   try {
     if (env.WA_TOKEN) {
       const auth = { headers: { authorization: `Bearer ${env.WA_TOKEN}` } };
