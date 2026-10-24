@@ -7,6 +7,7 @@ import { maybeSendReports } from '../marketing/hub/api/_lib/reports.js';
 import { maybeBackup } from '../marketing/hub/api/_lib/backup.js';
 import { trackTick } from '../marketing/hub/api/_lib/track.js';
 import { sessionsTick } from '../marketing/hub/api/_lib/sessions.js';
+import { storeTick } from './_lib/store.js';
 import { notifyRoles } from '../marketing/hub/api/_lib/telegram.js';
 
 const PHONE_ID = '1368158866379375';
@@ -37,6 +38,9 @@ export async function onRequestGet({ request, env }) {
   // جلسات التشخيص: تذكيرات الفريق والعميل (24 ساعة وساعة) وطلب تسجيل النتيجة
   let sessions = null;
   try { sessions = await sessionsTick(env.DB, env); } catch (e) { sessions = { error: e.message }; }
+  // متجر مروج على سلة: متابعات 48 ساعة (تأخير التنفيذ، متابعة طلب عرض السعر)
+  let store = null;
+  try { store = await storeTick(env); } catch (e) { store = { error: e.message }; }
 
   const issues = [];
   // 1) رقم واتساب على Meta
@@ -79,5 +83,5 @@ export async function onRequestGet({ request, env }) {
   if (alerted || sig !== (prev.sig || '')) {
     await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('health_alert', JSON.stringify(sig ? { sig, at: alerted ? now : prev.at || now } : {})).run();
   }
-  return Response.json({ ok: !sig, issues, alerted, reminders, reports, backup, track, sessions, time: new Date().toISOString() }, { headers: { 'cache-control': 'no-store' } });
+  return Response.json({ ok: !sig, issues, alerted, reminders, reports, backup, track, sessions, store, time: new Date().toISOString() }, { headers: { 'cache-control': 'no-store' } });
 }
