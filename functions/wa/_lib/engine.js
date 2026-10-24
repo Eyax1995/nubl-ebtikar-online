@@ -82,6 +82,11 @@ export function parseEvents(body, env = {}) {
           const rid = m.type === 'interactive' ? ((m.interactive.button_reply || m.interactive.list_reply || {}).id || '') : m.type === 'button' ? ((m.button && m.button.payload) || '') : '';
           out.push({ ...base, kind: 'message', wa_id: m.from, name: names[m.from] || '', type: m.type, text: String(describe(m)).trim(), reply_id: rid, msg_id: m.id, ts: Number(m.timestamp) || 0, media: mediaInfo(m) });
         }
+        // إيصالات التسليم لما أرسلناه (sent/delivered/read/failed) — تظهر حالة كل رسالة في الصندوق وسبب الفشل
+        for (const st of (v.statuses || [])) {
+          const er = (st.errors || [])[0];
+          out.push({ ...base, kind: 'status', msg_id: st.id, wa_id: st.recipient_id, status: st.status, error: er ? `${er.code}: ${er.title || er.message || ''}`.slice(0, 300) : null });
+        }
       } else if (change.field === 'smb_message_echoes') {
         for (const e of (v.message_echoes || [])) {
           out.push({ ...base, kind: 'echo', wa_id: e.to, name: '', type: e.type, text: String(describe(e)).trim(), msg_id: e.id, ts: Number(e.timestamp) || 0, media: mediaInfo(e) });
@@ -381,7 +386,16 @@ async function saveHistory(env, items) {
 export async function processWebhook(env, origin, body) {
   const events = parseEvents(body, env);
   await saveHistory(env, events.filter((e) => e.kind === 'history'));
-  for (const ev of events.filter((e) => e.kind !== 'history')) {
+  // الحالة لا تتراجع (قُرئت لا تعود «سُلّمت»)؛ الفشل يُسجَّل بسببه في detail.error
+  const RANK = { sent: 1, delivered: 2, read: 3, failed: 4 };
+  for (const s of events.filter((e) => e.kind === 'status' && RANK[e.status])) {
+    try {
+      await env.WA_DB.prepare(`UPDATE wa_events SET status = ?, detail = CASE WHEN ? IS NULL THEN detail ELSE json_set(COALESCE(detail, '{}'), '$.error', ?) END
+        WHERE msg_id = ? AND (CASE status WHEN 'delivered' THEN 2 WHEN 'read' THEN 3 WHEN 'failed' THEN 4 ELSE 1 END) <= ?`)
+        .bind(s.status, s.error, s.error, s.msg_id, RANK[s.status]).run();
+    } catch (e) { console.warn('status', e.message); }
+  }
+  for (const ev of events.filter((e) => e.kind !== 'history' && e.kind !== 'status')) {
     try { await handleLive(env, origin, ev); } catch (e) {
       console.error('wa', e.message);
       await logEvent(env, { dept: ev.dept, wa_id: ev.wa_id, kind: 'error', status: 'error', detail: String(e.message).slice(0, 1000) });

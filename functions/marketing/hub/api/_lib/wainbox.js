@@ -332,7 +332,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
       return {
         id: e.id, at: e.at, from: e.kind === 'message' ? 'customer' : e.kind === 'reply' ? 'bot' : e.kind === 'note' ? 'note' : 'staff',
         text: e.kind === 'reply' || e.kind === 'staff' || e.kind === 'note' ? (e.reply || e.text || '') : (e.text || ''),
-        status: e.status, by: e.kind === 'staff' || e.kind === 'note' ? (dt.by || '') : e.kind === 'echo' ? 'من تطبيق الجوال' : '', src: dt.src || '',
+        status: e.status, by: e.kind === 'staff' || e.kind === 'note' ? (dt.by || '') : e.kind === 'echo' ? 'من تطبيق الجوال' : '', src: dt.src || '', err: dt.error || '',
         msg_id: e.msg_id || null, media: dt.m || null, react: (e.msg_id && reacts[e.msg_id]) || '',
         del_ok: ROLES_ADMIN.includes(user.role) || (e.kind === 'staff' && dt.by === user.name) ? 1 : 0,
       };
