@@ -59,6 +59,15 @@ function fileName(name, mime, mid) {
   return n;
 }
 let marksReady = false;
+// بيانات زائر الودجت (الجوال إن تركه، والصفحة التي بدأ منها)
+async function webInfo(db, dept, waId) {
+  try {
+    const c = await db.prepare('SELECT attrs FROM wa_contacts WHERE dept = ? AND wa_id = ?').bind(dept, waId).first();
+    const a = JSON.parse((c && c.attrs) || '{}');
+    return { phone: a.phone || '', page: a.page || '' };
+  } catch { return { phone: '', page: '' }; }
+}
+
 async function ensureMarks(db) {
   if (marksReady) return;
   await db.prepare(`CREATE TABLE IF NOT EXISTS wa_marks (dept TEXT NOT NULL, wa_id TEXT NOT NULL, event_id INTEGER NOT NULL, kind TEXT NOT NULL, by_name TEXT, at TEXT, PRIMARY KEY (event_id, kind))`).run();
@@ -353,7 +362,8 @@ export async function waInboxRoute(env, request, user, sub, id) {
     return json({
       conv: await convOf(db, DEPT, waId),
       wa_id: waId, key: threadKey(DEPT, waId), line: DEPT, line_label: L.label, name: (s && s.customer_name) || '', bot_paused_until: (s && s.handoff_until) || '',
-      window_open: !!(lastIn && Date.now() - Date.parse(lastIn.at.replace(' ', 'T') + 'Z') < 24 * 3600e3),
+      window_open: L.web ? true : !!(lastIn && Date.now() - Date.parse(lastIn.at.replace(' ', 'T') + 'Z') < 24 * 3600e3),
+      web: L.web ? 1 : 0, web_info: L.web ? await webInfo(db, DEPT, waId) : null,
       can_clear: ROLES_ADMIN.includes(user.role) ? 1 : 0,
       messages: msgs,
     });
@@ -390,6 +400,16 @@ export async function waInboxRoute(env, request, user, sub, id) {
 
   if (sub === 'send' && method === 'POST') {
     let b = {}; try { b = await request.json(); } catch { /* */ }
+    // محادثة من ودجت الموقع: لا واتساب — الرد يُخزَّن ويظهر للزائر في النافذة (نص فقط)
+    if (L.web) {
+      const text = String(b.text || '').trim().slice(0, 3500);
+      if (!text || (b.type && b.type !== 'text')) return bad('محادثات الموقع تقبل النص فقط', 400);
+      const ins = await db.prepare(`INSERT INTO wa_events (dept, wa_id, kind, reply, status, detail) VALUES (?,?,?,?,?,?)`)
+        .bind(DEPT, waId, 'staff', text, 'sent', JSON.stringify({ by: user.name, src: 'web' })).run();
+      await mergeIntoSession(db, key, waId, { r: 'staff', t: text, at: new Date().toISOString() },
+        new Date(Date.now() + STAFF_PAUSE_H * 3600e3).toISOString(), true, '', DEPT);
+      return json({ ok: true, id: ins.meta.last_row_id });
+    }
     if (!L.token(env)) return noToken(L);
     const lastIn = await db.prepare(`SELECT at FROM wa_events WHERE dept=? AND wa_id=? AND kind='message' ORDER BY at DESC, id DESC LIMIT 1`).bind(DEPT, waId).first();
     if (!lastIn || Date.now() - Date.parse(String(lastIn.at).replace(' ', 'T') + 'Z') >= 24 * 3600e3) {

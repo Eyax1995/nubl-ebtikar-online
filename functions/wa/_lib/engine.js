@@ -11,14 +11,14 @@
 import { COMMON, KB } from './kb.js';
 import { MARKETING_EXTRA } from './marketing.js';
 import { MOROOJ_FULL, moroojWording } from './morooj.js';
-import { LINES, lineOf, lineByPhoneId, tokenForPath, threadKey } from './lines.js';
+import { LINES, PHONE_LINES, lineOf, lineByPhoneId, tokenForPath, threadKey } from './lines.js';
 import { notifyRoles, notifyUser, h as hx } from '../../marketing/hub/api/_lib/telegram.js';
 import { getSettings } from '../../marketing/hub/api/_lib/core.js';
 import { findStaff, handleStaffMessage } from '../../marketing/hub/api/_lib/staffwa.js';
 
 // الأرقام المخدومة: «نُبل وابتكار للتسويق» (قرار إياد 12 أكتوبر 2026)، و«مروج الحجاز» بعد نقلها من Chatwoot (قرار إياد 24 أكتوبر 2026).
 // أرقام الدعاية والإعلان ومروج الحجاز مستبعدة تماماً: رسائلها تُتجاهل فلا تُخزَّن ولا يُرد عليها ولا تصل لمنصة التسويق.
-export const NUMBERS = Object.fromEntries(Object.values(LINES).map((l) => [l.display, { dept: l.dept, brand: l.brand }]));
+export const NUMBERS = Object.fromEntries(PHONE_LINES.map((l) => [l.display, { dept: l.dept, brand: l.brand }]));
 const deptLabel = (dept) => (LINES[dept] ? LINES[dept].label : 'الدعاية والإعلان');
 
 const GRAPH = 'https://graph.facebook.com/v23.0';
@@ -141,14 +141,14 @@ async function saveSession(env, s) {
 }
 
 // تنبيه الإدارة (واتساب ثم تلجرام عبر منصة hub) — لا يُفشل الرد أبداً؛ except: من وصلته الرسالة نفسها بالتحويل الفوري
-async function alertStaff(env, text, link = '#wa', except = null) {
+export async function alertStaff(env, text, link = '#wa', except = null) {
   try { if (env.DB) await notifyRoles(env.DB, env, 'admin', text, { kind: 'lead', link }, except); } catch (e) { console.warn('alert', e.message); }
 }
 
 // تحويل كل رسالة واردة من العملاء فوراً لأرقام الإدارة الخاصة (بطلب إياد 22 أكتوبر 2026)
 // المستلمون: الإعداد wa_forward_user_ids (معرّفات مستخدمي المنصة مفصولة بفواصل، الافتراضي إياد = 1؛ فارغ = إيقاف)
 // يُرسل بقنوات المستخدم (واتساب ثم تلجرام ثم المنصة) حتى ليلاً — ويعيد المعرّفات حتى لا يتكرر لهم تنبيه المحادثة نفسها
-async function forwardIncoming(env, ev, name) {
+export async function forwardIncoming(env, ev, name) {
   try {
     if (!env.DB) return [];
     const s = await getSettings(env.DB);
@@ -177,7 +177,7 @@ async function registerLead(env, origin, ev, preview) {
   } catch (e) { console.warn('lead', e.message); }
 }
 
-function buildPrompt(ev, session, history) {
+export function buildPrompt(ev, session, history) {
   let when = '';
   try {
     when = new Intl.DateTimeFormat('ar-SA-u-ca-gregory-nu-latn', { timeZone: 'Asia/Riyadh', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
@@ -185,7 +185,7 @@ function buildPrompt(ev, session, history) {
   const context = [
     '# سياق هذه المحادثة',
     '- الوقت الآن في جدة: ' + when,
-    '- العميل راسل رقم: ' + ev.brand + ' (قسم ' + deptLabel(ev.dept) + ')',
+    ev.channel === 'web' ? '- العميل يكتب من نافذة المحادثة في موقع ' + ev.brand + ' الإلكتروني (ليس واتساب): إن احتاج متابعة طويلة أو إرسال ملفات فاقترح عليه زر «أكمل على واتساب» في النافذة.' : '- العميل راسل رقم: ' + ev.brand + ' (قسم ' + deptLabel(ev.dept) + ')',
     '- اسم العميل في واتساب: ' + (ev.name || session.customer_name || 'غير معروف'),
     '- طلبات العميل في المنصة:',
     'تعذر الوصول لبيانات الطلبات الآن — لا تخمّن حالة أي طلب، واعرض تحويله لموظف.',

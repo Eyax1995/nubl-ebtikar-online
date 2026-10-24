@@ -14,13 +14,24 @@ export const LINES = {
     phoneId: (env) => env.MOROOJ_WA_PHONE_ID || '1300528429818298', token: (env) => env.MOROOJ_WA_TOKEN,
     waba: (env) => env.MOROOJ_WABA_ID || '1563357331591665', appId: (env) => env.MOROOJ_APP_ID || '1573826707396743', // تطبيق «Morooj Alhijaz Automation»
   },
+  // ودجت المحادثة في الموقعين (24 أكتوبر 2026): خطان بلا رقم واتساب — الزائر يكتب في نافذة الموقع والفريق يرد من الصندوق
+  // base: الخط الذي يُستعار منه الذكاء والمعرفة ورقم «أكمل على واتساب». معرّف الزائر أرقام عشوائية (web.js).
+  wnubl: {
+    dept: 'wnubl', org: 'nubl', web: true, base: 'marketing', brand: 'نبل وابتكار للتسويق', label: 'موقع التسويق', display: '',
+    phoneId: () => '', token: () => '', waba: () => '', appId: () => '',
+  },
+  wmorooj: {
+    dept: 'wmorooj', org: 'morooj', web: true, base: 'morooj', brand: 'مروج الحجاز للأعمال التجارية', label: 'موقع مروج', display: '',
+    phoneId: () => '', token: () => '', waba: () => '', appId: () => '',
+  },
 };
+export const PHONE_LINES = Object.values(LINES).filter((l) => !l.web);
 
 // الخط من القسم، أو من معرّف الرقم لدى Meta
 export const lineOf = (dept) => LINES[dept] || LINES.marketing;
 export function lineByPhoneId(env, phoneId) {
   const id = String(phoneId || '');
-  return Object.values(LINES).find((l) => l.phoneId(env) === id) || null;
+  return id ? PHONE_LINES.find((l) => l.phoneId(env) === id) || null : null;
 }
 // توكن الطلب بحسب الرقم الذي يبدأ به مسار Graph (مثل «<phone_id>/messages»)؛ الافتراضي توكن التسويق
 export function tokenForPath(env, path) {
@@ -39,7 +50,7 @@ export function parseThread(id) {
 
 // الأقسام الظاهرة بحسب الجهة المختارة في المنصة (رأس x-org)
 export function deptsForOrg(org) {
-  if (org === 'morooj') return ['morooj'];
-  if (org === 'nubl') return ['marketing'];
-  return ['marketing', 'morooj'];
+  if (org === 'morooj') return ['morooj', 'wmorooj'];
+  if (org === 'nubl') return ['marketing', 'wnubl'];
+  return ['marketing', 'morooj', 'wnubl', 'wmorooj'];
 }
