@@ -12,7 +12,7 @@ export const LINES = {
   morooj: {
     dept: 'morooj', org: 'morooj', brand: 'مروج الحجاز للأعمال التجارية', label: 'مروج الحجاز', display: '966544004650',
     phoneId: (env) => env.MOROOJ_WA_PHONE_ID || '1300528429818298', token: (env) => env.MOROOJ_WA_TOKEN,
-    waba: (env) => env.MOROOJ_WABA_ID || '', appId: (env) => env.MOROOJ_APP_ID || '',
+    waba: (env) => env.MOROOJ_WABA_ID || '', appId: (env) => env.MOROOJ_APP_ID || '1573826707396743', // تطبيق «Morooj Alhijaz Automation»
   },
 };
 
