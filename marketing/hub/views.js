@@ -380,7 +380,7 @@ async function catalogPicker(onPick) {
 /* ====================== الطباعة الرسمية ====================== */
 // أدوات نافذة المستند: طباعة · PDF (A4 على الأوراق الرسمية في كل صفحة) · Word، وضغط عرض السعر في صفحة واحدة متى أمكن
 function docTools(C) {
-  const mm = 96 / 25.4, PH = 215 * mm; // ارتفاع منطقة المحتوى في صفحة A4 بين الترويسة والتذييل
+  const mm = 96 / 25.4, PH = (297 - 52 - (C.foot || 30)) * mm; // ارتفاع منطقة المحتوى في صفحة A4 بين الترويسة (52 مم) وتذييل ورق الجهة
   const D = document, doc = D.querySelector('.doc'), msg = (t) => { D.getElementById('dtb-m').textContent = t || ''; };
   if (C.fit) { // عرض السعر: صفحة واحدة ما لم تكن البيانات كثيرة
     const fit = () => { if (doc.scrollHeight <= PH) return; D.body.classList.add('fit1'); if (doc.scrollHeight <= PH) return; D.body.classList.remove('fit1'); D.body.classList.add('fit2'); if (doc.scrollHeight <= PH) return; if (doc.scrollHeight > PH * 1.25) D.body.classList.remove('fit2'); };
@@ -412,13 +412,11 @@ function docTools(C) {
       }
       const cv = await html2canvas(host, { scale: 2, backgroundColor: null, useCORS: true, logging: false });
       const k = cv.width / host.offsetWidth;
-      const mhEl = C.plain && D.querySelector('.mh');
-      const lh = mhEl ? await html2canvas(mhEl, { scale: 2, backgroundColor: '#ffffff', logging: false })
-        : await new Promise((ok) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => ok(im); im.onerror = () => ok(null); im.src = C.O + 'brand/letterhead-a4.png'; });
+      const lh = await new Promise((ok) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => ok(im); im.onerror = () => ok(null); im.src = C.O + C.lh; });
       const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', compress: true });
       pages.forEach(([a, b], i) => {
         if (i) pdf.addPage('a4');
-        if (lh) pdf.addImage(lh, 'PNG', 0, 0, 210, mhEl ? 52 : 297, 'lh', 'FAST');
+        if (lh) pdf.addImage(lh, 'PNG', 0, 0, 210, 297, 'lh', 'FAST');
         const c = D.createElement('canvas'); c.width = cv.width; c.height = Math.max(1, Math.ceil((b - a) * k));
         c.getContext('2d').drawImage(cv, 0, a * k, cv.width, (b - a) * k, 0, 0, cv.width, (b - a) * k);
         pdf.addImage(c, 'PNG', 20, 52, 166, (b - a) / mm, undefined, 'FAST');
@@ -466,7 +464,7 @@ function docTools(C) {
   async function word() {
     let r;
     if (C.docx) r = await fetch(C.docx, { credentials: 'include' });
-    else r = await fetch(C.api + 'studio/word', { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: C.title, blocks: blocks() }) });
+    else r = await fetch(C.api + 'studio/word', { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: C.title, org: C.org, blocks: blocks() }) });
     if (!r.ok) { let e = ''; try { e = (await r.json()).error; } catch (_) { /* */ } throw new Error(e || 'تعذّر إنشاء ملف Word'); }
     save(await r.blob(), fname + '.docx');
   }
@@ -480,16 +478,16 @@ function docTools(C) {
 function docShell(title, inner, opt = {}) {
   // كل المستندات المطبوعة تخرج على الأوراق الرسمية 3.0 (الترويسة والتذييل وشريط الأسهم في كل صفحة)
   const s = S.meta.settings; const O = location.origin + '/marketing/hub/';
-  // مستندات مروج الحجاز: ترويسة نصية خاصة بها (لا تُطبع على أوراق نُبل وابتكار) إلى أن يُعتمد ورقها الرسمي
-  const plain = opt.org === 'morooj';
-  const mh = plain ? `<div class="mh"><b>${esc(s.morooj_company_name || 'مروج الحجاز للأعمال التجارية')}</b><span>${[s.morooj_cr_number ? 'س.ت ' + esc(s.morooj_cr_number) : '', s.morooj_vat_number ? 'الرقم الضريبي ' + esc(s.morooj_vat_number) : '', esc(s.morooj_address || 'جدة — المملكة العربية السعودية')].filter(Boolean).join(' · ')}</span></div>` : '';
+  // ورق كل جهة: صورة A4 كاملة خلف النص. مروج الحجاز (24 أكتوبر 2026): تذييلها أعلى (خط التذييل عند 262 مم) فمنطقة النص تنتهي قبله
+  const LH = opt.org === 'morooj' ? { img: 'brand/morooj-letterhead-a4.png', foot: 38, name: 'ورق مروج الحجاز' } : { img: 'brand/letterhead-a4.png', foot: 30, name: 'الأوراق الرسمية' };
+  const so = orgSettings(opt.org);
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title>
   <style>@font-face{font-family:'The Year of Handicrafts';src:url(${O}fonts/TheYearofHandicrafts-Bold.woff2) format('woff2');font-weight:700}@font-face{font-family:'DG Agnadeen';src:url(${O}fonts/DGAgnadeen-Regular.woff2) format('woff2');font-weight:400}@font-face{font-family:'DG Agnadeen';src:url(${O}fonts/DGAgnadeen-Bold.woff2) format('woff2');font-weight:700}
   @page{size:A4;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   html,body{margin:0}body{font-family:'DG Agnadeen',Tajawal,sans-serif;color:#1E3E4A;font-size:13px;line-height:1.7}
   h1,h2,h3{font-family:'The Year of Handicrafts','DG Agnadeen',Tajawal,sans-serif}
   .lh{position:fixed;top:0;left:0;width:210mm;height:297mm;z-index:0}
-  table.pg{width:210mm;border-collapse:collapse;position:relative;z-index:1}table.pg>thead>tr>td{height:52mm;padding:0}table.pg>tfoot>tr>td{height:30mm;padding:0}
+  table.pg{width:210mm;border-collapse:collapse;position:relative;z-index:1}table.pg>thead>tr>td{height:52mm;padding:0}table.pg>tfoot>tr>td{height:${LH.foot}mm;padding:0}
   table.pg>tbody>tr>td{padding:0 24mm 0 20mm;vertical-align:top}
   .reg{font-size:10.5px;color:#3E5A66;margin:0 0 4mm}
   .ttl{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px;border-bottom:2px solid #D06429;padding-bottom:6px}.ttl h1{font-size:22px;margin:0;color:#18566D}
@@ -520,15 +518,14 @@ function docShell(title, inner, opt = {}) {
   .dtb button{border:0;border-radius:8px;padding:7px 14px;font:700 13px 'DG Agnadeen',Tajawal,sans-serif;cursor:pointer;background:#fff;color:#18566D}.dtb button[data-a=pdf]{background:#D06429;color:#fff}.dtb button[disabled]{opacity:.55;cursor:wait}.dtb-m{font-size:12px;color:#EDCEA3}
   .fit1 .doc{font-size:12px;line-height:1.55}.fit1 .doc td,.fit1 .doc th{padding:5px 8px}.fit1 h3{margin:12px 0 4px}.fit1 .meta{padding:8px 12px;margin-bottom:10px}.fit1 .ttl{margin-bottom:8px}.fit1 .sig{margin-top:22px}
   .fit2 .doc{font-size:11px;line-height:1.45}.fit2 .doc td,.fit2 .doc th{padding:3px 6px}.fit2 h3{font-size:13px;margin:8px 0 3px}.fit2 .ttl h1{font-size:18px}.fit2 .meta{padding:6px 10px;margin-bottom:8px;gap:3px 18px}.fit2 .sig{margin-top:16px}.fit2 .d-h1{margin:10px 0 5px}.fit2 .d-p,.fit2 .d-ul{margin-bottom:5px}.fit2 table.dt{font-size:11px}
-  .mh{height:52mm;display:flex;flex-direction:column;justify-content:flex-end;padding:0 24mm 6mm 20mm;border-bottom:0}.mh b{font-family:'The Year of Handicrafts','DG Agnadeen',Tajawal,sans-serif;font-size:22px;color:#3F5A24}.mh span{font-size:11px;color:#5A6B4A;border-top:2px solid #6E8B3D;padding-top:4px;margin-top:4px}
   @media print{.dtb{display:none!important}}
-  @media screen{body{background:#C5D5DA;padding-top:46px}table.pg{margin:20px auto;background:#fff ${plain ? '' : `url(${O}brand/letterhead-a4.png) top center/210mm auto no-repeat`};min-height:297mm}.lh{display:none}}</style></head><body>
-  ${plain ? '' : `<img class="lh" src="${O}brand/letterhead-a4.png" alt="">`}
-  <table class="pg"><thead><tr><td>${mh}</td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td><div class="doc">
-  ${opt.official || plain ? '' : `<div class="reg">${[s.company_name, s.cr_number ? 'س.ت ' + esc(s.cr_number) : '', s.vat_number ? 'الرقم الضريبي ' + esc(s.vat_number) : ''].filter(Boolean).map((x, i) => i ? x : esc(x)).join(' · ')}</div>`}
+  @media screen{body{background:#C5D5DA;padding-top:46px}table.pg{margin:20px auto;background:#fff url(${O}${LH.img}) top center/210mm auto no-repeat;min-height:297mm}.lh{display:none}}</style></head><body>
+  <img class="lh" src="${O}${LH.img}" alt="">
+  <table class="pg"><thead><tr><td></td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td><div class="doc">
+  ${opt.official ? '' : `<div class="reg">${[so.company_name, so.cr_number ? 'س.ت ' + esc(so.cr_number) : '', so.vat_number ? 'الرقم الضريبي ' + esc(so.vat_number) : ''].filter(Boolean).map((x, i) => i ? x : esc(x)).join(' · ')}</div>`}
   ${inner}</div></td></tr></tbody></table>
-  <div class="dtb" id="dtb"><span class="dtb-t">${esc(title)}</span><span class="dtb-s">A4 · ${plain ? 'مروج الحجاز' : 'الأوراق الرسمية'}</span><button type="button" data-a="print">طباعة</button><button type="button" data-a="pdf">تنزيل PDF</button>${plain ? '' : '<button type="button" data-a="word">تنزيل Word</button>'}<span class="dtb-m" id="dtb-m"></span></div>
-  <script>(${docTools.toString()})(${JSON.stringify({ title, O, plain, fit: !!opt.fit, docx: opt.docx ? (String(opt.docx).startsWith('/') ? location.origin + opt.docx : String(opt.docx)) : '', api: location.origin + '/marketing/hub/api/' }).replace(/</g, '\\u003c')})<\/script></body></html>`;
+  <div class="dtb" id="dtb"><span class="dtb-t">${esc(title)}</span><span class="dtb-s">A4 · ${LH.name}</span><button type="button" data-a="print">طباعة</button><button type="button" data-a="pdf">تنزيل PDF</button><button type="button" data-a="word">تنزيل Word</button><span class="dtb-m" id="dtb-m"></span></div>
+  <script>(${docTools.toString()})(${JSON.stringify({ title, O, org: opt.org === 'morooj' ? 'morooj' : 'nubl', lh: LH.img, foot: LH.foot, fit: !!opt.fit, docx: opt.docx ? (String(opt.docx).startsWith('/') ? location.origin + opt.docx : String(opt.docx)) : '', api: location.origin + '/marketing/hub/api/' }).replace(/</g, '\\u003c')})<\/script></body></html>`;
 }
 // طباعة أي صفحة تقارير على الأوراق الرسمية: تُنسخ محتويات الصفحة الحالية دون الأزرار وأدوات التصفية
 function printOfficialView(title, sub) {

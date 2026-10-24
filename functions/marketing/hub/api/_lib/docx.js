@@ -1,6 +1,7 @@
 // مولّد ملفات Word على أوراق «نُبل وابتكار للتسويق» — بنفس تنسيق عرض BBR المعتمد (14 أكتوبر 2026)
 // هوية 3.0: العناوين كحلي #18566D بخط سفلي برتقالي #D06429، الجداول برأس كحلي ونص أبيض، صناديق تنبيه بخلفية تركوازي 25٪ وحد برتقالي، خط DG Agnadeen مضمّن، من اليمين لليسار.
 import { LETTERHEAD } from './letterhead.js';
+import { MOROOJ_LETTERHEAD_PNG } from './letterhead-morooj.js';
 import { zip, b64ToU8 } from './zip.js';
 
 // هوية 3.0: كحلي 18566D · برتقالي D06429 · بطاقات تركوازي 25% CCE2E2 · صفوف كحلي 25% · خط DG Agnadeen مضمّن
@@ -96,14 +97,19 @@ export function render(blocks) {
 }
 
 const NS = 'xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" mc:Ignorable="w14 wp14"';
-const SECT = '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/><w:footerReference w:type="default" r:id="rId8"/><w:pgSz w:w="11906" w:h="16838" w:code="9"/><w:pgMar w:top="2948" w:right="1304" w:bottom="1588" w:left="1134" w:header="709" w:footer="1134" w:gutter="0"/><w:cols w:space="708"/><w:bidi/><w:rtlGutter/><w:docGrid w:linePitch="360"/></w:sectPr>';
+// الهامش السفلي بحسب ورق الجهة: تذييل مروج الحجاز أعلى (خطه عند 262 مم) فيبدأ هامشها السفلي عند 38 مم بدل 28
+const SECT = (bottom) => `<w:sectPr><w:headerReference w:type="default" r:id="rId7"/><w:footerReference w:type="default" r:id="rId8"/><w:pgSz w:w="11906" w:h="16838" w:code="9"/><w:pgMar w:top="2948" w:right="1304" w:bottom="${bottom}" w:left="1134" w:header="709" w:footer="1134" w:gutter="0"/><w:cols w:space="708"/><w:bidi/><w:rtlGutter/><w:docGrid w:linePitch="360"/></w:sectPr>`;
 
-export async function buildDocx(blocks, { title = '', subject = '' } = {}) {
-  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${NS}><w:body>${render(blocks)}${SECT}</w:body></w:document>`;
+export async function buildDocx(blocks, { title = '', subject = '', org = 'nubl' } = {}) {
+  const morooj = org === 'morooj';
+  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${NS}><w:body>${render(blocks)}${SECT(morooj ? 2160 : 1588)}</w:body></w:document>`;
   const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
-  const core = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${x(title)}</dc:title><dc:subject>${x(subject)}</dc:subject><dc:creator>إياد المغيرة — نُبل وابتكار للخدمات التسويقية</dc:creator><cp:lastModifiedBy>منصة نُبل وابتكار للتسويق</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`;
+  const core = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${x(title)}</dc:title><dc:subject>${x(subject)}</dc:subject><dc:creator>إياد المغيرة — ${morooj ? 'مروج الحجاز للأعمال التجارية' : 'نُبل وابتكار للخدمات التسويقية'}</dc:creator><cp:lastModifiedBy>منصة نُبل وابتكار للتسويق</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`;
   const files = [{ name: '[Content_Types].xml', data: b64ToU8(LETTERHEAD['[Content_Types].xml']) }, { name: 'word/document.xml', data: doc }, { name: 'docProps/core.xml', data: core }];
-  for (const [name, b64] of Object.entries(LETTERHEAD)) if (name !== '[Content_Types].xml') files.push({ name, data: b64ToU8(b64) });
+  for (const [name, b64] of Object.entries(LETTERHEAD)) {
+    if (name === '[Content_Types].xml') continue;
+    files.push({ name, data: b64ToU8(morooj && name === 'word/media/image1.png' ? MOROOJ_LETTERHEAD_PNG : b64) });
+  }
   return zip(files);
 }
 

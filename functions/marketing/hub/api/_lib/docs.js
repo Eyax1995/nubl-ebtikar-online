@@ -91,7 +91,7 @@ export function quoteBlocks(q, doc, ctx) {
   }
   if (s.bank_line) b.push({ t: 'small', jc: 'right', text: `**الحساب البنكي:** ${s.bank_line}` });
   b.push({ t: 'small', text: `هذا عرض مبدئي أُعِدّ خصيصاً للعميل الموجَّه إليه، وجميع الأرقام قابلة للتعديل حتى الاعتماد الخطي النهائي من الطرفين. صالح ${arDigits(doc.validity_days || s.quote_validity_days || 14)} يوماً من تاريخه.` });
-  b.push({ t: 'closing' }, { t: 'sign', name: ctx.signName, title: ctx.signTitle });
+  b.push({ t: 'closing' }, { t: 'sign', name: ctx.signName, title: ctx.signTitle, org: ctx.signOrg });
   return b;
 }
 
@@ -212,7 +212,7 @@ export function planBlocks(p, doc, ctx) {
     doc.next_steps?.length && H('الخطوات التالية'),
     doc.next_steps?.length && { t: 'bullets', items: doc.next_steps },
     { t: 'small', text: 'الأرقام المستهدفة تقديرات مبنية على المعطيات الحالية وأداء القطاع، وتُراجع شهرياً مع تقرير الأداء.' },
-    { t: 'closing' }, { t: 'sign', name: ctx.signName, title: ctx.signTitle },
+    { t: 'closing' }, { t: 'sign', name: ctx.signName, title: ctx.signTitle, org: ctx.signOrg },
   ];
   return b;
 }

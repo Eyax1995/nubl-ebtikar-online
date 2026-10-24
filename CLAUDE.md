@@ -165,3 +165,11 @@ wrangler pages dev . --port 8788 --local --persist-to .d1
 - عند الفشل أو الرفض ينزل الطلب درجةً ثم Gemini ثم Workers AI. التعليمات الثابتة مخزّنة مؤقتاً (cache_control)، و`fallbacks: "default"` مفعّل لنماذج Fable/Opus/Sonnet.
 - لا `temperature` ولا `budget_tokens` (مرفوضان)؛ العمق بـ `output_config.effort`، و`max_tokens` = الطول المطلوب + هامش للتفكير.
 - بوت واتساب للعملاء (`wa/_lib/engine.js`): Sonnet 5.5 بجهد low ثم Haiku 5.5، والجزء الثابت من التعليمات مخزّن مؤقتاً.
+
+## ورق مروج الحجاز الرسمي (24 أكتوبر 2026 — المرحلة 2، الخطوة 2)
+- المصدر «كليشة مروج الحجاز الحديثة» PDF من إياد ← `marketing/hub/brand/morooj-letterhead-a4.png` (A4 كاملة 1654×2339، 200dpi، لوحة 128 لوناً ~93KB) بنفس أبعاد `letterhead-a4.png`.
+- `docShell` (views.js): ورق كل جهة صورة كاملة خلف النص (`LH` بحسب `opt.org`). ترويسة مروج 52 مم كنُبل، لكن **تذييلها 38 مم** (خط التذييل عند 262 مم) لا 30؛ `docTools` يحسب ارتفاع المحتوى وPDF من `C.foot`. سطر السجل `.reg` يأخذ بيانات الجهة من `orgSettings`. زر Word ظاهر لمروج.
+- Word: `buildDocx(blocks, { org })` يستبدل `word/media/image1.png` بـ `MOROOJ_LETTERHEAD_PNG` من `_lib/letterhead-morooj.js` (مولَّد من الصورة) ويرفع الهامش السفلي إلى 2160 twips (38 مم). `studio/word` يستقبل `org` من المتصفح.
+- `docFile` (studio.js): مستندات مروج تحمل `legal_name` «مؤسسة مروج الحجاز للأعمال التجارية» (كان العقد يُظهر الاسم القانوني لنُبل للطرف الأول) واسم مروج تحت التوقيع (`ctx.signOrg`).
+- معاينة الاستوديو `.paper.morooj`: `morooj-lh-top.png` و`morooj-lh-bottom.png` (منطقة الزخرفة شفافة) و`morooj-lh-strip.png` (94×123 بكسل = مرحلة تكرار الزخرفة 15.6 مم، يبدأ عند 199 مم).
+- لتحديث الورق لاحقاً: استبدل الصورة بنفس الأبعاد ثم أعد توليد `letterhead-morooj.js` (base64 للصورة) والقطع الثلاث.

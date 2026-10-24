@@ -198,7 +198,7 @@
       ${P.perk ? `<div class="pp-call"><b>${esc(P.perk_label || 'ميزة عند التعاقد')}:</b> ${bold(P.perk)}</div>` : ''}` : '';
     const post = (doc.sections || []).filter((s) => s.after_pricing).map(sec).join('');
     const tl = doc.timeline?.length || doc.terms?.length ? `${H(doc.timeline_heading || 'الجدول الزمني والمطلوب منكم')}${doc.timeline?.length ? `<table class="pp-t"><thead><tr><th>المرحلة</th><th>المدة</th></tr></thead><tbody>${doc.timeline.map((x) => `<tr><td class="k">${esc(x.phase)}</td><td class="c">${esc(x.duration)}</td></tr>`).join('')}</tbody></table>` : ''}${doc.terms?.length ? `<ul class="pp-ul">${doc.terms.map((x) => `<li>${bold(x)}</li>`).join('')}</ul>` : ''}` : '';
-    return `<div class="paper">
+    return `<div class="paper${q.org === 'morooj' ? ' morooj' : ''}">
       <p class="pp-date">جدة، في ${fdate(String(q.created_at || todayStr()).slice(0, 10))}</p><h3 class="pp-title">عرض سعر</h3>${doc.subject ? `<p class="pp-sub">${esc(doc.subject)}</p>` : ''}
       <p class="pp-for"><b>أُعِدّ لـ:</b> ${esc(doc.prepared_for || '')}</p><p class="pp-no"><b>رقم العرض:</b> <span dir="ltr">${esc(q.number || '')}</span></p>${doc.intro ? `<p>${bold(doc.intro)}</p>` : ''}
       ${pre}${fin}${post}${tl}
@@ -286,7 +286,7 @@
     let n = 0; const H = (x) => `<h4 class="pp-h1">${ORD[n++]}: ${esc(x)}</h4>`;
     const T = (cols, rows) => (rows?.length ? `<table class="pp-t"><thead><tr>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td${i ? '' : ' class="k"'}>${bold(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '');
     const sw = d.swot || {}; const j = (a) => (a || []).join(' · ');
-    return `<div class="paper"><h3 class="pp-title">الخطة التسويقية</h3><p class="pp-sub">${esc(d.title || p.title || '')}</p>
+    return `<div class="paper${p.org === 'morooj' ? ' morooj' : ''}"><h3 class="pp-title">الخطة التسويقية</h3><p class="pp-sub">${esc(d.title || p.title || '')}</p>
       <p class="pp-for"><b>أُعِدّت لـ:</b> ${esc(refLabel('clients', p.client_id))} · ${p.months} أشهر تبدأ ${fdate(p.start_date)}</p>
       ${d.summary ? `<p>${bold(d.summary)}</p>` : ''}${d.summary_callout ? `<div class="pp-call"><b>الخلاصة:</b> ${bold(d.summary_callout)}</div>` : ''}
       ${sw.strengths || sw.weaknesses ? H('تحليل الوضع الحالي (SWOT)') + T(['المحور', 'التحليل'], [['نقاط القوة', j(sw.strengths)], ['نقاط الضعف', j(sw.weaknesses)], ['الفرص', j(sw.opportunities)], ['التهديدات', j(sw.threats)]].filter((r) => r[1])) : ''}
@@ -406,6 +406,7 @@
   .st-item{display:grid;grid-template-columns:2fr 2fr 60px 110px auto auto;gap:6px;align-items:center;margin-top:6px}
   .st-chipset{display:inline-flex;gap:6px;flex-wrap:wrap}
   .paper{background:url(brand/lh-top.png) top center/100% auto no-repeat,url(brand/lh-bottom.png) bottom center/100% auto no-repeat,url(brand/lh-strip.png) right top/5.72% auto repeat-y,#fff;border:1px solid var(--line);border-radius:6px;padding:25% 11.5% 15.5% 9.5%;color:#1E3E4A;font-size:14px;line-height:1.8;max-width:860px;box-shadow:0 1px 0 var(--line)}
+  .paper.morooj{background:url(brand/morooj-lh-top.png) top center/100% auto no-repeat,url(brand/morooj-lh-bottom.png) bottom center/100% auto no-repeat,url(brand/morooj-lh-strip.png) right top/5.68% auto repeat-y,#fff;padding:26% 11.5% 21% 9.5%}
   .paper p{margin:0 0 10px;text-align:justify}.pp-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #E8EEF0;padding-bottom:10px;margin-bottom:12px}.pp-head{border-bottom:2px solid #18566D!important}.pp-head img{height:44px}.pp-head span{color:#18566D;font-weight:700;letter-spacing:.12em;font-size:12px}.pp-title,.pp-h1,.pp-h2{font-family:var(--f-ar)}
   .pp-date{color:#3E5A66;font-size:12.5px}.pp-title{text-align:center;color:#18566D;font-size:24px;margin:4px 0}.pp-sub{text-align:center!important;color:#D06429;font-weight:700;font-size:15.5px}
   .pp-for{background:#CCE2E2;padding:4px 10px;border-radius:6px}.pp-for b{color:#D06429}.pp-no{font-size:12.5px}

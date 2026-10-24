@@ -436,7 +436,13 @@ async function docFile(db, user, kind, id, h, format) {
   const ctx = { settings: s, today: today(), signName: s.sign_name || 'إياد المغيرة', signTitle: s.sign_title || 'مدير قطاع التسويق' };
   let blocks, name, org = 'nubl';
   // مستندات مروج الحجاز تحمل بياناتها هي (الاسم والسجل والرقم الضريبي) لا بيانات نُبل وابتكار
-  const forOrg = (o) => { org = o || 'nubl'; if (org === 'morooj') ctx.settings = { ...s, company_name: s.morooj_company_name || 'مروج الحجاز للأعمال التجارية', cr_number: s.morooj_cr_number || '', vat_number: s.morooj_vat_number || '', company_city: s.morooj_address || 'جدة', bank_line: s.morooj_bank_line || '' }; };
+  // (الاسم القانوني للطرف الأول في العقد، واسم الجهة تحت التوقيع، كلاهما لمروج لا لنُبل)
+  const forOrg = (o) => {
+    org = o || 'nubl'; if (org !== 'morooj') return;
+    const name = s.morooj_company_name || 'مروج الحجاز للأعمال التجارية';
+    ctx.settings = { ...s, company_name: name, legal_name: s.morooj_legal_name || 'مؤسسة مروج الحجاز للأعمال التجارية', cr_number: s.morooj_cr_number || '', vat_number: s.morooj_vat_number || '', company_city: s.morooj_address || 'جدة', bank_line: s.morooj_bank_line || '' };
+    ctx.signOrg = name;
+  };
   if (kind === 'quote') {
     h.need(user, 'quotes', 'r');
     const q = await h.inScope(db, user, 'quotes', id); forOrg(q.org);
@@ -464,8 +470,7 @@ async function docFile(db, user, kind, id, h, format) {
     blocks = planBlocks(p, parse(p.doc, {}), ctx); name = `الخطة التسويقية — ${cl?.name || ''}`;
   } else return bad('نوع غير معروف', 404);
   if (format === 'html') { await audit(db, user, 'print', kind, id); return json({ title: name, html: renderHtml(blocks), org }); }
-  if (org === 'morooj') return bad('ملف Word لمستندات مروج الحجاز يُفعَّل بعد اعتماد ورقها الرسمي — استخدم «تنزيل PDF» حالياً');
-  const bytes = await buildDocx(blocks, { title: name });
+  const bytes = await buildDocx(blocks, { title: name, org });
   await audit(db, user, 'docx', kind, id);
   return new Response(bytes, { headers: {
     'content-type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -501,7 +506,7 @@ export async function studioRoute(db, env, request, user, parts, h) {
     }).filter(Boolean);
     if (!blocks.length) return bad('لا محتوى للتصدير', 400);
     const name = str(d.title, 150) || 'مستند';
-    const bytes = await buildDocx(blocks, { title: name });
+    const bytes = await buildDocx(blocks, { title: name, org: d.org === 'morooj' ? 'morooj' : 'nubl' });
     await audit(db, user, 'docx', 'doc', 0);
     return new Response(bytes, { headers: {
       'content-type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
