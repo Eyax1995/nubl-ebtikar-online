@@ -12,7 +12,7 @@ import { json, bad } from './core.js';
 import { askAI } from '../../../../wa/_lib/engine.js';
 import { COMMON, KB } from '../../../../wa/_lib/kb.js';
 import { MARKETING_EXTRA } from '../../../../wa/_lib/marketing.js';
-import { MOROOJ_KB, moroojWording } from '../../../../wa/_lib/morooj.js';
+import { MOROOJ_FULL, moroojWording } from '../../../../wa/_lib/morooj.js';
 import { LINES, lineOf, parseThread, threadKey, deptsForOrg } from '../../../../wa/_lib/lines.js';
 
 const GRAPH = 'https://graph.facebook.com/v23.0';
@@ -385,7 +385,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
     }[mode];
     if (!TASK) return bad('نوع غير معروف', 400);
     // معرفة خط المحادثة: مروج لها معرفتها الكاملة، والتسويق معرفة نُبل
-    const KNOW = DEPT === 'morooj' ? MOROOJ_KB : `${COMMON}\n\n${KB.marketing || ''}${MARKETING_EXTRA}`;
+    const KNOW = DEPT === 'morooj' ? MOROOJ_FULL : `${COMMON}\n\n${KB.marketing || ''}${MARKETING_EXTRA}`;
     const system = `${KNOW}\n\n# مهمتك الآن
 أنت لا ترد على العميل مباشرة؛ أنت «ذكاء نُبل» تساعد موظف فريق ${L.label} (${user.name}) في صياغة رسالة يراجعها ثم يرسلها بنفسه من رقم ${L.brand}.${DEPT === 'morooj' ? '\n- لا تُفتِ في المسائل الشرعية، وفي «الإغلاق» ادعُ لإتمام الطلب من المتجر لا لجلسة تشخيص.' : ''}
 - لا تخترع سعراً أو موعداً أو خدمة غير مكتوبة في المعرفة أعلاه.

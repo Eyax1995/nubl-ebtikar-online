@@ -10,7 +10,7 @@
 // الربط: env.WA_DB = قاعدة nubl-wa-assistant (مستقلة)، env.DB = قاعدة منصة hub (للتسجيل والتنبيهات فقط)
 import { COMMON, KB } from './kb.js';
 import { MARKETING_EXTRA } from './marketing.js';
-import { MOROOJ_KB, moroojWording } from './morooj.js';
+import { MOROOJ_FULL, moroojWording } from './morooj.js';
 import { LINES, lineOf, lineByPhoneId, tokenForPath, threadKey } from './lines.js';
 import { notifyRoles, notifyUser, h as hx } from '../../marketing/hub/api/_lib/telegram.js';
 import { getSettings } from '../../marketing/hub/api/_lib/core.js';
@@ -189,7 +189,7 @@ function buildPrompt(ev, session, history) {
   const LABEL = { customer: 'العميل', staff: ev.dept === 'morooj' ? 'موظف مروج' : 'موظف نبل', bot: 'أنت' };
   const transcript = history.map((x) => (LABEL[x.r] || x.r) + ': ' + x.t).join('\n');
   // مروج الحجاز لها معرفتها كاملة (هويتها وخدماتها) — لا تُبنى على COMMON نُبل وابتكار
-  let system = (ev.dept === 'morooj' ? MOROOJ_KB : COMMON + '\n\n' + (KB[ev.dept] || KB.advertising)) + '\n\n' + context + '\n\n' + OUTPUT;
+  let system = (ev.dept === 'morooj' ? MOROOJ_FULL : COMMON + '\n\n' + (KB[ev.dept] || KB.advertising)) + '\n\n' + context + '\n\n' + OUTPUT;
   if (ev.dept === 'marketing') system += MARKETING_EXTRA;
   return { system, user: 'المحادثة حتى الآن (الأقدم أولاً):\n' + transcript + '\n\nاكتب ردك على آخر رسالة من العميل.' };
 }
