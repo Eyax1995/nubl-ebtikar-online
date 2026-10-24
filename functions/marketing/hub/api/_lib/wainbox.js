@@ -12,7 +12,7 @@ import { json, bad } from './core.js';
 import { askAI } from '../../../../wa/_lib/engine.js';
 import { COMMON, KB } from '../../../../wa/_lib/kb.js';
 import { MARKETING_EXTRA } from '../../../../wa/_lib/marketing.js';
-import { MOROOJ_KB } from '../../../../wa/_lib/morooj.js';
+import { MOROOJ_KB, moroojWording } from '../../../../wa/_lib/morooj.js';
 import { LINES, lineOf, parseThread, threadKey, deptsForOrg } from '../../../../wa/_lib/lines.js';
 
 const GRAPH = 'https://graph.facebook.com/v23.0';
@@ -393,7 +393,8 @@ export async function waInboxRoute(env, request, user, sub, id) {
     const userMsg = `اسم العميل: ${(s && s.customer_name) || 'غير معروف'}\n\nالمحادثة (الأقدم أولاً):\n${transcript}\n\n${draft ? `مسودة الموظف:\n${draft}\n\n` : ''}${hint ? `توجيه الموظف: ${hint}\n\n` : ''}المطلوب: ${TASK}`;
     const r = await askAI(env, system, userMsg, true);
     if (!r.ok) return bad('تعذّر التوليد الآن: ' + String(r.error || '').slice(0, 200), 502);
-    return json({ text: r.text.replace(/^["«]|["»]$/g, '').trim(), engine: r.engine });
+    const out = r.text.replace(/^["«]|["»]$/g, '').trim();
+    return json({ text: DEPT === 'morooj' && mode !== 'summary' ? moroojWording(out) : out, engine: r.engine });
   }
 
   if (sub === 'bot' && method === 'POST') {

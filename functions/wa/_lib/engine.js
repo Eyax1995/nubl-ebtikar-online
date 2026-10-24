@@ -10,7 +10,7 @@
 // الربط: env.WA_DB = قاعدة nubl-wa-assistant (مستقلة)، env.DB = قاعدة منصة hub (للتسجيل والتنبيهات فقط)
 import { COMMON, KB } from './kb.js';
 import { MARKETING_EXTRA } from './marketing.js';
-import { MOROOJ_KB } from './morooj.js';
+import { MOROOJ_KB, moroojWording } from './morooj.js';
 import { LINES, lineOf, lineByPhoneId, tokenForPath, threadKey } from './lines.js';
 import { notifyRoles, notifyUser, h as hx } from '../../marketing/hub/api/_lib/telegram.js';
 import { getSettings } from '../../marketing/hub/api/_lib/core.js';
@@ -351,6 +351,7 @@ async function handleLive(env, origin, ev) {
     handoff = true;
   }
   if (reply.length > 3500) reply = reply.slice(0, 3500);
+  if (ev.dept === 'morooj') reply = moroojWording(reply); // نشاط مروج تجاري مدفوع: لا «تبرع» في ردودها
 
   const sent = await sendText(env, ev.phone_number_id, ev.wa_id, reply);
   history.push({ r: 'bot', t: reply, at: new Date().toISOString() });
