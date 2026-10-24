@@ -14,6 +14,14 @@ import { COMMON, KB } from '../../../../wa/_lib/kb.js';
 import { MARKETING_EXTRA } from '../../../../wa/_lib/marketing.js';
 import { MOROOJ_FULL, moroojWording } from '../../../../wa/_lib/morooj.js';
 import { LINES, lineOf, parseThread, threadKey, deptsForOrg } from '../../../../wa/_lib/lines.js';
+import { ensureCwTables } from '../../../../wa/import/chatwoot.js';
+const CONV_ST = ['open', 'pending', 'resolved'];
+let cwReady = false;
+const convOf = async (db, dept, waId) => {
+  const c = await db.prepare('SELECT status, labels, assignee FROM wa_conv WHERE dept = ? AND wa_id = ?').bind(dept, waId).first();
+  let labels = []; try { labels = JSON.parse((c && c.labels) || '[]'); } catch { /* */ }
+  return { status: (c && c.status) || 'open', labels, assignee: (c && c.assignee) || '' };
+};
 
 const GRAPH = 'https://graph.facebook.com/v23.0';
 const ROLES_OK = ['admin', 'manager', 'sales', 'account'];
@@ -77,6 +85,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
   // خط العمليات التي لا محادثة لها (القوالب، بدء محادثة، الملف التجاري، الرفع)
   const qLine = new URL(request.url).searchParams.get('line');
   const L0 = lineOf(LINES[qLine] ? qLine : org === 'morooj' ? 'morooj' : 'marketing');
+  if (!cwReady) { await ensureCwTables(db); cwReady = true; }
   const noToken = (L) => bad(`توكن واتساب «${L.label}» غير مضبوط${L.dept === 'morooj' ? ' (MOROOJ_WA_TOKEN في أسرار Cloudflare)' : ''}`, 503);
 
   if (sub === 'threads' && method === 'GET') {
@@ -85,19 +94,20 @@ export async function waInboxRoute(env, request, user, sub, id) {
       `SELECT e.dept, e.wa_id, MAX(e.id) AS last_id, MAX(e.at) AS last_at,
               SUM(CASE WHEN e.kind='message' THEN 1 ELSE 0 END) AS n_in
          FROM wa_events e WHERE e.dept IN (${depts.map(() => '?').join(',')}) AND e.wa_id IS NOT NULL AND e.wa_id <> ''
-        GROUP BY e.dept, e.wa_id ORDER BY last_id DESC LIMIT 200`).bind(...depts).all()).results || [];
+        GROUP BY e.dept, e.wa_id ORDER BY last_at DESC, last_id DESC LIMIT 200`).bind(...depts).all()).results || [];
     const out = [];
     for (const r of rows) {
       const DEPT = r.dept;
       const clr = H.clr[DEPT + ':' + r.wa_id] || 0;
       // آخر رسالة ظاهرة (بعد استبعاد المحذوف وما قبل مسح المحادثة)
-      const lastRows = (await db.prepare(`SELECT id, kind, text, reply, at FROM wa_events WHERE dept=? AND wa_id=? AND id > ? AND kind IN ('message','reply','staff','echo') ORDER BY id DESC LIMIT 25`).bind(DEPT, r.wa_id, clr).all()).results || [];
+      const lastRows = (await db.prepare(`SELECT id, kind, text, reply, at FROM wa_events WHERE dept=? AND wa_id=? AND id > ? AND kind IN ('message','reply','staff','echo') ORDER BY at DESC, id DESC LIMIT 25`).bind(DEPT, r.wa_id, clr).all()).results || [];
       const last = lastRows.find((x) => !H.del.has(x.id));
       if (clr && !last) continue; // محادثة ممسوحة بلا رسائل جديدة
       const s = await db.prepare('SELECT customer_name, handoff_until FROM wa_sessions WHERE session_key = ?').bind(DEPT + ':' + r.wa_id).first();
-      const lastIn = await db.prepare(`SELECT at FROM wa_events WHERE dept=? AND wa_id=? AND kind='message' ORDER BY id DESC LIMIT 1`).bind(DEPT, r.wa_id).first();
+      const lastIn = await db.prepare(`SELECT at FROM wa_events WHERE dept=? AND wa_id=? AND kind='message' ORDER BY at DESC, id DESC LIMIT 1`).bind(DEPT, r.wa_id).first();
+      const cv = await convOf(db, DEPT, r.wa_id);
       out.push({
-        key: threadKey(DEPT, r.wa_id), line: DEPT, line_label: lineOf(DEPT).label,
+        key: threadKey(DEPT, r.wa_id), line: DEPT, line_label: lineOf(DEPT).label, status: cv.status, labels: cv.labels, assignee: cv.assignee,
         wa_id: r.wa_id, name: (s && s.customer_name) || '', last_at: clr && last ? last.at : r.last_at, n_in: r.n_in,
         last_kind: last && last.kind, last_text: last ? (last.kind === 'reply' || last.kind === 'staff' ? (last.reply || last.text) : last.text) : '',
         last_customer_at: lastIn ? lastIn.at : null,
@@ -105,6 +115,28 @@ export async function waInboxRoute(env, request, user, sub, id) {
       });
     }
     return json({ threads: out, lines: depts, now: new Date().toISOString() });
+  }
+
+  if (sub === 'meta' && method === 'GET') {
+    const labels = (await db.prepare('SELECT title, color, description FROM wa_labels WHERE dept = ? ORDER BY title').bind(L0.dept).all()).results || [];
+    const quick = (await db.prepare('SELECT id, short_code, content FROM wa_quick WHERE dept = ? ORDER BY id').bind(L0.dept).all()).results || [];
+    return json({ line: L0.dept, line_label: L0.label, labels, quick, can_edit: ROLES_ADMIN.includes(user.role) ? 1 : 0 });
+  }
+  if ((sub === 'quick' || sub === 'labels') && method === 'POST') {
+    if (!ROLES_ADMIN.includes(user.role)) return bad('تعديل الردود الجاهزة والوسوم للمدير فقط', 403);
+    let b = {}; try { b = await request.json(); } catch { /* */ }
+    if (sub === 'quick') {
+      if (b.del) await db.prepare('DELETE FROM wa_quick WHERE id = ? AND dept = ?').bind(Number(b.del) || 0, L0.dept).run();
+      else {
+        const content = String(b.content || '').trim().slice(0, 2000); if (!content) return bad('اكتب نص الرد', 400);
+        await db.prepare('INSERT INTO wa_quick (dept, short_code, content) VALUES (?,?,?)').bind(L0.dept, String(b.short_code || '').trim().slice(0, 40), content).run();
+      }
+    } else if (b.del) await db.prepare('DELETE FROM wa_labels WHERE dept = ? AND title = ?').bind(L0.dept, String(b.del)).run();
+    else {
+      const title = String(b.title || '').trim().replace(/\s+/g, '_').slice(0, 40); if (!title) return bad('اكتب اسم الوسم', 400);
+      await db.prepare('INSERT OR REPLACE INTO wa_labels (dept, title, color, description) VALUES (?,?,?,?)').bind(L0.dept, title, /^#[0-9a-f]{6}$/i.test(b.color || '') ? b.color : '#18566D', String(b.description || '').slice(0, 120)).run();
+    }
+    return json({ ok: true });
   }
 
   if (sub === 'templates' && method === 'GET') {
@@ -266,18 +298,18 @@ export async function waInboxRoute(env, request, user, sub, id) {
 
   if (sub === 'thread' && method === 'GET') {
     const ev = (await db.prepare(
-      `SELECT id, at, kind, msg_id, text, reply, status, detail FROM wa_events WHERE dept = ? AND wa_id = ? ORDER BY id DESC LIMIT 300`)
+      `SELECT id, at, kind, msg_id, text, reply, status, detail FROM wa_events WHERE dept = ? AND wa_id = ? ORDER BY at DESC, id DESC LIMIT 300`)
       .bind(DEPT, waId).all()).results || [];
     const all = ev.reverse();
     const reacts = {};
     for (const e of all) if (e.kind === 'reaction_out') { try { const x = JSON.parse(e.detail || '{}'); if (x.target) reacts[x.target] = x.emoji || ''; } catch { /* */ } }
-    const msgs = all.filter((e) => ['message', 'reply', 'staff', 'echo'].includes(e.kind)).map((e) => {
+    const msgs = all.filter((e) => ['message', 'reply', 'staff', 'echo', 'note'].includes(e.kind)).map((e) => {
       let dt = {}; try { dt = JSON.parse(e.detail || '{}') || {}; } catch { /* */ }
       if (e.kind === 'reply' && dt.wamid && !e.msg_id) e.msg_id = dt.wamid;
       return {
-        id: e.id, at: e.at, from: e.kind === 'message' ? 'customer' : e.kind === 'reply' ? 'bot' : 'staff',
-        text: e.kind === 'reply' || e.kind === 'staff' ? (e.reply || e.text || '') : (e.text || ''),
-        status: e.status, by: e.kind === 'staff' ? (dt.by || '') : e.kind === 'echo' ? 'من تطبيق الجوال' : '',
+        id: e.id, at: e.at, from: e.kind === 'message' ? 'customer' : e.kind === 'reply' ? 'bot' : e.kind === 'note' ? 'note' : 'staff',
+        text: e.kind === 'reply' || e.kind === 'staff' || e.kind === 'note' ? (e.reply || e.text || '') : (e.text || ''),
+        status: e.status, by: e.kind === 'staff' || e.kind === 'note' ? (dt.by || '') : e.kind === 'echo' ? 'من تطبيق الجوال' : '', src: dt.src || '',
         msg_id: e.msg_id || null, media: dt.m || null, react: (e.msg_id && reacts[e.msg_id]) || '',
         del_ok: ROLES_ADMIN.includes(user.role) || (e.kind === 'staff' && dt.by === user.name) ? 1 : 0,
       };
@@ -293,6 +325,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
     const s = await db.prepare('SELECT customer_name, handoff_until FROM wa_sessions WHERE session_key = ?').bind(key).first();
     const lastIn = [...msgs].reverse().find((m) => m.from === 'customer');
     return json({
+      conv: await convOf(db, DEPT, waId),
       wa_id: waId, key: threadKey(DEPT, waId), line: DEPT, line_label: L.label, name: (s && s.customer_name) || '', bot_paused_until: (s && s.handoff_until) || '',
       window_open: !!(lastIn && Date.now() - Date.parse(lastIn.at.replace(' ', 'T') + 'Z') < 24 * 3600e3),
       can_clear: ROLES_ADMIN.includes(user.role) ? 1 : 0,
@@ -332,7 +365,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
   if (sub === 'send' && method === 'POST') {
     let b = {}; try { b = await request.json(); } catch { /* */ }
     if (!L.token(env)) return noToken(L);
-    const lastIn = await db.prepare(`SELECT at FROM wa_events WHERE dept=? AND wa_id=? AND kind='message' ORDER BY id DESC LIMIT 1`).bind(DEPT, waId).first();
+    const lastIn = await db.prepare(`SELECT at FROM wa_events WHERE dept=? AND wa_id=? AND kind='message' ORDER BY at DESC, id DESC LIMIT 1`).bind(DEPT, waId).first();
     if (!lastIn || Date.now() - Date.parse(String(lastIn.at).replace(' ', 'T') + 'Z') >= 24 * 3600e3) {
       return bad('مرّ أكثر من 24 ساعة على آخر رسالة من العميل — واتساب لا يسمح بالرد الحر؛ يلزم قالب معتمد.', 409);
     }
@@ -395,6 +428,25 @@ export async function waInboxRoute(env, request, user, sub, id) {
     if (!r.ok) return bad('تعذّر التوليد الآن: ' + String(r.error || '').slice(0, 200), 502);
     const out = r.text.replace(/^["«]|["»]$/g, '').trim();
     return json({ text: DEPT === 'morooj' && mode !== 'summary' ? moroojWording(out) : out, engine: r.engine });
+  }
+
+  // الحالة (open|pending|resolved) والوسوم والمسؤول — {status?, labels?, assignee?}
+  if (sub === 'conv' && method === 'POST') {
+    let b = {}; try { b = await request.json(); } catch { /* */ }
+    const cur = await convOf(db, DEPT, waId);
+    const status = CONV_ST.includes(b.status) ? b.status : cur.status;
+    const labels = Array.isArray(b.labels) ? [...new Set(b.labels.map((x) => String(x).slice(0, 40)).filter(Boolean))].slice(0, 12) : cur.labels;
+    const assignee = b.assignee !== undefined ? String(b.assignee || '').slice(0, 80) : cur.assignee;
+    await db.prepare(`INSERT INTO wa_conv (dept, wa_id, status, labels, assignee, updated_at) VALUES (?,?,?,?,?,datetime('now'))
+      ON CONFLICT(dept, wa_id) DO UPDATE SET status=excluded.status, labels=excluded.labels, assignee=excluded.assignee, updated_at=datetime('now')`).bind(DEPT, waId, status, JSON.stringify(labels), assignee || null).run();
+    return json({ ok: true, conv: { status, labels, assignee } });
+  }
+  // ملاحظة داخلية للفريق — لا تُرسل للعميل
+  if (sub === 'note' && method === 'POST') {
+    let b = {}; try { b = await request.json(); } catch { /* */ }
+    const text = String(b.text || '').trim().slice(0, 2000); if (!text) return bad('اكتب الملاحظة', 400);
+    await db.prepare('INSERT INTO wa_events (dept, wa_id, kind, reply, status, detail) VALUES (?,?,?,?,?,?)').bind(DEPT, waId, 'note', text, 'note', JSON.stringify({ by: user.name })).run();
+    return json({ ok: true });
   }
 
   if (sub === 'bot' && method === 'POST') {

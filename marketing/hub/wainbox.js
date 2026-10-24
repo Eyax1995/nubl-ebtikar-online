@@ -25,6 +25,12 @@ const WA_LINES = { marketing: { label: 'التسويق', brand: 'نُبل واب
 const waLineOf = (id) => (/^morooj\./.test(String(id || '')) ? 'morooj' : 'marketing');
 const waNum = (id) => String(id || '').split('.').pop();
 const waOrgLine = () => (S.org === 'morooj' ? 'morooj' : S.org === 'nubl' ? 'marketing' : '');
+const WA_F = { status: '', label: '' };
+const WA_META = {};
+const WA_CST = { open: ['مفتوحة', 't'], pending: ['معلّقة', 'o'], resolved: ['مغلقة', 'x'] };
+async function waMeta(line, fresh) { if (fresh || !WA_META[line]) WA_META[line] = await api('wa/meta?line=' + line).catch(() => ({ labels: [], quick: [] })); return WA_META[line]; }
+const waLblColor = (line, t) => ((WA_META[line] && WA_META[line].labels.find((l) => l.title === t)) || {}).color || '#18566D';
+const waLblChip = (line, t) => `<span class="wa-lbl" style="--c:${esc(waLblColor(line, t))}">${esc(String(t).replace(/_/g, ' '))}</span>`;
 const waLnBadge = (line) => `<span class="wa-ln ${line}">${esc((WA_LINES[line] || WA_LINES.marketing).label)}</span>`;
 const waBotOn = (until) => !until || Date.parse(until) <= Date.now();
 
@@ -36,11 +42,13 @@ async function waView(id) {
       <div class="small muted num" dir="ltr">${OLX ? OLX.phone : 'التسويق 0563413040 · مروج 0544004650'}</div></div>
       <div class="wa-acts">${WA_ADMIN.includes(me().role) ? '<button class="btn btn-g btn-s" id="wa-set" title="إعدادات واتساب">⚙︎ الإعدادات</button>' : ''}
       <button class="btn btn-g btn-s" id="wa-starred" title="الرسائل المهمة المحفوظة">${WA_STAR}<span class="wa-hide-m"> المهمة</span></button>
-      <button class="btn btn-wa btn-s" id="wa-new">+ محادثة جديدة</button></div></div><div id="wa-threads" class="wa-threads"><div class="empty">جارٍ التحميل…</div></div></div>
+      <button class="btn btn-wa btn-s" id="wa-new">+ محادثة جديدة</button></div></div><div class="wa-flt" id="wa-flt"></div><div id="wa-threads" class="wa-threads"><div class="empty">جارٍ التحميل…</div></div></div>
     <div class="wa-thread card" id="wa-thread">${id ? '<div class="empty">جارٍ التحميل…</div>' : '<div class="empty">اختر محادثة من القائمة</div>'}</div></div>`;
   $('#wa-new').onclick = () => waStartModal({ line: id ? waLineOf(id) : OL });
   $('#wa-starred').onclick = () => waStarredModal();
   if ($('#wa-set')) $('#wa-set').onclick = () => waSettingsModal(id ? waLineOf(id) : OL || 'marketing');
+  await Promise.all((OL ? [OL] : Object.keys(WA_LINES)).map((l) => waMeta(l)));
+  waFilterBar(id, OL);
   await waLoadThreads(id);
   if (id) await waLoadThread(id);
   waTimer = setInterval(async () => {
@@ -50,19 +58,31 @@ async function waView(id) {
   }, 15000);
 }
 
+function waFilterBar(id, OL) {
+  const el = $('#wa-flt'); if (!el) return;
+  const lines = OL ? [OL] : Object.keys(WA_LINES);
+  const labels = [...new Map(lines.flatMap((l) => ((WA_META[l] || {}).labels || []).map((x) => [x.title, x]))).values()];
+  el.innerHTML = `<div class="wa-fs">${[['', 'الكل'], ['open', 'مفتوحة'], ['pending', 'معلّقة'], ['resolved', 'مغلقة']].map(([k, t]) => `<button type="button" class="${WA_F.status === k ? 'on' : ''}" data-fs="${k}">${t}</button>`).join('')}</div>
+    ${labels.length ? `<select class="inp wa-fl-l" id="wa-fl-l"><option value="">كل الوسوم</option>${labels.map((l) => `<option value="${esc(l.title)}" ${WA_F.label === l.title ? 'selected' : ''}>${esc(l.title.replace(/_/g, ' '))}</option>`).join('')}</select>` : ''}`;
+  $$('[data-fs]', el).forEach((b) => b.onclick = () => { WA_F.status = b.dataset.fs; waFilterBar(id, OL); waLoadThreads(id); });
+  const sel = $('#wa-fl-l', el); if (sel) sel.onchange = () => { WA_F.label = sel.value; waLoadThreads(id); };
+}
+
 async function waLoadThreads(active, quiet) {
   const d = await api('wa/threads');
   const el = $('#wa-threads'); if (!el) return;
   const both = (d.lines || []).length > 1;
-  el.innerHTML = d.threads.length ? d.threads.map((t) => {
+  const list = d.threads.filter((t) => (!WA_F.status || (t.status || 'open') === WA_F.status) && (!WA_F.label || (t.labels || []).includes(WA_F.label)));
+  el.innerHTML = list.length ? list.map((t) => {
     const who = t.last_kind === 'message' ? '' : t.last_kind === 'reply' ? '🤖 ' : '👤 ';
     const k = t.key || t.wa_id;
     return `<a class="wa-ti ${k === active ? 'on' : ''}" href="#/wa/${esc(k)}">${both ? waLnBadge(t.line) : ''}
       <div class="wa-tn"><b>${esc(t.name || waPhone(t.wa_id))}</b><span class="small muted">${waTime(t.last_at)}</span></div>
       <div class="wa-tp small muted">${who}${esc(String(t.last_text || '').slice(0, 80))}</div>
       <div class="wa-tf">${t.name ? `<span class="small muted num" dir="ltr">${esc(waPhone(t.wa_id))}</span>` : '<span></span>'}
-        ${waBotOn(t.bot_paused_until) ? '<span class="pill t">الرد الآلي يعمل</span>' : '<span class="pill o">موظف يتولى</span>'}</div></a>`;
-  }).join('') : '<div class="empty">لا توجد محادثات بعد</div>';
+        ${waBotOn(t.bot_paused_until) ? '<span class="pill t">الرد الآلي يعمل</span>' : '<span class="pill o">موظف يتولى</span>'}</div>
+      ${(t.labels || []).length || (t.status && t.status !== 'open') || t.assignee ? `<div class="wa-tl">${t.status && t.status !== 'open' ? `<span class="pill ${WA_CST[t.status][1]}">${WA_CST[t.status][0]}</span>` : ''}${(t.labels || []).map((x) => waLblChip(t.line, x)).join('')}${t.assignee ? `<span class="small muted">👤 ${esc(t.assignee)}</span>` : ''}</div>` : ''}</a>`;
+  }).join('') : `<div class="empty">${d.threads.length ? 'لا محادثات بهذا الفلتر' : 'لا توجد محادثات بعد'}</div>`;
 }
 
 // ---------- المحادثة: عرض الوسائط + أدوات الإرسال الكاملة + ذكاء نُبل ----------
@@ -127,7 +147,7 @@ function waBubble(m) {
   }
   const acts = `<div class="wa-ma">${m.msg_id ? `<button type="button" data-rep="${esc(m.msg_id)}" title="رد على هذه الرسالة">↩︎</button>` : ''}${m.msg_id && m.from === 'customer' ? `<button type="button" data-rx="${esc(m.msg_id)}" title="تفاعل">☺︎</button>` : ''}<button type="button" data-cp title="نسخ">⧉</button>${m.id ? `<button type="button" data-pin="${m.id}" class="${m.pin ? 'on' : ''}" title="${m.pin ? 'إلغاء التثبيت' : 'تثبيت في أعلى المحادثة'}">${WA_PIN}</button><button type="button" data-star="${m.id}" class="${m.star ? 'on' : ''}" title="${m.star ? 'إزالة من الرسائل المهمة' : 'حفظ في الرسائل المهمة'}">${WA_STAR}</button>` : ''}${m.id && m.del_ok ? `<button type="button" data-del="${m.id}" class="wa-del" title="حذف الرسالة من المنصة">${I.trash}</button>` : ''}</div>`;
   return `<div class="wa-m ${m.from}${m.pin ? ' pinned' : ''}${m.star ? ' starred' : ''}" data-mid="${esc(m.msg_id || '')}" data-eid="${m.id || ''}"><div class="wa-b">${inner}${m.react ? `<span class="wa-rx">${esc(m.react)}</span>` : ''}${acts}</div>
-    <div class="wa-meta small muted">${m.from === 'bot' ? '🤖 الرد الآلي · ' : m.from === 'staff' ? `👤 ${esc(m.by || 'موظف')} · ` : ''}${m.star ? '<span class="wa-flag s">'+WA_STAR+'</span>' : ''}${m.pin ? '<span class="wa-flag p">'+WA_PIN+'</span>' : ''}${waTime(m.at)}${m.status === 'send_failed' ? ' · <b style="color:var(--red)">لم يُرسل</b>' : ''}</div></div>`;
+    <div class="wa-meta small muted">${m.from === 'bot' ? '🤖 الرد الآلي · ' : m.from === 'note' ? `📝 ملاحظة داخلية — ${esc(m.by || 'موظف')} · ` : m.from === 'staff' ? `👤 ${esc(m.by || 'موظف')} · ` : ''}${m.src === 'chatwoot' ? 'من Chatwoot · ' : ''}${m.star ? '<span class="wa-flag s">'+WA_STAR+'</span>' : ''}${m.pin ? '<span class="wa-flag p">'+WA_PIN+'</span>' : ''}${waTime(m.at)}${m.status === 'send_failed' ? ' · <b style="color:var(--red)">لم يُرسل</b>' : ''}</div></div>`;
 }
 
 // ملخص سطر واحد لأي رسالة (للتثبيت والقوائم)
@@ -197,6 +217,11 @@ async function waLoadThread(id, quiet) {
       ${d.can_clear ? `<button class="btn btn-s btn-g" id="wa-clr" title="حذف المحادثة من صندوق المنصة">${I.trash}<span class="wa-hide-m"> حذف المحادثة</span></button>` : ''}
       <button class="btn btn-s btn-g" id="wa-qr" title="باركود يفتح المحادثة على جوالك">📱<span class="wa-hide-m"> على الجوال</span></button>
       <a class="btn btn-wa btn-s" href="tel:${esc(waPhone(d.wa_id))}" title="اتصال">${I.phone}</a></div>
+    <div class="wa-cv" id="wa-cv">
+      <select class="inp" id="wa-cst" title="حالة المحادثة">${Object.entries(WA_CST).map(([k, [t]]) => `<option value="${k}" ${(d.conv || {}).status === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <span class="wa-cl">${((d.conv || {}).labels || []).map((x) => waLblChip(d.line, x)).join('')}<button type="button" class="btn btn-g btn-s" id="wa-lbl">🏷️ وسوم</button></span>
+      <select class="inp" id="wa-asg" title="المسؤول عن المحادثة"><option value="">— بلا مسؤول —</option>${(S.meta.users || []).filter((u) => u.active).map((u) => `<option ${(d.conv || {}).assignee === u.name ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}${(d.conv || {}).assignee && !(S.meta.users || []).some((u) => u.name === d.conv.assignee) ? `<option selected>${esc(d.conv.assignee)}</option>` : ''}</select>
+      <button type="button" class="btn btn-g btn-s" id="wa-note">📝 ملاحظة داخلية</button></div>
     <div class="wa-bar small ${on ? 'muted' : 'off'}">${on ? 'الرد الآلي يعمل لهذه المحادثة.' : `الرد الآلي متوقف حتى ${waTime(d.bot_paused_until)} — أنت من يرد.`}${d.window_open ? ` · <span class="wa-win">${I.clock} نافذة الرد الحر مفتوحة</span>` : ''}</div>
     ${(() => { const pins = d.messages.filter((m) => m.pin).reverse(); return pins.length ? `<button type="button" class="wa-pinbar" id="wa-pinbar" data-i="0"><span class="wa-pin-ic">${WA_PIN}</span><span class="wa-pin-t"><b>رسالة مثبتة${pins.length > 1 ? ` <small class="num">(1 من ${pins.length})</small>` : ''}</b><span>${esc(waBrief(pins[0]))}</span></span></button>` : ''; })()}
     <div class="wa-msgs" id="wa-msgs">${d.messages.map(waBubble).join('') || '<div class="empty">لا رسائل</div>'}</div>
@@ -232,6 +257,11 @@ async function waLoadThread(id, quiet) {
     try { await api('wa/bot/' + encodeURIComponent(id), { method: 'POST', body: { on: !on } }); toast(on ? 'أُوقف الرد الآلي لهذه المحادثة' : 'عاد الرد الآلي للعمل'); waLoadThread(id); waLoadThreads(id); }
     catch (e) { toast(e.message, 1); }
   };
+  const conv = (patch, msg) => api('wa/conv/' + encodeURIComponent(id), { method: 'POST', body: patch }).then(() => { toast(msg); waLoadThread(id, true); waLoadThreads(id, true); }).catch((e) => toast(e.message, 1));
+  $('#wa-cst').onchange = (e) => conv({ status: e.target.value }, 'حالة المحادثة: ' + WA_CST[e.target.value][0]);
+  $('#wa-asg').onchange = (e) => conv({ assignee: e.target.value }, e.target.value ? 'أُسندت إلى ' + e.target.value : 'أُزيل المسؤول');
+  $('#wa-lbl').onclick = () => waLabelsModal(d, (labels) => conv({ labels }, 'حُدّثت الوسوم'));
+  $('#wa-note').onclick = () => waNoteModal(id);
   const sumBtn = () => waSummary(id);
   $('#wa-sum').onclick = sumBtn; if ($('#wa-sum2')) $('#wa-sum2').onclick = sumBtn;
   $('#wa-media').onclick = () => waMediaPanel(id);
@@ -334,7 +364,7 @@ async function waLoadThread(id, quiet) {
     const a = b.dataset.a;
     if (a === 'media') pick('#wa-fmedia'); else if (a === 'doc') pick('#wa-fdoc'); else if (a === 'audio') pick('#wa-faudio');
     else if (a === 'loc') waLocationModal(id); else if (a === 'ct') waContactsModal(id); else if (a === 'btns') waButtonsModal(id, ta.value);
-    else if (a === 'quick') waQuickModal((t) => { ta.value = t; st.draft = t; grow(); ta.focus(); });
+    else if (a === 'quick') waQuickModal(waLineOf(id), (t) => { ta.value = t; st.draft = t; grow(); ta.focus(); });
   });
   $$('#wa-aipop [data-ai]').forEach((b) => b.onclick = () => { $('#wa-aipop').hidden = true; waAI(id, b.dataset.ai, ta.value, $('#wa-aihint').value); });
   // السحب والإفلات واللصق
@@ -480,10 +510,43 @@ function waButtonsModal(id, text) {
   };
 }
 
-function waQuickModal(onPick) {
-  const m = modal({ title: 'ردود جاهزة', icon: 'spark', body: `<div class="pick">${WA_QUICK.map((t, i) => `<div class="list-i" data-i="${i}"><div class="g"><span>${esc(t)}</span></div></div>`).join('')}</div>
-    <div class="small muted" style="margin-top:8px">تُدرج في خانة الرد لتعدّلها قبل الإرسال.</div>` });
-  $$('[data-i]', m.el).forEach((d) => d.onclick = () => { m.close(); onPick(WA_QUICK[+d.dataset.i]); });
+async function waQuickModal(line, onPick) {
+  const LX = WA_LINES[line] || WA_LINES.marketing;
+  const m = modal({ title: `ردود جاهزة — ${LX.label}`, icon: 'spark', body: '<div class="empty">جارٍ التحميل…</div>' });
+  const draw = async (fresh) => {
+    const meta = await waMeta(line, fresh);
+    // التسويق: الردود المحفوظة، وإن لم توجد فالقائمة الافتراضية
+    const list = meta.quick.length ? meta.quick : line === 'marketing' ? WA_QUICK.map((content) => ({ content })) : [];
+    $('.modal-b', m.el).innerHTML = `<div class="pick">${list.map((q, i) => `<div class="list-i" data-i="${i}"><div class="g">${q.short_code ? `<b>/${esc(q.short_code)}</b>` : ''}<span>${esc(q.content)}</span></div>${meta.can_edit && q.id ? `<button type="button" class="btn btn-g btn-s" data-qdel="${q.id}" title="حذف">${I.trash}</button>` : ''}</div>`).join('') || '<div class="empty">لا ردود جاهزة لهذا الرقم بعد</div>'}</div>
+      ${meta.can_edit ? `<form class="fgrid" id="wa-qf" style="margin-top:10px"><label class="f"><span>اختصار</span><input class="inp" name="sc" placeholder="مثل: مدة"></label><label class="f full"><span>نص الرد</span><textarea class="inp" name="ct" rows="2"></textarea></label><button class="btn btn-p btn-s">+ إضافة رد جاهز</button></form>` : ''}
+      <div class="small muted" style="margin-top:8px">تُدرج في خانة الرد لتعدّلها قبل الإرسال. ردود كل رقم مستقلة.</div>`;
+    $$('[data-i]', m.el).forEach((d) => d.onclick = (e) => { if (e.target.closest('[data-qdel]')) return; m.close(); onPick(list[+d.dataset.i].content); });
+    $$('[data-qdel]', m.el).forEach((b) => b.onclick = async () => { await api('wa/quick?line=' + line, { method: 'POST', body: { del: b.dataset.qdel } }); draw(true); });
+    const f = $('#wa-qf', m.el); if (f) f.onsubmit = async (e) => { e.preventDefault(); try { await api('wa/quick?line=' + line, { method: 'POST', body: { short_code: f.sc.value, content: f.ct.value } }); toast('أُضيف الرد'); draw(true); } catch (err) { toast(err.message, 1); } };
+  };
+  draw();
+}
+
+// وسوم المحادثة (لكل رقم وسومه) — اختيار متعدد، وإضافة وسم جديد للمدير
+async function waLabelsModal(d, onSave) {
+  const m = modal({ title: 'وسوم المحادثة', icon: 'layers', body: '<div class="empty">…</div>' });
+  const cur = new Set((d.conv || {}).labels || []);
+  const draw = async (fresh) => {
+    const meta = await waMeta(d.line, fresh);
+    $('.modal-b', m.el).innerHTML = `<div class="wa-lgrid">${meta.labels.map((l) => `<label class="wa-lopt"><input type="checkbox" value="${esc(l.title)}" ${cur.has(l.title) ? 'checked' : ''}> ${waLblChip(d.line, l.title)}<small class="muted">${esc(l.description || '')}</small></label>`).join('') || '<div class="empty">لا وسوم لهذا الرقم بعد</div>'}</div>
+      ${meta.can_edit ? `<form class="wa-lnew" id="wa-lf"><input class="inp" name="t" placeholder="وسم جديد"><input type="color" name="c" value="#18566D"><button class="btn btn-g btn-s">+ وسم</button></form>` : ''}
+      <button class="btn btn-p" id="wa-lsave" style="margin-top:10px">حفظ</button>`;
+    $$('input[type=checkbox]', m.el).forEach((x) => x.onchange = () => { x.checked ? cur.add(x.value) : cur.delete(x.value); });
+    const f = $('#wa-lf', m.el); if (f) f.onsubmit = async (e) => { e.preventDefault(); try { await api('wa/labels?line=' + d.line, { method: 'POST', body: { title: f.t.value, color: f.c.value } }); cur.add(f.t.value.trim().replace(/\s+/g, '_')); draw(true); } catch (err) { toast(err.message, 1); } };
+    $('#wa-lsave', m.el).onclick = () => { m.close(); onSave([...cur]); };
+  };
+  draw();
+}
+
+// ملاحظة داخلية: تظهر للفريق داخل المحادثة ولا تُرسل للعميل
+function waNoteModal(id) {
+  const m = modal({ title: 'ملاحظة داخلية', icon: 'edit', body: `<textarea class="inp" id="wa-nt" rows="4" placeholder="تظهر للفريق فقط داخل المحادثة — لا تصل للعميل"></textarea><button class="btn btn-p" id="wa-ns" style="margin-top:10px">حفظ الملاحظة</button>` });
+  $('#wa-ns', m.el).onclick = async () => { try { await api('wa/note/' + encodeURIComponent(id), { method: 'POST', body: { text: $('#wa-nt', m.el).value } }); m.close(); toast('حُفظت الملاحظة'); waLoadThread(id); } catch (e) { toast(e.message, 1); } };
 }
 
 document.addEventListener('click', (e) => { if (!e.target.closest('.wa-menu')) $$('.wa-pop').forEach((x) => { x.hidden = true; }); if (!e.target.closest('.wa-rxp,[data-rx]')) $$('.wa-rxp').forEach((x) => x.remove()); });
@@ -649,6 +712,14 @@ ROUTES.wa = { title: 'صندوق واتساب', render: waView };
   .wa-b{padding:8px 12px;border-radius:12px;background:#fff;box-shadow:0 1px 1px rgba(0,0,0,.06);white-space:normal;word-break:break-word}
   .wa-m.bot .wa-b{background:#DCF5E3}.wa-m.staff .wa-b{background:#D7ECF4}
   .wa-meta{padding:2px 6px}
+  .wa-flt{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}.wa-fs{display:flex;gap:4px;flex-wrap:wrap}
+  .wa-fs button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer}.wa-fs button.on{background:var(--deep,#18566D);color:#fff;border-color:transparent}
+  .wa-fl-l{width:auto;min-width:120px;padding:4px 8px;font-size:12px}
+  .wa-tl{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:5px}
+  .wa-lbl{display:inline-block;font-size:11px;font-weight:600;border-radius:99px;padding:1px 8px;color:var(--c);background:color-mix(in srgb,var(--c) 14%,#fff);border:1px solid color-mix(in srgb,var(--c) 35%,#fff)}
+  .wa-cv{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--line)}.wa-cv select.inp{width:auto;padding:4px 8px;font-size:12.5px}.wa-cl{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+  .wa-m.note{align-self:center;max-width:86%}.wa-m.note .wa-b{background:#FFF6DB;border:1px dashed #E2B94C}
+  .wa-lgrid{display:grid;gap:6px}.wa-lopt{display:flex;align-items:center;gap:8px;cursor:pointer}.wa-lnew{display:flex;gap:6px;margin-top:10px}.wa-lnew input[type=color]{width:42px;padding:0;border:0;background:none}
   .wa-ln{display:inline-block;font-size:10.5px;font-weight:700;border-radius:99px;padding:0 8px;margin-bottom:3px;background:#E8EEF0;color:#18566D}.wa-ln.morooj{background:#DDF1F0;color:#1F7C79}
   .wa-compose{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line);align-items:flex-end}
   .wa-compose textarea{flex:1;resize:vertical;min-height:44px}

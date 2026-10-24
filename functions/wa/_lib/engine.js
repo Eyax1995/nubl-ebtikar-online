@@ -285,6 +285,8 @@ async function workersAI(env, system, user) {
 async function handleLive(env, origin, ev) {
   const fresh = await logEvent(env, { dept: ev.dept, wa_id: ev.wa_id, kind: ev.kind, msg_id: ev.msg_id, text: ev.text, status: 'received', detail: ev.media ? JSON.stringify({ m: ev.media }).slice(0, 1500) : null });
   if (!fresh) return; // مكررة
+  // رسالة جديدة من العميل تعيد فتح محادثته المغلقة في الصندوق (wa_conv — منقول من Chatwoot)
+  if (ev.kind === 'message') { try { await env.WA_DB.prepare("UPDATE wa_conv SET status = 'open', updated_at = datetime('now') WHERE dept = ? AND wa_id = ? AND status <> 'open'").bind(ev.dept, ev.wa_id).run(); } catch { /* الجدول لم يُنشأ بعد */ } }
   const key = ev.dept + ':' + ev.wa_id;
   const row = (await getSession(env, key)) || {};
   let history = []; try { history = JSON.parse(row.history || '[]'); } catch { history = []; }
