@@ -3,6 +3,7 @@
 // كل رسالة آلية تظهر أيضاً في محادثة العميل بصندوق واتساب («أتمتة المتجر»)، والطلبات وعملاء المتجر تُحفظ في المنصة (store_orders/store_customers).
 // المتابعات بعد 48 ساعة (تأخير التنفيذ، متابعة طلب عرض السعر) تُجدول في store_due ويرسلها /wa/health (storeTick).
 import { LINES } from './lines.js';
+import { renderByName } from './templates.js';
 
 const L = LINES.morooj;
 const GRAPH = 'https://graph.facebook.com/v23.0';
@@ -111,7 +112,9 @@ async function logSend(env, plan, template, params, r) {
       .bind(plan.ref || '', plan.phone || '', plan.name || '', template, r.ok ? 1 : 0, r.id || '', r.error || '').run();
   } catch (e) { console.warn('store_wa', e.message); }
   if (!env.WA_DB || !plan.phone) return;
-  const label = `🛒 ${TEMPLATE_AR[template] || template}${plan.ref ? ` — طلب ${plan.ref}` : ''}\n${params.filter(Boolean).join(' · ')}`.slice(0, 1500);
+  // سطر للفريق (نوع الرسالة ورقم الطلب) ثم نص القالب كما وصل للعميل
+  const full = await renderByName(env, L, template, params, 'ar').catch(() => null);
+  const label = `🛒 ${TEMPLATE_AR[template] || template}${plan.ref ? ` — طلب ${plan.ref}` : ''}\n${(full && full.text) || params.filter(Boolean).join(' · ')}`.slice(0, 3000);
   try {
     await env.WA_DB.prepare('INSERT INTO wa_events (dept, wa_id, kind, msg_id, text, reply, status, detail) VALUES (?,?,?,?,?,?,?,?)')
       .bind('morooj', plan.phone, 'staff', r.id || null, null, label, r.ok ? 'sent' : 'send_failed', JSON.stringify({ by: 'أتمتة المتجر', template, error: r.ok ? null : r.error }).slice(0, 1500)).run();

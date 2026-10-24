@@ -100,7 +100,9 @@ function waFileName(md, m) {
 const WA_DL = (md, m) => WA_MEDIA(md.id, 1, waFileName(md, m), md.mime);
 const waDlBtn = (md, m) => md.id ? `<a class="wa-dl" href="${WA_DL(md, m)}" download="${esc(waFileName(md, m))}" title="تنزيل ${esc(waFileName(md, m))}">${WA_DLI}<span>تنزيل</span></a>` : '';
 const WA_URL_RE = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
-const waLinkify = (t) => esc(t).replace(WA_URL_RE, (u) => `<a href="${u.startsWith('http') ? u : 'https://' + u}" target="_blank" rel="noopener">${u}</a>`);
+// روابط قابلة للنقر + تنسيق واتساب (*عريض* و_مائل_) كما يراه العميل
+const waLinkify = (t) => esc(t).replace(WA_URL_RE, (u) => `<a href="${u.startsWith('http') ? u : 'https://' + u}" target="_blank" rel="noopener">${u}</a>`)
+  .replace(/(^|[\s(«])\*([^*\n<]+)\*(?=[\s).,،»!؟]|$)/g, '$1<b>$2</b>').replace(/(^|[\s(«])_([^_\n<]+)_(?=[\s).,،»!؟]|$)/g, '$1<i>$2</i>');
 const WA_EMOJI = ['👍', '❤️', '😂', '😮', '🙏', '✅'];
 const WA_QUICK = [
   'حياك الله 🌷 معك فريق نُبل وابتكار للتسويق، كيف نقدر نخدمك؟',

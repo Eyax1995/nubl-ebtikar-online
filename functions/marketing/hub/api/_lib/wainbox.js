@@ -15,6 +15,7 @@ import { MARKETING_EXTRA } from '../../../../wa/_lib/marketing.js';
 import { MOROOJ_FULL, moroojWording } from '../../../../wa/_lib/morooj.js';
 import { LINES, lineOf, parseThread, threadKey, deptsForOrg } from '../../../../wa/_lib/lines.js';
 import { ensureCwTables } from '../../../../wa/import/chatwoot.js';
+import { renderByName } from '../../../../wa/_lib/templates.js';
 const CONV_ST = ['open', 'pending', 'resolved'];
 let cwReady = false;
 const convOf = async (db, dept, waId) => {
@@ -168,7 +169,9 @@ export async function waInboxRoute(env, request, user, sub, id) {
     if (params.length) msg.template.components = [{ type: 'body', parameters: params.map((text) => ({ type: 'text', text })) }];
     const r = await graph(env, `${L0.phoneId(env)}/messages`, { method: 'POST', body: JSON.stringify(msg) }, L0);
     const ok = r.ok && r.data.messages && r.data.messages[0];
-    const rendered = String(b.preview || '').slice(0, 4000) || `[قالب ${tpl}] ${params.join(' · ')}`;
+    // النص كما وصل للعميل (المتن والتذييل والأزرار من Meta)، وإلا معاينة الواجهة
+    const full = await renderByName(env, L0, tpl, params, lang).catch(() => null);
+    const rendered = ((full && full.text) || String(b.preview || '') || `[قالب ${tpl}] ${params.join(' · ')}`).slice(0, 4000);
     await db.prepare(`INSERT INTO wa_events (dept, wa_id, kind, msg_id, text, reply, status, detail) VALUES (?,?,?,?,?,?,?,?)`)
       .bind(DEPT, to, 'staff', ok ? r.data.messages[0].id : null, null, rendered, ok ? 'sent' : 'send_failed',
         JSON.stringify({ by: user.name, template: tpl, error: ok ? null : gErr(r) }).slice(0, 1500)).run();
