@@ -275,6 +275,29 @@ export async function waInboxRoute(env, request, user, sub, id) {
     return new Response(buf, { headers: hdrs(mt) });
   }
 
+  // نسخ وسائط من خط إلى خط (للمدير): ملف وصل على رقم التسويق يُرسل من رقم مروج — POST wa/copy {from, to, ids:[media_id]} → {map:{old:new}}
+  if (sub === 'copy' && method === 'POST') {
+    if (user.role !== 'admin') return bad('للمدير العام فقط', 403);
+    let b = {}; try { b = await request.json(); } catch { /* */ }
+    const F = lineOf(b.from), T = lineOf(b.to);
+    if (F === T || !F.token(env) || !T.token(env)) return bad('خطان مختلفان مضبوطان مطلوبان', 400);
+    const map = {};
+    for (const mid of (Array.isArray(b.ids) ? b.ids : []).map((x) => String(x).replace(/\D/g, '')).filter(Boolean).slice(0, 30)) {
+      try {
+        const meta = await graph(env, mid, {}, F);
+        if (!meta.ok || !meta.data.url) { map[mid] = { error: 'غير متاح' }; continue; }
+        const f = await fetch(meta.data.url, { headers: { authorization: 'Bearer ' + F.token(env) } });
+        const mime = meta.data.mime_type || f.headers.get('content-type') || 'application/octet-stream';
+        const fd = new FormData(); fd.append('messaging_product', 'whatsapp'); fd.append('type', mime);
+        fd.append('file', new Blob([await f.arrayBuffer()], { type: mime }), 'file');
+        const up = await fetch(`${GRAPH}/${T.phoneId(env)}/media`, { method: 'POST', headers: { authorization: 'Bearer ' + T.token(env) }, body: fd });
+        const ud = await up.json().catch(() => ({}));
+        map[mid] = ud.id ? { id: ud.id, mime } : { error: (ud.error && ud.error.message) || up.status };
+      } catch (e) { map[mid] = { error: e.message }; }
+    }
+    return json({ map });
+  }
+
   // الرسائل المميزة بنجمة في كل المحادثات
   if (sub === 'starred' && method === 'GET') {
     await ensureMarks(db);
