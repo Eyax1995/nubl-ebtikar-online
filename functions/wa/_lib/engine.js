@@ -10,15 +10,16 @@
 // الربط: env.WA_DB = قاعدة nubl-wa-assistant (مستقلة)، env.DB = قاعدة منصة hub (للتسجيل والتنبيهات فقط)
 import { COMMON, KB } from './kb.js';
 import { MARKETING_EXTRA } from './marketing.js';
+import { MOROOJ_KB } from './morooj.js';
+import { LINES, lineOf, lineByPhoneId, tokenForPath, threadKey } from './lines.js';
 import { notifyRoles, notifyUser, h as hx } from '../../marketing/hub/api/_lib/telegram.js';
 import { getSettings } from '../../marketing/hub/api/_lib/core.js';
 import { findStaff, handleStaffMessage } from '../../marketing/hub/api/_lib/staffwa.js';
 
-// الأرقام المخدومة — رقم «نُبل وابتكار للتسويق» فقط (قرار إياد 12 أكتوبر 2026).
+// الأرقام المخدومة: «نُبل وابتكار للتسويق» (قرار إياد 12 أكتوبر 2026)، و«مروج الحجاز» بعد نقلها من Chatwoot (قرار إياد 24 أكتوبر 2026).
 // أرقام الدعاية والإعلان ومروج الحجاز مستبعدة تماماً: رسائلها تُتجاهل فلا تُخزَّن ولا يُرد عليها ولا تصل لمنصة التسويق.
-export const NUMBERS = {
-  '966563413040': { dept: 'marketing', brand: 'نبل وابتكار للتسويق' },
-};
+export const NUMBERS = Object.fromEntries(Object.values(LINES).map((l) => [l.display, { dept: l.dept, brand: l.brand }]));
+const deptLabel = (dept) => (LINES[dept] ? LINES[dept].label : 'الدعاية والإعلان');
 
 const GRAPH = 'https://graph.facebook.com/v23.0';
 const HANDOFF_HOURS = 12;      // صمت بعد رد موظف من التطبيق أو بعد تحويل حقيقي
@@ -62,14 +63,15 @@ export function mediaInfo(m) {
 }
 
 // يحوّل حمولة Meta إلى أحداث مبسّطة
-export function parseEvents(body) {
+export function parseEvents(body, env = {}) {
   const out = [];
   for (const entry of (body.entry || [])) {
     for (const change of (entry.changes || [])) {
       const v = change.value || {};
       const meta = v.metadata || {};
       const display = String(meta.display_phone_number || '').replace(/\D/g, '');
-      const cfg = NUMBERS[display];
+      let cfg = NUMBERS[display];
+      if (!cfg) { const l = lineByPhoneId(env, meta.phone_number_id); if (l) cfg = { dept: l.dept, brand: l.brand }; }
       if (!cfg) continue;
       const base = { dept: cfg.dept, brand: cfg.brand, phone_number_id: String(meta.phone_number_id || ''), display_phone: display };
       if (change.field === 'messages') {
@@ -97,7 +99,7 @@ export function parseEvents(body) {
 async function graph(env, path, payload) {
   const r = await fetch(`${env.WA_GRAPH_URL || GRAPH}/${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${env.WA_TOKEN}` },
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${tokenForPath(env, path)}` }, // توكن خط الرقم المرسِل
     body: JSON.stringify(payload),
   });
   let d = {}; try { d = await r.json(); } catch { /* */ }
@@ -148,10 +150,10 @@ async function forwardIncoming(env, ev, name) {
     const ids = String(s.wa_forward_user_ids ?? '1').split(',').map((x) => parseInt(x, 10)).filter((x) => x > 0);
     if (!ids.length) return [];
     const phone = String(ev.wa_id || '');
-    const text = `📩 <b>واتساب التسويق</b> — ${hx(name || phone)} · ${hx(phone)}\n${hx(String(ev.text || '').slice(0, 1200))}`
+    const text = `📩 <b>واتساب ${deptLabel(ev.dept)}</b> — ${hx(name || phone)} · ${hx(phone)}\n${hx(String(ev.text || '').slice(0, 1200))}`
       + (ev.media && ev.media.t && ev.media.t !== 'button' && ev.media.t !== 'unsupported' ? '\n📎 المرفق في صندوق واتساب بالمنصة' : '')
       + `\n💬 فتح المحادثة: https://wa.me/${phone}`;
-    for (const id of ids) await notifyUser(env.DB, env, id, text, null, { kind: 'wa_in', link: `#/wa/${phone}`, title: '📩 رسالة واتساب واردة', urgent: true });
+    for (const id of ids) await notifyUser(env.DB, env, id, text, null, { kind: 'wa_in', link: `#/wa/${threadKey(ev.dept, phone)}`, title: '📩 رسالة واتساب واردة', urgent: true });
     return ids;
   } catch (e) { console.warn('forward', e.message); return []; }
 }
@@ -178,15 +180,16 @@ function buildPrompt(ev, session, history) {
   const context = [
     '# سياق هذه المحادثة',
     '- الوقت الآن في جدة: ' + when,
-    '- العميل راسل رقم: ' + ev.brand + ' (قسم ' + (ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان') + ')',
+    '- العميل راسل رقم: ' + ev.brand + ' (قسم ' + deptLabel(ev.dept) + ')',
     '- اسم العميل في واتساب: ' + (ev.name || session.customer_name || 'غير معروف'),
-    '- طلبات العميل في منصة نبل:',
+    '- طلبات العميل في المنصة:',
     'تعذر الوصول لبيانات الطلبات الآن — لا تخمّن حالة أي طلب، واعرض تحويله لموظف.',
   ].join('\n');
   const OUTPUT = '# صيغة الإخراج\nاكتب نص الرد فقط كما سيصل للعميل في واتساب — بلا مقدمات ولا شرح ولا علامات اقتباس. إذا احتاجت المحادثة موظفاً اكتب ردك ثم [تحويل] في آخر سطر.';
-  const LABEL = { customer: 'العميل', staff: 'موظف نبل', bot: 'أنت' };
+  const LABEL = { customer: 'العميل', staff: ev.dept === 'morooj' ? 'موظف مروج' : 'موظف نبل', bot: 'أنت' };
   const transcript = history.map((x) => (LABEL[x.r] || x.r) + ': ' + x.t).join('\n');
-  let system = COMMON + '\n\n' + (KB[ev.dept] || KB.advertising) + '\n\n' + context + '\n\n' + OUTPUT;
+  // مروج الحجاز لها معرفتها كاملة (هويتها وخدماتها) — لا تُبنى على COMMON نُبل وابتكار
+  let system = (ev.dept === 'morooj' ? MOROOJ_KB : COMMON + '\n\n' + (KB[ev.dept] || KB.advertising)) + '\n\n' + context + '\n\n' + OUTPUT;
   if (ev.dept === 'marketing') system += MARKETING_EXTRA;
   return { system, user: 'المحادثة حتى الآن (الأقدم أولاً):\n' + transcript + '\n\nاكتب ردك على آخر رسالة من العميل.' };
 }
@@ -298,7 +301,7 @@ async function handleLive(env, origin, ev) {
   if (ev.ts && now / 1000 - ev.ts > STALE_SEC) return;
 
   // عضو في الفريق (رقمه مسجّل في المنصة): إدارة المهام والتقارير — لا رد آلي للعملاء ولا تسجيل كعميل محتمل
-  const staff = await findStaff(env.DB, ev.wa_id);
+  const staff = ev.dept === 'marketing' ? await findStaff(env.DB, ev.wa_id) : null;
   if (staff) {
     graph(env, `${ev.phone_number_id}/messages`, { messaging_product: 'whatsapp', status: 'read', message_id: ev.msg_id }).catch(() => {});
     await handleStaffMessage(env, ev, staff);
@@ -316,7 +319,7 @@ async function handleLive(env, origin, ev) {
     const lastAlert = s.waiting_alert_at ? Date.parse(s.waiting_alert_at) : 0;
     if (now - lastAlert > WAIT_ALERT_MIN * 60 * 1000) {
       s.waiting_alert_at = new Date(now).toISOString();
-      await alertStaff(env, `⏳ عميل ينتظر رداً على واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'}\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\n${hx(ev.text.slice(0, 300))}\n↩️ ردّ من صندوق واتساب في المنصة`, `#/wa/${ev.wa_id}`, skipAlert);
+      await alertStaff(env, `⏳ عميل ينتظر رداً على واتساب ${deptLabel(ev.dept)}\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\n${hx(ev.text.slice(0, 300))}\n↩️ ردّ من صندوق واتساب في المنصة`, `#/wa/${threadKey(ev.dept, ev.wa_id)}`, skipAlert);
     }
     await saveSession(env, s);
     return;
@@ -358,10 +361,10 @@ async function handleLive(env, origin, ev) {
     detail: JSON.stringify({ engine: ai.engine || null, ai_error: ai.ok ? null : ai.error, handoff, wamid: sent.data?.messages?.[0]?.id || null, send_error: sent.data?.error?.message || null }).slice(0, 1500),
   });
   if (handoff) {
-    await alertStaff(env, `🙋 تحويل محادثة واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'} لموظف\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\nآخر رسالة: ${hx(ev.text.slice(0, 300))}${ai.ok ? '' : '\n⚠️ عطل مؤقت في الذكاء الاصطناعي'}`, `#/wa/${ev.wa_id}`, skipAlert);
+    await alertStaff(env, `🙋 تحويل محادثة واتساب ${deptLabel(ev.dept)} لموظف\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\nآخر رسالة: ${hx(ev.text.slice(0, 300))}${ai.ok ? '' : '\n⚠️ عطل مؤقت في الذكاء الاصطناعي'}`, `#/wa/${threadKey(ev.dept, ev.wa_id)}`, skipAlert);
   } else if (!row.session_key) {
     // أول رسالة من رقم جديد: تنبيه فوري حتى لو تولّى الرد الآلي المحادثة
-    await alertStaff(env, `💬 محادثة جديدة على واتساب ${ev.dept === 'marketing' ? 'التسويق' : 'الدعاية والإعلان'}\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\n${hx(ev.text.slice(0, 300))}\n🤖 ${sent.ok ? 'ردّ الرد الآلي، ويمكنك المتابعة من صندوق واتساب في المنصة' : 'تعذّر إرسال الرد الآلي — ردّ بنفسك من المنصة'}`, `#/wa/${ev.wa_id}`, skipAlert);
+    await alertStaff(env, `💬 محادثة جديدة على واتساب ${deptLabel(ev.dept)}\n<b>${hx(s.customer_name || ev.wa_id)}</b> · ${hx(ev.wa_id)}\n${hx(ev.text.slice(0, 300))}\n🤖 ${sent.ok ? 'ردّ الرد الآلي، ويمكنك المتابعة من صندوق واتساب في المنصة' : 'تعذّر إرسال الرد الآلي — ردّ بنفسك من المنصة'}`, `#/wa/${threadKey(ev.dept, ev.wa_id)}`, skipAlert);
   }
 }
 
@@ -373,7 +376,7 @@ async function saveHistory(env, items) {
 }
 
 export async function processWebhook(env, origin, body) {
-  const events = parseEvents(body);
+  const events = parseEvents(body, env);
   await saveHistory(env, events.filter((e) => e.kind === 'history'));
   for (const ev of events.filter((e) => e.kind !== 'history')) {
     try { await handleLive(env, origin, ev); } catch (e) {
@@ -384,14 +387,19 @@ export async function processWebhook(env, origin, body) {
 }
 
 // التحقق من توقيع Meta (X-Hub-Signature-256) عند ضبط META_APP_SECRET
+// كل خط قد يصل من تطبيق Meta مختلف: يُقبل التوقيع بسرّ تطبيق نُبل (META_APP_SECRET) أو تطبيق مروج (MOROOJ_APP_SECRET)
 export async function validSignature(env, raw, header) {
-  if (!env.META_APP_SECRET) return true;
+  const secrets = [env.META_APP_SECRET, env.MOROOJ_APP_SECRET].filter(Boolean);
+  if (!secrets.length) return true;
   if (!header || !header.startsWith('sha256=')) return false;
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.META_APP_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(raw));
-  const hex = [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
   const given = header.slice(7);
-  if (given.length !== hex.length) return false;
-  let diff = 0; for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ given.charCodeAt(i);
-  return diff === 0;
+  for (const secret of secrets) {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(raw));
+    const hex = [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    if (given.length !== hex.length) continue;
+    let diff = 0; for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ given.charCodeAt(i);
+    if (diff === 0) return true;
+  }
+  return false;
 }
