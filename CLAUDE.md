@@ -214,6 +214,8 @@ wrangler pages dev . --port 8788 --local --persist-to .d1
 - في ملف المتقدم (`#/application/<id>`) بطاقة «دعوة المقابلة»: تاريخ ووقت ونوع (حضوري/فيديو) وملاحظة → `POST applications/<id>/invite` (`inviteInterview` في hiring.js): يحفظ `interview_at/interview_mode`، ويرسل واتساب من رقم التسويق (نص حر إن كانت نافذة 24 ساعة مفتوحة وإلا قالب `nubl_client_update`) برابط موقّع `/i/A<id>.<HMAC>` (سرّ `track_secret` ببادئة `interview:`)، ويسجّل الرسالة في صندوق واتساب، و`interview_status = مدعو`.
 - صفحة المتقدم `marketing/careers/interview/` (بلا دخول): الموعد والمكان (أو اتصال فيديو) وزرا «أؤكد الحضور» / «لديّ ملاحظات» → `POST public/interview/<key>` يحدّث `interview_status` (مؤكد | ملاحظات) و`interview_note` ويبلّغ admin/manager. الدعوة تُقفل إذا خرج الطلب من مرحلة «مقابلة».
 - بوت واتساب (HIRING): من يرد بالموافقة أو ملاحظات في المحادثة يُوجَّه لرابط الدعوة ثم [تحويل].
+- **التأكيد يجدول المقابلة** (`scheduleInterview`، أيضاً `POST applications/<id>/schedule` يدوياً): حدث 30 دقيقة في تقويم Google (`gcal_id`؛ Meet للفيديو → `meet_link`، والمتقدم مدعو بالبريد إن وُجد) + رسالة واتساب للمتقدم (رابط Meet للفيديو / موقع المكتب للحضوري) + مهمة متابعة «مقابلة توظيف: …» للمسؤول (`followup_task_id`، مرة واحدة).
+- **الاعتذار:** `POST applications/<id>/regret` (الحالة «معتذر عنه») يرسل «نحتفظ ببياناتك لأي احتياج مستقبلي» بالقالب ويضع `regret_sent_at`.
 
 ## ودجت المحادثة في الموقعين (24 أكتوبر 2026)
 - السكربت `marketing/chat-widget.js` (Shadow DOM، بلا مكتبات): `<script src="https://nubl-ebtikar.online/marketing/chat-widget.js" data-site="nubl|morooj" defer>` — اختياري `data-side="right"`. مثبّت في كل صفحات `marketing/*.html` (يسار الشاشة، وزر واتساب يبقى يميناً). مروج: يُلصق في «الأكواد المخصصة» بمتجر سلة.

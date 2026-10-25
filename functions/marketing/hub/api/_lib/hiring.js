@@ -6,6 +6,7 @@ import { json, bad, HttpError, audit, nextNumber, getSettings } from './core.js'
 import { notifyRoles, h as hx } from './telegram.js';
 import { secret, templateReady } from './track.js';
 import { sendText } from '../../../../wa/_lib/engine.js';
+import { upsertEvent, googleReady } from './google.js';
 
 export const EXPERIENCE = ['أقل من سنة', 'من سنة إلى سنتين', 'من 3 إلى 5 سنوات', 'أكثر من 5 سنوات'];
 export const START_WHEN = ['خلال أسبوع', 'خلال أسبوعين', 'خلال شهر', 'أكثر من شهر'];
@@ -188,6 +189,65 @@ async function inviteInterview0(db, env, user, id, d) {
   return json({ ok: true, at, mode, link, via: mode_ });
 }
 
+// ---------- جدولة المقابلة المؤكدة: حدث في تقويم Google (+ رابط Meet للفيديو) + رسالة واتساب بالرابط + مهمة متابعة ----------
+// تُستدعى عند تأكيد المتقدم من رابط الدعوة، أو يدوياً POST applications/<id>/schedule (لمن أكّد قبل هذه الميزة أو عند تغيير الموعد)
+const addMin = (at, m) => { const d = new Date(at.replace(' ', 'T') + ':00Z'); d.setUTCMinutes(d.getUTCMinutes() + m); return d.toISOString().slice(0, 16).replace('T', ' '); };
+async function sendWa(db, env, a, text, link, tag) {
+  const to = cleanPhone(a.phone); if (!/^\d{9,15}$/.test(to) || !env.WA_TOKEN) return { ok: false, error: 'رقم غير صالح أو واتساب غير مضبوط' };
+  const hello = `مرحباً ${firstName(a.name)}،`; const phoneId = env.WA_PHONE_ID || FROM_PHONE_ID;
+  let open = false;
+  try { const r = env.WA_DB && await env.WA_DB.prepare("SELECT at FROM wa_events WHERE wa_id = ? AND kind = 'message' ORDER BY id DESC LIMIT 1").bind(to).first(); open = !!(r && Date.now() - Date.parse(String(r.at).replace(' ', 'T') + 'Z') < 23.5 * 3600e3); } catch { /* */ }
+  let res, mode_;
+  if (open) { res = await sendText(env, phoneId, to, `${hello}\n${text}\n\n${link}\n\nفريق نُبل وابتكار للخدمات التسويقية`); mode_ = 'text'; }
+  else {
+    if (!(await templateReady(db, env))) return { ok: false, error: 'قالب واتساب غير معتمد' };
+    res = await graph(env, `${phoneId}/messages`, { messaging_product: 'whatsapp', to, type: 'template',
+      template: { name: 'nubl_client_update', language: { code: 'ar' }, components: [{ type: 'body', parameters: [firstName(a.name) || 'مرشحنا', text.replace(/\s*[\r\n]+\s*/g, ' · ').slice(0, 900), link].map((t) => ({ type: 'text', text: t })) }] } });
+    mode_ = 'template';
+  }
+  const ok = res && res.ok && res.data?.messages?.[0];
+  const err = ok ? null : String(res?.data?.error?.message || res?.error || 'تعذّر الإرسال').slice(0, 300);
+  try { await env.WA_DB?.prepare('INSERT INTO wa_events (dept, wa_id, kind, msg_id, text, reply, status, detail) VALUES (?,?,?,?,?,?,?,?)')
+    .bind('marketing', to, 'staff', ok ? res.data.messages[0].id : null, null, `${hello}\n${text}\n${link}`, ok ? 'sent' : 'send_failed', JSON.stringify({ by: tag, mode: mode_, error: err, app: a.id })).run(); } catch { /* */ }
+  return { ok: !!ok, error: err, via: mode_ };
+}
+export async function scheduleInterview(db, env, user, id) {
+  const a = await db.prepare('SELECT * FROM applications WHERE id = ?').bind(id).first();
+  if (!a) return bad('الطلب غير موجود', 404);
+  if (!a.interview_at) return bad('لا موعد مقابلة لهذا الطلب');
+  const video = a.interview_mode === 'فيديو';
+  const out = { calendar: null, meet: a.meet_link || null, wa: null, task: null };
+  const s = await getSettings(db);
+  const link = `${SITE}/marketing/hub/#/application/${a.id}`;
+  // 1) حدث التقويم (+Meet للفيديو) — يُحدَّث إن وُجد
+  if (googleReady(env, s)) {
+    const r = await upsertEvent(db, env, { id: 'iv' + a.id }, { start: a.interview_at, end: addMin(a.interview_at, 30), eventId: a.gcal_id || undefined, meet: video,
+      title: `مقابلة توظيف — ${a.name} (${a.job_title || ''})${video ? ' — فيديو' : ''}`,
+      description: `مقابلة ${video ? 'عبر Google Meet' : 'حضورية في مكتب الحمدانية'} لوظيفة ${a.job_title || ''}.\nالمتقدم: ${a.name} · ${a.city || ''} · الجوال ${a.phone || '—'}${a.portfolio ? `\nمعرض الأعمال: ${a.portfolio}` : ''}\nملف الطلب: ${link}`,
+      attendees: a.email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(a.email) ? [a.email] : [] });
+    out.calendar = r.ok ? 'ok' : r.error;
+    if (r.ok) { out.meet = video ? (r.link || a.meet_link || null) : null; await db.prepare('UPDATE applications SET gcal_id = ?, meet_link = COALESCE(?, meet_link) WHERE id = ?').bind(r.id, out.meet, a.id).run(); }
+  } else out.calendar = 'Google غير مربوط';
+  // 2) رسالة التأكيد للمتقدم: رابط Meet للفيديو، أو موقع المكتب للحضوري
+  const when = whenAr(a.interview_at);
+  const text = video
+    ? (out.meet ? `تم تأكيد موعد مقابلتك ${when}. المقابلة عبر Google Meet — ادخل من الرابط في الموعد (نحو 30 دقيقة) وجهّز ملف أعمالك على الشاشة.` : `تم تأكيد موعد مقابلتك ${when}. سنرسل لك رابط اتصال الفيديو قبل الموعد.`)
+    : `تم تأكيد موعد مقابلتك ${when} في ${OFFICE.place}. احضر قبل الموعد بعشر دقائق ومعك ملف أعمالك.`;
+  const w = await sendWa(db, env, a, text, video && out.meet ? out.meet : (video ? await interviewLink(db, a.id) : OFFICE.maps), 'تأكيد المقابلة');
+  out.wa = w.ok ? w.via : w.error;
+  // 3) مهمة متابعة للمسؤول (مرة واحدة)
+  if (!a.followup_task_id) {
+    const owner = a.owner_id || user?.id || (await db.prepare("SELECT id FROM users WHERE role = 'admin' AND active = 1 ORDER BY id LIMIT 1").first('id')) || null;
+    const r = await db.prepare(`INSERT INTO tasks (title, assignee_id, status, priority, due_date, est_hours, description, link, created_by) VALUES (?,?,?,?,?,?,?,?,?)`)
+      .bind(`مقابلة توظيف: ${a.name} — ${a.interview_at.slice(11)} ${video ? 'فيديو' : 'حضوري'}`, owner, 'جديدة', 'عالية', a.interview_at.slice(0, 10), 0.5,
+        `${a.job_title || ''} · ${a.city || ''} · ${a.phone || ''}${out.meet ? `\nرابط Meet: ${out.meet}` : ''}${a.portfolio ? `\nمعرض الأعمال: ${a.portfolio}` : ''}\nبعد المقابلة: سجّل التقييم والملاحظات في ملف الطلب وحدّث المرحلة (عرض وظيفي / معتذر عنه).`, `#/application/${a.id}`, user?.id || null).run();
+    out.task = r.meta.last_row_id;
+    await db.prepare('UPDATE applications SET followup_task_id = ? WHERE id = ?').bind(out.task, a.id).run();
+  } else out.task = a.followup_task_id;
+  await audit(db, user || { id: null, name: 'جدولة المقابلة', role: 'system' }, 'schedule', 'applications', a.id, JSON.stringify(out).slice(0, 300));
+  return json({ ok: true, ...out });
+}
+
 // رسالة اعتذار لطيفة للمستبعد: نحتفظ ببياناته لأي احتياج أو توظيف مستقبلي — POST applications/<id>/regret
 const REGRET_LINK = `${SITE}/marketing/careers`;
 export async function regretApplicant(db, env, user, id) {
@@ -248,6 +308,8 @@ export async function publicInterview(db, env, request, key) {
     ? `✅ أكّد <b>${hx(a.name)}</b> حضور المقابلة ${hx(whenAr(a.interview_at))}${note ? `\n💬 ${hx(note)}` : ''}`
     : `💬 ملاحظات من <b>${hx(a.name)}</b> على موعد المقابلة (${hx(whenAr(a.interview_at))}):\n${hx(note)}\n➡️ راجع الطلب وعدّل الموعد إن لزم`;
   await notifyRoles(db, env, 'admin,manager', msg, { kind: 'hr', title: st === 'مؤكد' ? `✅ تأكيد مقابلة — ${a.name}` : `💬 ملاحظات مقابلة — ${a.name}`, link: `#/application/${a.id}` });
+  // التأكيد يجدول المقابلة: حدث التقويم (+Meet) ورسالة بالرابط ومهمة متابعة
+  if (st === 'مؤكد') { try { await scheduleInterview(db, env, null, a.id); } catch (e) { console.warn('schedule', e.message); } }
   a.interview_status = st; a.interview_note = note || ''; a.interview_replied_at = new Date().toISOString();
   return json({ ok: true, ...view() });
 }

@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 22;
+export const SCHEMA_VERSION = 23;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -243,6 +243,10 @@ export const MIGRATIONS = [
   'ALTER TABLE applications ADD COLUMN interview_replied_at TEXT',
   // v22: رسالة الاعتذار اللطيف (نحتفظ ببياناتك لاحتياج مستقبلي) — متى أُرسلت
   'ALTER TABLE applications ADD COLUMN regret_sent_at TEXT',
+  // v23: جدولة المقابلة المؤكدة — حدث Google Calendar (+Meet للفيديو) ومهمة متابعة
+  'ALTER TABLE applications ADD COLUMN gcal_id TEXT',
+  'ALTER TABLE applications ADD COLUMN meet_link TEXT',
+  'ALTER TABLE applications ADD COLUMN followup_task_id INTEGER',
   'ALTER TABLE content ADD COLUMN publish_time TEXT',
   'ALTER TABLE content ADD COLUMN hashtags TEXT',
   'ALTER TABLE content ADD COLUMN cta TEXT',
