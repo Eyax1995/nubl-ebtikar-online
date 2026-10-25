@@ -38,8 +38,11 @@ const waLblChip = (line, t) => `<span class="wa-lbl" style="--c:${esc(waLblColor
 const waLnBadge = (line) => `<span class="wa-ln ${line}">${esc((WA_LINES[line] || WA_WEB[line] || WA_LINES.marketing).label)}</span>`;
 const waBotOn = (until) => !until || Date.parse(until) <= Date.now();
 
+// المحادثة المعروضة الآن + رقم جيل للعرض: أي تحميل أو مؤقت من عرض سابق يتوقف ولا يرسم فوق المحادثة الحالية
+let waGen = 0, waCur = '';
 async function waView(id) {
   clearInterval(waTimer);
+  const gen = ++waGen; waCur = id || '';
   if (!WA_ROLES.includes(me().role)) { V().innerHTML = '<div class="empty">لا تملك صلاحية صندوق واتساب</div>'; return; }
   const OL = waOrgLine(); const OLX = OL && WA_LINES[OL];
   V().innerHTML = `<div class="wa-box ${id ? 'has-thread' : ''}"><div class="wa-list card"><div class="wa-lh"><div><b>${I.wa} ${OLX ? 'محادثات رقم ' + OLX.label : 'محادثات واتساب'}</b>
@@ -52,13 +55,17 @@ async function waView(id) {
   $('#wa-starred').onclick = () => waStarredModal();
   if ($('#wa-set')) $('#wa-set').onclick = () => waSettingsModal(id ? waBase(waLineOf(id)) : OL || 'marketing');
   await Promise.all((OL ? [OL] : Object.keys(WA_LINES)).map((l) => waMeta(l)));
+  if (gen !== waGen) return;
   waFilterBar(id, OL);
   await waLoadThreads(id);
+  if (gen !== waGen) return;
   if (id) await waLoadThread(id);
-  waTimer = setInterval(async () => {
-    if (S.route !== 'wa') { clearInterval(waTimer); return; }
+  if (gen !== waGen) return; // فُتحت محادثة أخرى أثناء التحميل — لا مؤقت لهذا العرض
+  clearInterval(waTimer);
+  const t = waTimer = setInterval(async () => {
+    if (S.route !== 'wa' || gen !== waGen) { clearInterval(t); return; }
     await waLoadThreads(id, true).catch(() => {});
-    if (id && !($('#wa-text') && $('#wa-text').value)) await waLoadThread(id, true).catch(() => {});
+    if (id && gen === waGen && !($('#wa-text') && $('#wa-text').value)) await waLoadThread(id, true).catch(() => {});
   }, 15000);
 }
 
@@ -74,6 +81,7 @@ function waFilterBar(id, OL) {
 
 async function waLoadThreads(active, quiet) {
   const d = await api('wa/threads');
+  if ((active || '') !== waCur) return; // رد متأخر من عرض سابق
   const el = $('#wa-threads'); if (!el) return;
   const both = (d.lines || []).length > 1;
   const list = d.threads.filter((t) => (!WA_F.status || (t.status || 'open') === WA_F.status) && (!WA_F.label || (t.labels || []).includes(WA_F.label)));
@@ -210,6 +218,7 @@ async function waLoadThread(id, quiet) {
   const ta0 = $('#wa-text'); if (ta0) st.draft = ta0.value;
   if (quiet && (st.files.length || st.busy || $('.wa-aip:not([hidden])'))) return; // لا تقاطع الموظف أثناء التحضير
   const d = await api('wa/thread/' + encodeURIComponent(id));
+  if (id !== waCur) return; // لا ترسم محادثة لم تعد المفتوحة
   const el = $('#wa-thread'); if (!el) return;
   const box0 = $('#wa-msgs'); const atBottom = !box0 || box0.scrollHeight - box0.scrollTop - box0.clientHeight < 80;
   const on = waBotOn(d.bot_paused_until);
