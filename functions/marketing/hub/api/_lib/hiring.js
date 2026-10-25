@@ -248,6 +248,23 @@ export async function scheduleInterview(db, env, user, id) {
   return json({ ok: true, ...out });
 }
 
+// ---------- المجدول (/wa/health كل 10 دقائق): تذكير الساعة 8 صباحاً يوم المقابلة لمن دُعي ولم يرد ----------
+export async function hiringTick(db, env) {
+  const ksa = new Date(Date.now() + 3 * 3600e3); const today = ksa.toISOString().slice(0, 10); const hour = ksa.getUTCHours();
+  if (hour < 8 || hour >= 12) return { skipped: 'خارج 08:00–12:00' };
+  const { results } = await db.prepare(`SELECT * FROM applications WHERE status = 'مقابلة' AND interview_status = 'مدعو' AND interview_at LIKE ? AND interview_reminded_at IS NULL
+    AND interview_at > ? ORDER BY interview_at LIMIT 25`).bind(today + '%', today + ' ' + String(hour).padStart(2, '0') + ':30').all();
+  let sent = 0, failed = 0;
+  for (const a of results) {
+    await db.prepare("UPDATE applications SET interview_reminded_at = datetime('now') WHERE id = ?").bind(a.id).run(); // لا تكرار حتى عند الفشل
+    const video = a.interview_mode === 'فيديو';
+    const text = `تذكير: مقابلتك لوظيفة «${a.job_title || ''}» اليوم ${whenAr(a.interview_at).replace(/^.*?\d{4} /, '')} ${video ? 'عبر اتصال فيديو' : 'في ' + OFFICE.place}. لم يصلنا تأكيدك بعد — نرجو تأكيد الحضور من الرابط، أو إرسال ملاحظاتك إن كان الموعد لا يناسبك.`;
+    const r = await sendWa(db, env, a, text, await interviewLink(db, a.id), 'تذكير المقابلة');
+    r.ok ? sent++ : failed++;
+  }
+  return { sent, failed };
+}
+
 // رسالة اعتذار لطيفة للمستبعد: نحتفظ ببياناته لأي احتياج أو توظيف مستقبلي — POST applications/<id>/regret
 const REGRET_LINK = `${SITE}/marketing/careers`;
 export async function regretApplicant(db, env, user, id) {
