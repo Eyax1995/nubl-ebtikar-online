@@ -150,6 +150,10 @@ async function graph(env, path, body) {
 const inviteText = (a, note) => `ندعوك لمقابلة ${a.interview_mode === 'فيديو' ? 'عبر اتصال فيديو (واتساب)' : 'شخصية في ' + OFFICE.place} لوظيفة «${a.job_title || ''}» ${whenAr(a.interview_at)}. يلزم تأكيد الموعد من الرابط، ومن لديه ملاحظات أو يرغب بتغيير الموعد يرسلها من الرابط نفسه عبر طلبه في النظام.${note ? ' ' + note : ''}`;
 
 export async function inviteInterview(db, env, user, id, d) {
+  try { return await inviteInterview0(db, env, user, id, d); }
+  catch (e) { console.error('invite', e); return bad('تعذّر إرسال الدعوة (خطأ داخلي): ' + String(e && e.message || e).slice(0, 200), 500); }
+}
+async function inviteInterview0(db, env, user, id, d) {
   const a = await db.prepare('SELECT * FROM applications WHERE id = ?').bind(id).first();
   if (!a) return bad('الطلب غير موجود', 404);
   const at = String(d.at || a.interview_at || '').trim().replace('T', ' ').slice(0, 16);
