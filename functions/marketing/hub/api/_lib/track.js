@@ -20,6 +20,8 @@ const ksaHour = () => (new Date().getUTCHours() + 3) % 24;
 const parse = (s, d) => { try { return JSON.parse(s); } catch { return d; } };
 const money = (v) => Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const arDate = (d) => { if (!d) return ''; const [y, m, x] = String(d).slice(0, 10).split('-'); return `${+x}/${+m}/${y}`; };
+// الاسم الأول للتحية: «عبد الرحمن» و«أبو أنس» كلمتان لا كلمة
+const firstName = (n) => { const w = String(n || '').trim().split(/\s+/); return /^(عبد|عبدال|أبو|ابو|أم|ام|آل)$/.test(w[0]) && w[1] ? `${w[0]} ${w[1]}` : (w[0] || ''); };
 const cleanPhone = (p) => { let d = String(p || '').replace(/[٠-٩]/g, (c) => '٠١٢٣٤٥٦٧٨٩'.indexOf(c)).replace(/[^\d]/g, ''); if (d.startsWith('00')) d = d.slice(2); if (/^05\d{8}$/.test(d)) d = '966' + d.slice(1); if (/^5\d{8}$/.test(d)) d = '966' + d; return /^\d{9,15}$/.test(d) ? d : null; };
 
 // ---------- مفتاح الرابط ----------
@@ -185,7 +187,7 @@ export async function flushOutbox(db, env, { limit = 20 } = {}) {
   let sent = 0, waiting = 0, failed = 0; let tplOk = null;
   for (const m of results) {
     if (!env.WA_TOKEN) { await db.prepare("UPDATE client_msgs SET status = 'failed', error = 'واتساب غير مضبوط' WHERE id = ?").bind(m.id).run(); failed++; continue; }
-    const hello = m.name ? `مرحباً ${String(m.name).split(/\s+/)[0]}،` : 'مرحباً،';
+    const hello = m.name ? `مرحباً ${firstName(m.name)}،` : 'مرحباً،';
     let res = null, mode = null;
     if (await windowOpen(env, m.to_phone)) {
       res = await sendText(env, env.WA_PHONE_ID || FROM_PHONE_ID, m.to_phone, `${hello}\n${m.text}\n\nللتفاصيل والمتابعة: ${m.link}\n\nفريق نُبل وابتكار للخدمات التسويقية`);
@@ -195,7 +197,7 @@ export async function flushOutbox(db, env, { limit = 20 } = {}) {
       if (tplOk) {
         res = await graph(env, `${env.WA_PHONE_ID || FROM_PHONE_ID}/messages`, { messaging_product: 'whatsapp', to: m.to_phone, type: 'template',
           // معاملات القالب لا تقبل أسطراً جديدة أو مسافات متتالية (#132018) — تُسطَّح إلى سطر واحد
-          template: { name: TPL, language: { code: 'ar' }, components: [{ type: 'body', parameters: [String(m.name || 'عميلنا').split(/\s+/)[0], m.text.replace(/\s*[\r\n]+\s*/g, ' · ').replace(/\s{2,}/g, ' ').trim().slice(0, 900), m.link].map((text) => ({ type: 'text', text })) }] } });
+          template: { name: TPL, language: { code: 'ar' }, components: [{ type: 'body', parameters: [firstName(m.name) || 'عميلنا', m.text.replace(/\s*[\r\n]+\s*/g, ' · ').replace(/\s{2,}/g, ' ').trim().slice(0, 900), m.link].map((text) => ({ type: 'text', text })) }] } });
         mode = 'template';
       }
     }
