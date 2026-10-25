@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 21;
+export const SCHEMA_VERSION = 22;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -241,6 +241,8 @@ export const MIGRATIONS = [
   'ALTER TABLE applications ADD COLUMN interview_note TEXT',
   'ALTER TABLE applications ADD COLUMN interview_sent_at TEXT',
   'ALTER TABLE applications ADD COLUMN interview_replied_at TEXT',
+  // v22: رسالة الاعتذار اللطيف (نحتفظ ببياناتك لاحتياج مستقبلي) — متى أُرسلت
+  'ALTER TABLE applications ADD COLUMN regret_sent_at TEXT',
   'ALTER TABLE content ADD COLUMN publish_time TEXT',
   'ALTER TABLE content ADD COLUMN hashtags TEXT',
   'ALTER TABLE content ADD COLUMN cta TEXT',

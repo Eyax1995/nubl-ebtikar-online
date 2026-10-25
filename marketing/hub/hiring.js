@@ -85,6 +85,7 @@
               <select class="inp" id="iv-m" ${w ? '' : 'disabled'}><option ${a.interview_mode !== 'فيديو' ? 'selected' : ''}>حضوري</option><option ${a.interview_mode === 'فيديو' ? 'selected' : ''}>فيديو</option></select>
               <input class="inp" id="iv-n" placeholder="ملاحظة في الدعوة (اختياري)" maxlength="300" ${w ? '' : 'disabled'}></div>
             ${w ? `<button class="btn btn-p btn-s" id="iv-send" style="margin-top:8px">📨 ${a.interview_sent_at ? 'إعادة إرسال الدعوة' : 'إرسال دعوة المقابلة عبر واتساب'}</button>` : ''}
+            ${a.status === 'معتذر عنه' ? `<h3 style="margin-top:16px">رسالة الاعتذار</h3><div class="small muted" style="margin-bottom:8px">${a.regret_sent_at ? `✅ أُرسلت ${fdate(a.regret_sent_at)} — نحتفظ ببياناته لاحتياج مستقبلي` : 'لم تُرسل بعد — تشكره وتخبره أننا نحتفظ ببياناته لأي احتياج أو وظيفة مستقبلية'}</div>${w ? `<button class="btn btn-g btn-s" id="rg-send">💌 ${a.regret_sent_at ? 'إعادة إرسال رسالة الاعتذار' : 'إرسال رسالة الاعتذار عبر واتساب'}</button>` : ''}` : ''}
             <h3 style="margin-top:16px">ملاحظات المقابلة والفرز</h3>
             <textarea class="inp" id="ap-notes" rows="5" ${w ? '' : 'readonly'} placeholder="انطباعك عن الأعمال، نتيجة المقابلة، الخطوة التالية…">${esc(a.notes || '')}</textarea>
             ${w ? '<button class="btn btn-p btn-s" id="ap-save" style="margin-top:8px">حفظ الملاحظات</button>' : ''}</div>
@@ -102,6 +103,12 @@
     $$('[data-st]').forEach((b) => b.onclick = () => b.dataset.st !== a.status && put({ status: b.dataset.st }, `المرحلة: ${b.dataset.st}`));
     $$('[data-rt]').forEach((b) => b.onclick = () => put({ rating: +b.dataset.rt === a.rating ? null : +b.dataset.rt }, 'تم حفظ التقييم'));
     const sv = $('#ap-save'); if (sv) sv.onclick = () => put({ notes: $('#ap-notes').value }, 'تم حفظ الملاحظات');
+    const rg = $('#rg-send'); if (rg) rg.onclick = async () => {
+      if (!(await confirmBox(`إرسال رسالة الاعتذار إلى <b>${esc(a.name)}</b> على واتساب؟`))) return;
+      rg.disabled = true;
+      try { await api(`applications/${a.id}/regret`, { method: 'POST', body: {} }); invalidate('applications'); toast('أُرسلت رسالة الاعتذار ✓'); rerender(); }
+      catch (e) { toast(e.message, 1); rg.disabled = false; }
+    };
     const iv = $('#iv-send'); if (iv) iv.onclick = async () => {
       const at = `${$('#iv-d').value} ${$('#iv-t').value}`; if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(at)) return toast('حدد التاريخ والوقت', 1);
       if (!(await confirmBox(`إرسال دعوة المقابلة إلى <b>${esc(a.name)}</b> على واتساب؟<br><small>${esc(at)} · ${esc($('#iv-m').value)}</small>`))) return;

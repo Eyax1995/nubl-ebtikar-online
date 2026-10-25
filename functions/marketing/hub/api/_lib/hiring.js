@@ -188,6 +188,39 @@ async function inviteInterview0(db, env, user, id, d) {
   return json({ ok: true, at, mode, link, via: mode_ });
 }
 
+// رسالة اعتذار لطيفة للمستبعد: نحتفظ ببياناته لأي احتياج أو توظيف مستقبلي — POST applications/<id>/regret
+const REGRET_LINK = `${SITE}/marketing/careers`;
+export async function regretApplicant(db, env, user, id) {
+  try {
+    const a = await db.prepare('SELECT * FROM applications WHERE id = ?').bind(id).first();
+    if (!a) return bad('الطلب غير موجود', 404);
+    if (a.status !== 'معتذر عنه') return bad('الطلب ليس في مرحلة «معتذر عنه»');
+    const to = cleanPhone(a.phone);
+    if (!/^\d{9,15}$/.test(to)) return bad(`رقم الجوال غير صالح (${a.phone || '—'})`);
+    if (!env.WA_TOKEN) return bad('واتساب غير مضبوط');
+    const text = `نشكر لك اهتمامك بالتقديم لوظيفة «${a.job_title || ''}» لدى نُبل وابتكار للخدمات التسويقية. بعد مراجعة الطلبات لم يقع الاختيار عليك في هذه المرحلة، وسنحتفظ ببياناتك وملف أعمالك في قاعدة مرشحينا لأي احتياج أو وظيفة مستقبلية، وسنتواصل معك عند توفر ما يناسبك. نتمنى لك كل التوفيق.`;
+    const hello = `مرحباً ${firstName(a.name)}،`;
+    let open = false;
+    try { const r = env.WA_DB && await env.WA_DB.prepare("SELECT at FROM wa_events WHERE wa_id = ? AND kind = 'message' ORDER BY id DESC LIMIT 1").bind(to).first(); open = !!(r && Date.now() - Date.parse(String(r.at).replace(' ', 'T') + 'Z') < 23.5 * 3600e3); } catch { /* */ }
+    const phoneId = env.WA_PHONE_ID || FROM_PHONE_ID; let res, mode_;
+    if (open) { res = await sendText(env, phoneId, to, `${hello}\n${text}\n\nوظائفنا الجديدة تُنشر هنا: ${REGRET_LINK}\n\nفريق نُبل وابتكار للخدمات التسويقية`); mode_ = 'text'; }
+    else {
+      if (!(await templateReady(db, env))) return bad('قالب واتساب غير معتمد بعد');
+      res = await graph(env, `${phoneId}/messages`, { messaging_product: 'whatsapp', to, type: 'template',
+        template: { name: 'nubl_client_update', language: { code: 'ar' }, components: [{ type: 'body', parameters: [firstName(a.name) || 'مرشحنا', text, REGRET_LINK].map((t) => ({ type: 'text', text: t })) }] } });
+      mode_ = 'template';
+    }
+    const ok = res && res.ok && res.data?.messages?.[0];
+    const err = ok ? null : String(res?.data?.error?.message || res?.error || 'تعذّر الإرسال').slice(0, 300);
+    try { await env.WA_DB?.prepare('INSERT INTO wa_events (dept, wa_id, kind, msg_id, text, reply, status, detail) VALUES (?,?,?,?,?,?,?,?)')
+      .bind('marketing', to, 'staff', ok ? res.data.messages[0].id : null, null, `${hello}\n${text}\n${REGRET_LINK}`, ok ? 'sent' : 'send_failed', JSON.stringify({ by: user?.name || 'اعتذار', mode: mode_, error: err, regret: id })).run(); } catch { /* */ }
+    if (!ok) return bad('تعذّر الإرسال: ' + err, 409);
+    await db.prepare("UPDATE applications SET regret_sent_at = datetime('now') WHERE id = ?").bind(id).run();
+    await audit(db, user, 'regret', 'applications', id, mode_);
+    return json({ ok: true, via: mode_ });
+  } catch (e) { console.error('regret', e); return bad('خطأ داخلي: ' + String(e && e.message || e).slice(0, 200), 500); }
+}
+
 async function fromKey(db, key) {
   const m = /^A(\d{1,9})\.([a-f0-9]{16})$/.exec(String(key || '')); if (!m) return null;
   if ((await isign(db, 'A' + m[1])) !== m[2]) return null;
