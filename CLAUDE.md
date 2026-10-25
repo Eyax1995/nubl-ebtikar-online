@@ -206,6 +206,11 @@ wrangler pages dev . --port 8788 --local --persist-to .d1
 - التوقيع يظهر في العقد كتلة `esign` (صورة في HTML، سطر نصي في Word) وفي صفحة العقد بالمنصة. حالة «بانتظار التوقيع» مضافة لقوائم الحالات والـpills.
 - معاملات قالب `nubl_client_update` تُسطَّح إلى سطر واحد (الأسطر الجديدة كانت تُفشل الإرسال #132018)، والتحية تحفظ «عبد الرحمن/أبو أنس» كلمتين.
 
+## دعوات المقابلات الشخصية وتأكيدها (25 أكتوبر 2026 — ترقية v21)
+- في ملف المتقدم (`#/application/<id>`) بطاقة «دعوة المقابلة»: تاريخ ووقت ونوع (حضوري/فيديو) وملاحظة → `POST applications/<id>/invite` (`inviteInterview` في hiring.js): يحفظ `interview_at/interview_mode`، ويرسل واتساب من رقم التسويق (نص حر إن كانت نافذة 24 ساعة مفتوحة وإلا قالب `nubl_client_update`) برابط موقّع `/i/A<id>.<HMAC>` (سرّ `track_secret` ببادئة `interview:`)، ويسجّل الرسالة في صندوق واتساب، و`interview_status = مدعو`.
+- صفحة المتقدم `marketing/careers/interview/` (بلا دخول): الموعد والمكان (أو اتصال فيديو) وزرا «أؤكد الحضور» / «لديّ ملاحظات» → `POST public/interview/<key>` يحدّث `interview_status` (مؤكد | ملاحظات) و`interview_note` ويبلّغ admin/manager. الدعوة تُقفل إذا خرج الطلب من مرحلة «مقابلة».
+- بوت واتساب (HIRING): من يرد بالموافقة أو ملاحظات في المحادثة يُوجَّه لرابط الدعوة ثم [تحويل].
+
 ## ودجت المحادثة في الموقعين (24 أكتوبر 2026)
 - السكربت `marketing/chat-widget.js` (Shadow DOM، بلا مكتبات): `<script src="https://nubl-ebtikar.online/marketing/chat-widget.js" data-site="nubl|morooj" defer>` — اختياري `data-side="right"`. مثبّت في كل صفحات `marketing/*.html` (يسار الشاشة، وزر واتساب يبقى يميناً). مروج: يُلصق في «الأكواد المخصصة» بمتجر سلة.
 - الخادم `functions/wa/web/[[path]].js` (CORS مفتوح): `start` (اسم + جوال اختياري → معرّف زائر عشوائي يبدأ بـ7 + توقيع HMAC من `WA_VERIFY_TOKEN`؛ موقع التسويق مع جوال = عميل محتمل «محادثة الموقع» عبر hook/lead) · `send` (حد 40/ساعة) · `poll`.

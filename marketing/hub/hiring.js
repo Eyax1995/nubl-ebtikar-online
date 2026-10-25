@@ -79,6 +79,12 @@
             <div style="display:flex;gap:6px;flex-wrap:wrap" id="ap-st">${STATUSES.map((s) => `<button class="btn btn-s ${s === a.status ? 'btn-p' : 'btn-g'}" data-st="${s}" ${w ? '' : 'disabled'}>${s}</button>`).join('')}</div>
             <h3 style="margin-top:16px">التقييم</h3>
             <div id="ap-rt" style="font-size:24px;letter-spacing:4px;color:var(--gold)">${[1, 2, 3, 4, 5].map((n) => `<button data-rt="${n}" ${w ? '' : 'disabled'} aria-label="${n} من 5" style="background:none;border:0;cursor:pointer;font:inherit;color:${n <= (a.rating || 0) ? 'var(--gold)' : 'rgba(62,90,102,.28)'}">★</button>`).join('')}</div>
+            <h3 style="margin-top:16px">دعوة المقابلة</h3>
+            ${a.interview_sent_at ? `<div class="small" style="margin-bottom:8px">${a.interview_status === 'مؤكد' ? '✅ <b>أكّد الحضور</b>' : a.interview_status === 'ملاحظات' ? '💬 <b>أرسل ملاحظات</b>' : '📨 <b>مدعو</b> — بانتظار تأكيده'} · ${esc(a.interview_mode || 'حضوري')} · <span class="num">${esc(a.interview_at || '')}</span> · أُرسلت ${fdate(a.interview_sent_at)}${a.interview_note ? `<div style="white-space:pre-wrap;margin-top:4px;padding:8px;background:var(--bg2,#F4F7F8);border-radius:8px">${esc(a.interview_note)}</div>` : ''}</div>` : '<div class="small muted" style="margin-bottom:8px">لم تُرسل دعوة بعد</div>'}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input class="inp" type="date" id="iv-d" value="${esc(String(a.interview_at || '').slice(0, 10))}" ${w ? '' : 'disabled'}><input class="inp" type="time" id="iv-t" value="${esc(String(a.interview_at || '').slice(11, 16))}" ${w ? '' : 'disabled'}>
+              <select class="inp" id="iv-m" ${w ? '' : 'disabled'}><option ${a.interview_mode !== 'فيديو' ? 'selected' : ''}>حضوري</option><option ${a.interview_mode === 'فيديو' ? 'selected' : ''}>فيديو</option></select>
+              <input class="inp" id="iv-n" placeholder="ملاحظة في الدعوة (اختياري)" maxlength="300" ${w ? '' : 'disabled'}></div>
+            ${w ? `<button class="btn btn-p btn-s" id="iv-send" style="margin-top:8px">📨 ${a.interview_sent_at ? 'إعادة إرسال الدعوة' : 'إرسال دعوة المقابلة عبر واتساب'}</button>` : ''}
             <h3 style="margin-top:16px">ملاحظات المقابلة والفرز</h3>
             <textarea class="inp" id="ap-notes" rows="5" ${w ? '' : 'readonly'} placeholder="انطباعك عن الأعمال، نتيجة المقابلة، الخطوة التالية…">${esc(a.notes || '')}</textarea>
             ${w ? '<button class="btn btn-p btn-s" id="ap-save" style="margin-top:8px">حفظ الملاحظات</button>' : ''}</div>
@@ -96,6 +102,13 @@
     $$('[data-st]').forEach((b) => b.onclick = () => b.dataset.st !== a.status && put({ status: b.dataset.st }, `المرحلة: ${b.dataset.st}`));
     $$('[data-rt]').forEach((b) => b.onclick = () => put({ rating: +b.dataset.rt === a.rating ? null : +b.dataset.rt }, 'تم حفظ التقييم'));
     const sv = $('#ap-save'); if (sv) sv.onclick = () => put({ notes: $('#ap-notes').value }, 'تم حفظ الملاحظات');
+    const iv = $('#iv-send'); if (iv) iv.onclick = async () => {
+      const at = `${$('#iv-d').value} ${$('#iv-t').value}`; if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(at)) return toast('حدد التاريخ والوقت', 1);
+      if (!(await confirmBox(`إرسال دعوة المقابلة إلى <b>${esc(a.name)}</b> على واتساب؟<br><small>${esc(at)} · ${esc($('#iv-m').value)}</small>`))) return;
+      iv.disabled = true;
+      try { const r = await api(`applications/${a.id}/invite`, { method: 'POST', body: { at, mode: $('#iv-m').value, note: $('#iv-n').value } }); invalidate('applications'); toast(`أُرسلت الدعوة ✓ (${r.via === 'template' ? 'قالب' : 'نص'})`); rerender(); }
+      catch (e) { toast(e.message, 1); iv.disabled = false; }
+    };
   } };
 
   // إن سبق الإقلاعُ تحميلَ هذه الوحدة: أعد بناء القائمة والصفحة

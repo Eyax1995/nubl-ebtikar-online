@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 20;
+export const SCHEMA_VERSION = 21;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -234,6 +234,13 @@ export const MIGRATIONS = [
   'ALTER TABLE contracts ADD COLUMN doc TEXT',
   // v20: التوقيع الإلكتروني للعقد من رابط المتابعة — JSON {name, title, at, ip, ua, code, sig (PNG data URL)}
   'ALTER TABLE contracts ADD COLUMN esign TEXT',
+  // v21: دعوة المقابلة الشخصية للمتقدم وتأكيده لها من رابط موقّع (hiring.js)
+  'ALTER TABLE applications ADD COLUMN interview_at TEXT',
+  "ALTER TABLE applications ADD COLUMN interview_mode TEXT DEFAULT 'حضوري'",
+  'ALTER TABLE applications ADD COLUMN interview_status TEXT',
+  'ALTER TABLE applications ADD COLUMN interview_note TEXT',
+  'ALTER TABLE applications ADD COLUMN interview_sent_at TEXT',
+  'ALTER TABLE applications ADD COLUMN interview_replied_at TEXT',
   'ALTER TABLE content ADD COLUMN publish_time TEXT',
   'ALTER TABLE content ADD COLUMN hashtags TEXT',
   'ALTER TABLE content ADD COLUMN cta TEXT',

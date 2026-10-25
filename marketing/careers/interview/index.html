@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#082A37">
+<title>دعوة مقابلة — نُبل وابتكار للخدمات التسويقية</title>
+<link rel="icon" href="/marketing/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/marketing/portal/portal.css?v=1">
+<style>
+  .hd h1{margin:14px 0 2px;font-size:clamp(20px,4.5vw,28px)}
+  .hd p{margin:0;opacity:.85;font-size:14px}
+  .box{margin-top:-48px;position:relative;z-index:2}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:15px;margin:12px 0}
+  .kv b{color:var(--muted);font-weight:600}
+  .kv .big{font-size:18px;font-weight:700;color:var(--navy)}
+  .acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+  .btn.ok{background:var(--teal)}.btn.ok:hover{background:var(--ok)}
+  .btn.line{background:#fff;color:var(--navy);border:1px solid var(--line)}
+  .done{padding:14px;border-radius:12px;background:#EAF7F2;color:#145C45;font-weight:600;margin-top:14px}
+  .warn{padding:14px;border-radius:12px;background:#FBF6EC;margin-top:14px;font-size:14px}
+  .tips{font-size:14px;color:var(--muted);margin-top:16px;line-height:1.8}
+  .wa{position:fixed;bottom:18px;inset-inline-end:18px;background:#25D366;color:#fff;border-radius:99px;padding:12px 18px;font-weight:700;text-decoration:none;box-shadow:0 8px 24px #25d36655;z-index:20}
+</style>
+</head>
+<body>
+<div id="app"><div class="login"><div class="lcard"><img src="/marketing/logo.png" alt=""><p>جارٍ تحميل الدعوة…</p></div></div></div>
+<a class="wa" id="wa" href="https://wa.me/966563413040" target="_blank" rel="noopener" hidden>تواصل معنا</a>
+<script>
+'use strict';
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const KEY = new URLSearchParams(location.search).get('k') || '';
+  const API = '/marketing/hub/api/public/interview/' + encodeURIComponent(KEY);
+  let D = null;
+  function toast(m, bad) { const t = document.createElement('div'); t.className = 'toast' + (bad ? ' bad' : ''); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); }
+  function modal(title, body, foot = '') {
+    const m = document.createElement('div'); m.className = 'mask';
+    m.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><button class="x" aria-label="إغلاق">×</button><h3>${esc(title)}</h3>${body}${foot ? `<div class="row" style="margin-top:14px">${foot}</div>` : ''}</div>`;
+    const close = () => m.remove(); m.onclick = (e) => { if (e.target === m) close(); }; $('.x', m).onclick = close;
+    document.body.appendChild(m); return { el: m, close };
+  }
+  async function call(opts) {
+    const r = await fetch(API, opts ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(opts) } : { cache: 'no-store' });
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'تعذّر تحميل الدعوة'); return d;
+  }
+  function draw() {
+    const d = D; const video = d.mode === 'فيديو';
+    $('#app').innerHTML = `<header class="hd"><div class="wrap">
+        <div class="top"><a class="brand" href="/marketing/" target="_blank" rel="noopener"><img src="/marketing/brand/logo-h-onnavy.svg" alt="نُبل وابتكار للخدمات التسويقية" height="34"></a></div>
+        <h1>دعوة مقابلة — ${esc(d.name)}</h1><p>وظيفة ${esc(d.job)}</p></div></header>
+      <main class="wrap"><div class="c box">
+        <div class="kv"><b>الموعد</b><span class="big">${esc(d.when)}</span><b>النوع</b><span>${video ? 'مقابلة عبر اتصال فيديو (واتساب) — العمل نفسه حضوري في جدة' : 'مقابلة شخصية (حضورية)'}</span><b>المكان</b><span>${esc(d.place)}${d.maps ? ` · <a href="${esc(d.maps)}" target="_blank" rel="noopener">الموقع على الخريطة ↗</a>` : ''}</span></div>
+        ${d.closed ? '<div class="warn">هذه الدعوة لم تعد نشطة — إن كان لديك استفسار تواصل معنا على واتساب.</div>'
+          : d.status === 'مؤكد' ? `<div class="done">✅ شكراً لك — تأكد حضورك${d.note ? `<div style="font-weight:400;margin-top:6px">ملاحظتك: ${esc(d.note)}</div>` : ''}</div><div class="acts"><button class="btn line" id="note">تعديل أو إضافة ملاحظة</button></div>`
+          : d.status === 'ملاحظات' ? `<div class="warn">💬 وصلتنا ملاحظاتك وسيتواصل معك فريق التوظيف:<div style="margin-top:6px;white-space:pre-wrap">${esc(d.note)}</div></div><div class="acts"><button class="btn ok" id="ok">✅ أؤكد الحضور في هذا الموعد</button><button class="btn line" id="note">تعديل الملاحظات</button></div>`
+          : `<p style="margin:0;font-size:15px">نرجو تأكيد حضورك في الموعد أعلاه. وإن كان لديك ملاحظة أو ترغب بتغيير الموعد فأرسلها من هنا لتصل مباشرة إلى فريق التوظيف عبر طلبك في النظام.</p>
+             <div class="acts"><button class="btn ok" id="ok">✅ أؤكد الحضور</button><button class="btn line" id="note">💬 لديّ ملاحظات / تغيير الموعد</button></div>`}
+        <div class="tips">${video ? '• سنتصل بك على رقمك المسجل في الموعد المحدد عبر واتساب (فيديو). جهّز ملف أعمالك على الشاشة.' : '• احضر قبل الموعد بعشر دقائق، وأحضر ملف أعمالك على جهازك أو جوالك.'}<br>• المقابلة نحو 30 دقيقة، وقد نطلب مهمة قصيرة بعدها.</div>
+      </div></main><footer class="foot">نُبل وابتكار للخدمات التسويقية — جدة · هذا الرابط خاص بك.</footer>`;
+    const wa = $('#wa'); wa.hidden = false; wa.href = `https://wa.me/${d.wa}?text=${encodeURIComponent(`السلام عليكم، بخصوص دعوة المقابلة (${d.name})`)}`;
+    const ok = $('#ok'); if (ok) ok.onclick = () => respond('confirm');
+    const nb = $('#note'); if (nb) nb.onclick = () => respond('note');
+  }
+  function respond(action) {
+    const acc = action === 'confirm';
+    const m = modal(acc ? 'تأكيد الحضور' : 'ملاحظاتك على الموعد',
+      `<p class="small">${acc ? `بتأكيدك نحجز لك الموعد: <b>${esc(D.when)}</b>.` : 'اكتب ما تريد تغييره أو أي ملاحظة (مثل: الموعد لا يناسبني، أفضّل بعد الساعة 6)، وسيتواصل معك فريق التوظيف.'}</p>
+       <textarea class="inp" rows="3" id="nt" placeholder="${acc ? 'ملاحظة (اختياري)' : 'ملاحظاتك'}" style="width:100%">${esc(!acc ? (D.note || '') : '')}</textarea>`,
+      `<button class="btn ${acc ? 'ok' : ''}" id="go">${acc ? 'تأكيد الحضور' : 'إرسال الملاحظات'}</button>`);
+    $('#go', m.el).onclick = async (e) => {
+      const note = $('#nt', m.el).value.trim(); if (!acc && !note) return toast('اكتب ملاحظاتك أولاً', 1);
+      e.target.disabled = true;
+      try { D = await call({ action, note }); m.close(); toast(acc ? 'شكراً لك — تم تأكيد حضورك' : 'وصلتنا ملاحظاتك'); draw(); }
+      catch (err) { toast(err.message, 1); e.target.disabled = false; }
+    };
+  }
+  (async () => {
+    try { D = await call(); draw(); }
+    catch (e) { $('#app').innerHTML = `<div class="login"><div class="lcard"><img src="/marketing/logo.png" alt=""><p>${esc(e.message)}</p><a class="btn" href="https://wa.me/966563413040" target="_blank" rel="noopener">تواصل معنا على واتساب</a></div></div>`; }
+  })();
+})();
+</script>
+</body>
+</html>

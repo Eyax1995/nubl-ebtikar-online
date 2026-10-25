@@ -28,7 +28,7 @@ import { backupsRoute } from './_lib/backup.js';
 import { auditRoute } from './_lib/auditlog.js';
 import { portalRoute, portalsAdminRoute } from './_lib/portal.js';
 import { SECTIONS, ROUTE_SECTION, allowed, permsFor, sectionAllowed, parseSections } from './_lib/sections.js';
-import { publicJobs, publicApply, applicationCv } from './_lib/hiring.js';
+import { publicJobs, publicApply, applicationCv, inviteInterview, publicInterview } from './_lib/hiring.js';
 import { trackHooks, quoteMoved, newRequest, publicTrack, trackRoute, contractSendForSign } from './_lib/track.js';
 import { pushRoute } from './_lib/push.js';
 import { publicBook, sessionsRoute } from './_lib/sessions.js';
@@ -54,6 +54,7 @@ export async function onRequest(ctx) {
     if (parts[0] === 'public' && parts[1] === 'track') return await publicTrack(db, env, request, parts); // رابط متابعة العميل الموقّع
     if (parts[0] === 'public' && parts[1] === 'book') return await publicBook(db, env, request, parts, (p) => ctx.waitUntil(p)); // حجز جلسات التشخيص
     if (parts[0] === 'public' && parts[1] === 'apply' && method === 'POST') return await publicApply(db, env, request);
+    if (parts[0] === 'public' && parts[1] === 'interview') return await publicInterview(db, env, request, parts[2]); // دعوة المقابلة (رابط موقّع)
     if (parts[0] === 'hook') return await hookRoute(db, env, request, parts[1]);
     if (parts[0] === 'xq' && parts[1] === 'bridge') return await xqBridge(db, env, request, ctx); // من منصة الدعاية والإعلان — موقّع HMAC
     if (parts[0] === 'auth' && parts[1] === 'login' && method === 'POST') return await login(db, request);
@@ -154,6 +155,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'google': return googleRoute(db, env, request, user, parts[1]);
       case 'applications':
         if (parts[2] === 'cv' && request.method === 'GET') { need(user, 'applications', 'r'); return applicationCv(db, user, parts[1]); }
+        if (parts[2] === 'invite' && request.method === 'POST') { need(user, 'applications', 'w'); return inviteInterview(db, env, user, parts[1], await request.json().catch(() => ({}))); }
         return bad('إجراء غير معروف', 404);
       case 'timeline': return timeline(db, user, parts[1], parts[2]);
       case 'ai': return aiRoute(env, db, request, user);

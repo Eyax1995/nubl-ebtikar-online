@@ -25,7 +25,7 @@ const firstName = (n) => { const w = String(n || '').trim().split(/\s+/); return
 const cleanPhone = (p) => { let d = String(p || '').replace(/[٠-٩]/g, (c) => '٠١٢٣٤٥٦٧٨٩'.indexOf(c)).replace(/[^\d]/g, ''); if (d.startsWith('00')) d = d.slice(2); if (/^05\d{8}$/.test(d)) d = '966' + d.slice(1); if (/^5\d{8}$/.test(d)) d = '966' + d; return /^\d{9,15}$/.test(d) ? d : null; };
 
 // ---------- مفتاح الرابط ----------
-async function secret(db) {
+export async function secret(db) {
   let s = await db.prepare("SELECT value FROM settings WHERE key = 'track_secret'").first('value');
   if (!s) {
     s = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, '0')).join('');

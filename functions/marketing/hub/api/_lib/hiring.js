@@ -2,8 +2,10 @@
 // عام:  GET public/jobs (الوظائف المفتوحة) · POST public/apply (طلب تقديم مع سيرة PDF/صورة/Word حتى 5MB أو رابط)
 // داخلي: GET applications/:id/cv (تنزيل السيرة المرفوعة) — يتبع صلاحية applications وقسم الموارد البشرية
 // الحماية: فخ الروبوتات (website) + زمن تعبئة لا يقل عن 5 ثوانٍ + 6 طلبات للساعة لكل IP. تكرار التقديم بنفس الجوال للوظيفة نفسها يحدّث الطلب ولا يكرره.
-import { json, bad, HttpError, audit, nextNumber } from './core.js';
-import { notifyRoles } from './telegram.js';
+import { json, bad, HttpError, audit, nextNumber, getSettings } from './core.js';
+import { notifyRoles, h as hx } from './telegram.js';
+import { secret, templateReady } from './track.js';
+import { sendText } from '../../../../wa/_lib/engine.js';
 
 export const EXPERIENCE = ['أقل من سنة', 'من سنة إلى سنتين', 'من 3 إلى 5 سنوات', 'أكثر من 5 سنوات'];
 export const START_WHEN = ['خلال أسبوع', 'خلال أسبوعين', 'خلال شهر', 'أكثر من شهر'];
@@ -115,6 +117,102 @@ export async function publicApply(db, env, request) {
   const msg = `${updated ? '🔁 تحديث طلب توظيف' : '📝 طلب توظيف جديد'} — ${job.title}\n${rec.name} · ${rec.city}\nالخبرة: ${rec.experience} · ${rec.mode} · الراتب المتوقع: ${rec.salary}\nالرقم: ${number}`;
   await notifyRoles(db, env, 'admin,manager', msg, { kind: 'hr', title: `${updated ? '🔁 تحديث طلب توظيف' : '📝 طلب توظيف جديد'} — ${rec.name}`, link: `#/application/${id}` });
   return json({ ok: true, number, updated }, updated ? 200 : 201);
+}
+
+// ---------- دعوة المقابلة الشخصية وتأكيدها (25 أكتوبر 2026) ----------
+// الفريق: POST applications/<id>/invite {at: 'YYYY-MM-DD HH:MM', mode: 'حضوري'|'فيديو', note?} → رسالة واتساب للمتقدم برابط موقّع
+//   (نص حر إن كانت نافذة 24 ساعة مفتوحة، وإلا قالب nubl_client_update) + الحالة interview_status = «مدعو».
+// المتقدم: GET public/interview/<key> (تفاصيل الموعد) · POST public/interview/<key> {action: confirm|note, note} → «مؤكد» أو «ملاحظات» + تنبيه فريق التوظيف.
+// الرابط القصير /i/<key> ← /marketing/careers/interview/?k=<key>، والمفتاح A<id>.<HMAC من سرّ track_secret> فلا يُخمَّن.
+const SITE = 'https://nubl-ebtikar.online';
+const FROM_PHONE_ID = '1368158866379375';
+const OFFICE = { place: 'مكتب نُبل وابتكار للخدمات التسويقية — جدة، حي الحمدانية', maps: 'https://www.google.com/maps/search/%D9%86%D8%A8%D9%84+%D9%88%D8%A7%D8%A8%D8%AA%D9%83%D8%A7%D8%B1+%D9%84%D9%84%D8%AF%D8%B9%D8%A7%D9%8A%D8%A9+%D9%88%D8%A7%D9%84%D8%A7%D8%B9%D9%84%D8%A7%D9%86+%D8%AC%D8%AF%D8%A9' };
+const DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+const firstName = (n) => { const w = String(n || '').trim().split(/\s+/); return /^(عبد|عبدال|أبو|ابو|أم|ام|آل)$/.test(w[0]) && w[1] ? `${w[0]} ${w[1]}` : (w[0] || ''); };
+// «الإثنين 26 أكتوبر 2026 الساعة 4:00 م»
+export function whenAr(at) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(at || '')); if (!m) return String(at || '');
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])); let h = +m[4]; const ap = h >= 12 ? 'م' : 'ص'; h = h % 12 || 12;
+  return `${DAYS[d.getUTCDay()]} ${+m[3]} ${MONTHS[+m[2] - 1]} ${m[1]} الساعة ${h}:${m[5]} ${ap}`;
+}
+async function isign(db, base) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(await secret(db)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', k, new TextEncoder().encode('interview:' + base));
+  return [...new Uint8Array(sig)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+export async function interviewLink(db, id) { return `${SITE}/i/A${id}.${await isign(db, 'A' + id)}`; }
+async function graph(env, path, body) {
+  const r = await fetch(`${env.WA_GRAPH_URL || 'https://graph.facebook.com/v23.0'}/${path}`, { method: 'POST', headers: { authorization: `Bearer ${env.WA_TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  let d = {}; try { d = await r.json(); } catch { /* */ }
+  return { ok: r.ok && !d.error, data: d };
+}
+const inviteText = (a, note) => `ندعوك لمقابلة ${a.interview_mode === 'فيديو' ? 'عبر اتصال فيديو (واتساب)' : 'شخصية في ' + OFFICE.place} لوظيفة «${a.job_title || ''}» ${whenAr(a.interview_at)}. يلزم تأكيد الموعد من الرابط، ومن لديه ملاحظات أو يرغب بتغيير الموعد يرسلها من الرابط نفسه عبر طلبه في النظام.${note ? ' ' + note : ''}`;
+
+export async function inviteInterview(db, env, user, id, d) {
+  const a = await db.prepare('SELECT * FROM applications WHERE id = ?').bind(id).first();
+  if (!a) return bad('الطلب غير موجود', 404);
+  const at = String(d.at || a.interview_at || '').trim().replace('T', ' ').slice(0, 16);
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(at)) return bad('حدد تاريخ المقابلة ووقتها');
+  const mode = d.mode === 'فيديو' ? 'فيديو' : 'حضوري';
+  const note = s(d.note, 300);
+  const to = cleanPhone(a.phone);
+  if (!/^\d{9,15}$/.test(to)) return bad(`رقم الجوال غير صالح (${a.phone || '—'}) — صحّحه في الطلب أولاً`);
+  if (!env.WA_TOKEN) return bad('واتساب غير مضبوط');
+  await db.prepare("UPDATE applications SET interview_at = ?, interview_mode = ?, status = 'مقابلة', updated_at = datetime('now') WHERE id = ?").bind(at, mode, id).run();
+  const A = { ...a, interview_at: at, interview_mode: mode };
+  const text = inviteText(A, note); const link = await interviewLink(db, id); const hello = `مرحباً ${firstName(a.name)}،`;
+  // نافذة 24 ساعة مفتوحة؟ نص حر، وإلا القالب المعتمد
+  let open = false;
+  try { const r = env.WA_DB && await env.WA_DB.prepare("SELECT at FROM wa_events WHERE wa_id = ? AND kind = 'message' ORDER BY id DESC LIMIT 1").bind(to).first(); open = !!(r && Date.now() - Date.parse(String(r.at).replace(' ', 'T') + 'Z') < 23.5 * 3600e3); } catch { /* */ }
+  let res, mode_;
+  const phoneId = env.WA_PHONE_ID || FROM_PHONE_ID;
+  if (open) { res = await sendText(env, phoneId, to, `${hello}\n${text}\n\nللتفاصيل والمتابعة: ${link}\n\nفريق نُبل وابتكار للخدمات التسويقية`); mode_ = 'text'; }
+  else {
+    if (!(await templateReady(db, env))) return bad('قالب واتساب غير معتمد بعد — لا يمكن مراسلة رقم لم يراسلنا خلال 24 ساعة');
+    res = await graph(env, `${phoneId}/messages`, { messaging_product: 'whatsapp', to, type: 'template',
+      template: { name: 'nubl_client_update', language: { code: 'ar' }, components: [{ type: 'body', parameters: [firstName(a.name) || 'مرشحنا', text.replace(/\s*[\r\n]+\s*/g, ' · ').replace(/\s{2,}/g, ' ').slice(0, 900), link].map((t) => ({ type: 'text', text: t })) }] } });
+    mode_ = 'template';
+  }
+  const ok = res && res.ok && res.data?.messages?.[0];
+  const err = ok ? null : String(res?.data?.error?.message || res?.error || 'تعذّر الإرسال').slice(0, 300);
+  try { await env.WA_DB?.prepare('INSERT INTO wa_events (dept, wa_id, kind, msg_id, text, reply, status, detail) VALUES (?,?,?,?,?,?,?,?)')
+    .bind('marketing', to, 'staff', ok ? res.data.messages[0].id : null, null, `${hello}\n${text}\n${link}`, ok ? 'sent' : 'send_failed', JSON.stringify({ by: user?.name || 'دعوة مقابلة', mode: mode_, error: err, interview: id })).run(); } catch { /* */ }
+  if (!ok) return bad('تعذّر إرسال الدعوة: ' + err, 502);
+  await db.prepare("UPDATE applications SET interview_status = 'مدعو', interview_sent_at = datetime('now'), interview_note = NULL, interview_replied_at = NULL WHERE id = ?").bind(id).run();
+  await audit(db, user, 'invite', 'applications', id, `${at} ${mode}${note ? ' — ' + note : ''}`);
+  return json({ ok: true, at, mode, link, via: mode_ });
+}
+
+async function fromKey(db, key) {
+  const m = /^A(\d{1,9})\.([a-f0-9]{16})$/.exec(String(key || '')); if (!m) return null;
+  if ((await isign(db, 'A' + m[1])) !== m[2]) return null;
+  return db.prepare('SELECT id, number, name, job_title, status, interview_at, interview_mode, interview_status, interview_note, interview_replied_at FROM applications WHERE id = ?').bind(+m[1]).first();
+}
+export async function publicInterview(db, env, request, key) {
+  const a = await fromKey(db, key);
+  if (!a || !a.interview_at) return bad('رابط الدعوة غير صالح — تواصل معنا على واتساب', 404);
+  const method = request.method.toUpperCase();
+  const view = () => ({ name: a.name, job: a.job_title, at: a.interview_at, when: whenAr(a.interview_at), mode: a.interview_mode || 'حضوري',
+    place: a.interview_mode === 'فيديو' ? 'اتصال فيديو عبر واتساب على رقمك المسجل' : OFFICE.place, maps: a.interview_mode === 'فيديو' ? '' : OFFICE.maps,
+    status: a.interview_status || 'مدعو', note: a.interview_note || '', replied_at: a.interview_replied_at, wa: '966563413040', closed: !['مقابلة'].includes(a.status) });
+  if (method === 'GET') return json(view(), 200, { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' });
+  if (method !== 'POST') return bad('مسار غير معروف', 404);
+  let d = {}; try { d = await request.json(); } catch { /* */ }
+  const note = s(d.note, 800);
+  const st = d.action === 'confirm' ? 'مؤكد' : d.action === 'note' ? 'ملاحظات' : null;
+  if (!st) return bad('إجراء غير معروف');
+  if (st === 'ملاحظات' && !note) return bad('اكتب ملاحظاتك أولاً');
+  if (a.status !== 'مقابلة') return bad('هذه الدعوة لم تعد نشطة — تواصل معنا على واتساب');
+  const keep = note || (st === 'مؤكد' ? a.interview_note : '') || null; // التأكيد بلا ملاحظة جديدة يحتفظ بالملاحظة السابقة
+  await db.prepare("UPDATE applications SET interview_status = ?, interview_note = ?, interview_replied_at = datetime('now'), updated_at = datetime('now') WHERE id = ?").bind(st, keep, a.id).run();
+  await audit(db, { id: null, name: `رابط الدعوة — ${a.name}`, role: 'applicant' }, st === 'مؤكد' ? 'confirm' : 'note', 'applications', a.id, note || whenAr(a.interview_at));
+  const msg = st === 'مؤكد'
+    ? `✅ أكّد <b>${hx(a.name)}</b> حضور المقابلة ${hx(whenAr(a.interview_at))}${note ? `\n💬 ${hx(note)}` : ''}`
+    : `💬 ملاحظات من <b>${hx(a.name)}</b> على موعد المقابلة (${hx(whenAr(a.interview_at))}):\n${hx(note)}\n➡️ راجع الطلب وعدّل الموعد إن لزم`;
+  await notifyRoles(db, env, 'admin,manager', msg, { kind: 'hr', title: st === 'مؤكد' ? `✅ تأكيد مقابلة — ${a.name}` : `💬 ملاحظات مقابلة — ${a.name}`, link: `#/application/${a.id}` });
+  a.interview_status = st; a.interview_note = note || ''; a.interview_replied_at = new Date().toISOString();
+  return json({ ok: true, ...view() });
 }
 
 // تنزيل السيرة المرفوعة — الصلاحية (الدور + القسم) تُفحص في الموجّه قبل الاستدعاء

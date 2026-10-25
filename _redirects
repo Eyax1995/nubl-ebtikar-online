@@ -6,3 +6,5 @@
 # حجز جلسات التشخيص (sessions.js): الصفحة العامة ورابط إدارة الحجز الموقّع
 /book       /marketing/book/ 302
 /book/s/:key  /marketing/book/?s=:key 302
+# دعوة المقابلة للمتقدم (hiring.js): /i/<مفتاح موقّع> ← صفحة التأكيد
+/i/:key   /marketing/careers/interview/?k=:key 302
