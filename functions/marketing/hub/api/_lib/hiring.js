@@ -182,7 +182,7 @@ async function inviteInterview0(db, env, user, id, d) {
   const err = ok ? null : String(res?.data?.error?.message || res?.error || 'تعذّر الإرسال').slice(0, 300);
   try { await env.WA_DB?.prepare('INSERT INTO wa_events (dept, wa_id, kind, msg_id, text, reply, status, detail) VALUES (?,?,?,?,?,?,?,?)')
     .bind('marketing', to, 'staff', ok ? res.data.messages[0].id : null, null, `${hello}\n${text}\n${link}`, ok ? 'sent' : 'send_failed', JSON.stringify({ by: user?.name || 'دعوة مقابلة', mode: mode_, error: err, interview: id })).run(); } catch { /* */ }
-  if (!ok) return bad('تعذّر إرسال الدعوة: ' + err, 502);
+  if (!ok) return bad('تعذّر إرسال الدعوة: ' + err, 409); // لا 502: Cloudflare تستبدل صفحة 5xx بصفحتها فتضيع الرسالة
   await db.prepare("UPDATE applications SET interview_status = 'مدعو', interview_sent_at = datetime('now'), interview_note = NULL, interview_replied_at = NULL WHERE id = ?").bind(id).run();
   await audit(db, user, 'invite', 'applications', id, `${at} ${mode}${note ? ' — ' + note : ''}`);
   return json({ ok: true, at, mode, link, via: mode_ });
