@@ -10,8 +10,8 @@ import { legacyQuoteDoc, contractBlocksFor } from './studio.js';
 import { sendText } from '../../../../wa/_lib/engine.js';
 
 const SITE = 'https://nubl-ebtikar.online';
-const FROM_PHONE_ID = '1368158866379375';
-const WABA_ID = '1686695736383983';
+const FROM_PHONE_ID = '1502622659590128'; // رقم التسويق 0563413040 (env.WA_PHONE_ID أولاً)
+const WABA_ID = '1095264449567821'; // حساب واتساب الذي يحمل الرقم منذ أكتوبر 2026 — القوالب تُنشأ عليه
 const GRAPH = 'https://graph.facebook.com/v23.0';
 const TPL = 'nubl_client_update';
 const HOLD_H = 72;
@@ -162,7 +162,7 @@ async function graph(env, path, body) {
 const setSetting = (db, k, v) => db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind(k, String(v)).run();
 export async function templateReady(db, env, force) {
   const s = await getSettings(db);
-  if (s.client_tpl === 'APPROVED') return true;
+  if (s.client_tpl === 'APPROVED' && !force) return true; // force: يعيد الفحص لدى Meta حتى لو كان معتمداً (قد يُحذف القالب)
   if (!force && s.client_tpl_at && Date.now() - Date.parse(s.client_tpl_at) < 30 * 60e3) return false;
   if (!env.WA_TOKEN) return false;
   let status = 'MISSING';

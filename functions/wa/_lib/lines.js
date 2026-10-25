@@ -6,8 +6,9 @@
 export const LINES = {
   marketing: {
     dept: 'marketing', org: 'nubl', brand: 'نبل وابتكار للتسويق', label: 'التسويق', display: '966563413040',
-    phoneId: (env) => env.WA_PHONE_ID || '1368158866379375', token: (env) => env.WA_TOKEN,
-    waba: () => '1686695736383983', appId: (env) => env.META_APP_ID || '1399023689070366',
+    // الرقم انتقل في أكتوبر 2026 إلى حساب واتساب جديد (1095264449567821، معرّف الرقم 1502622659590128) بلا قوالب؛ القوالب القديمة على 1686695736383983 لا تعمل معه
+    phoneId: (env) => env.WA_PHONE_ID || '1502622659590128', token: (env) => env.WA_TOKEN,
+    waba: (env) => env.WA_WABA_ID || '1095264449567821', appId: (env) => env.META_APP_ID || '1399023689070366',
   },
   morooj: {
     dept: 'morooj', org: 'morooj', brand: 'مروج الحجاز للأعمال التجارية', label: 'مروج الحجاز', display: '966544004650',
