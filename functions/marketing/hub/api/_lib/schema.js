@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 20;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -232,6 +232,8 @@ export const MIGRATIONS = [
   'ALTER TABLE quotes ADD COLUMN approved_at TEXT',
   'ALTER TABLE quotes ADD COLUMN ai_engine TEXT',
   'ALTER TABLE contracts ADD COLUMN doc TEXT',
+  // v20: التوقيع الإلكتروني للعقد من رابط المتابعة — JSON {name, title, at, ip, ua, code, sig (PNG data URL)}
+  'ALTER TABLE contracts ADD COLUMN esign TEXT',
   'ALTER TABLE content ADD COLUMN publish_time TEXT',
   'ALTER TABLE content ADD COLUMN hashtags TEXT',
   'ALTER TABLE content ADD COLUMN cta TEXT',

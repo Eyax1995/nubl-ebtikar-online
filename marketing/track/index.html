@@ -37,6 +37,9 @@
   .ev{display:flex;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line);font-size:14px}
   .ev:last-child{border:0}
   .ev time{color:var(--muted);font-size:12.5px;white-space:nowrap}
+  .pad{display:block;width:100%;height:170px;border:1.5px dashed #9BB8C2;border-radius:12px;background:#fff;touch-action:none;cursor:crosshair}
+  .chk{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;margin-top:10px;line-height:1.6}
+  .chk input{margin-top:4px;width:18px;height:18px;flex:none}
   .wa{position:fixed;bottom:18px;inset-inline-end:18px;background:#25D366;color:#fff;border-radius:99px;padding:12px 18px;font-weight:700;text-decoration:none;box-shadow:0 8px 24px #25d36655;z-index:20}
   @media (max-width:640px){
     .steps{grid-template-columns:1fr;gap:0;padding:12px 16px}
@@ -58,7 +61,7 @@
   const date = (d) => { if (!d) return ''; const [y, m, x] = String(d).slice(0, 10).split('-'); return `${+x}/${+m}/${y}`; };
   const KEY = new URLSearchParams(location.search).get('k') || '';
   const API = '/marketing/hub/api/public/track/' + encodeURIComponent(KEY);
-  const PILL = { 'مرسل': ['بانتظار ردكم', 'y'], 'مقبول': ['مقبول', 'g'], 'مرفوض': ['مرفوض', 'r'], 'منتهي': ['منتهي', ''], 'مصدرة': ['مستحقة', 'y'], 'مدفوعة جزئياً': ['مدفوعة جزئياً', 'y'], 'مدفوعة': ['مدفوعة', 'g'], 'موقّع': ['موقّع', 'g'], 'نشط': ['قيد التنفيذ', 'g'], 'متأخرة': ['متأخرة', 'r'] };
+  const PILL = { 'مرسل': ['بانتظار ردكم', 'y'], 'مقبول': ['مقبول', 'g'], 'مرفوض': ['مرفوض', 'r'], 'منتهي': ['منتهي', ''], 'مصدرة': ['مستحقة', 'y'], 'مدفوعة جزئياً': ['مدفوعة جزئياً', 'y'], 'مدفوعة': ['مدفوعة', 'g'], 'بانتظار التوقيع': ['بانتظار توقيعك', 'y'], 'موقّع': ['موقّع', 'g'], 'نشط': ['قيد التنفيذ', 'g'], 'متأخرة': ['متأخرة', 'r'] };
   const pill = (s) => { const [t, c] = PILL[s] || [s, '']; return `<span class="pill ${c}">${esc(t)}</span>`; };
   const NEXT = ['', 'سيتواصل معك فريقنا لتحديد موعد جلسة التشخيص.', 'نُعدّ عرض السعر المناسب لك بناءً على التشخيص.', 'عرض السعر بانتظار موافقتك — راجعه واقبله من الأسفل.', 'نجهّز العقد والفاتورة الأولى للتوقيع.', 'بعد اعتماد العقد نبدأ التنفيذ مباشرة.', ''];
   let D = null;
@@ -82,14 +85,15 @@
         <h1>متابعة طلبك${d.name ? ` — ${esc(d.name)}` : ''}</h1><p>كل مراحل العمل معك في مكان واحد، وتصلك التحديثات على واتساب.</p></div></header>
       <main class="wrap">
         <ol class="steps" aria-label="مراحل العمل">${d.stages.map((s, i) => `<li class="${s.done ? 'done' : i === cur ? 'now' : ''}" ${i === cur ? 'aria-current="step"' : ''}><i>${s.done ? '✓' : i + 1}</i>${esc(s.label)}</li>`).join('')}</ol>
-        ${NEXT[cur] ? `<p class="now-msg">⏳ <b>المرحلة الحالية: ${esc(d.stages[cur]?.label || '')}</b> — ${NEXT[cur]}</p>` : '<p class="now-msg">🎉 اكتملت كل المراحل — شكراً لثقتك.</p>'}
+        ${d.contracts.some((c) => c.can_sign) ? '<p class="now-msg">✍️ <b>عقدك جاهز للتوقيع الإلكتروني</b> — راجعه ووقّعه من قسم العقود بالأسفل.</p>' : NEXT[cur] ? `<p class="now-msg">⏳ <b>المرحلة الحالية: ${esc(d.stages[cur]?.label || '')}</b> — ${NEXT[cur]}</p>` : '<p class="now-msg">🎉 اكتملت كل المراحل — شكراً لثقتك.</p>'}
         <section class="sec"><h2>عروض الأسعار</h2>${d.quotes.length ? d.quotes.map((q) => `<div class="c" style="margin-bottom:10px"><div class="q">
             <div><h3>${esc(q.title || 'عرض سعر')}</h3><div class="meta"><span class="num">${esc(q.number)}</span> · ${money(q.total)} ر.س شامل الضريبة${q.valid_until ? ` · صالح حتى ${date(q.valid_until)}` : ''}</div></div>
             <div>${pill(q.status)}</div></div>
             <div class="acts" style="margin-top:10px"><button class="btn line" data-view="${q.id}">عرض التفاصيل</button>
             ${q.can_act ? `<button class="btn ok" data-acc="${q.id}">قبول العرض</button><button class="btn line" data-rej="${q.id}">لديّ ملاحظات</button>` : ''}</div></div>`).join('')
           : '<div class="c empty">لا توجد عروض بعد — نجهّز عرضك بعد جلسة التشخيص.</div>'}</section>
-        ${d.contracts.length ? `<section class="sec"><h2>العقود</h2>${d.contracts.map((c) => `<div class="c q" style="margin-bottom:8px"><div><h3>${esc(c.title || 'عقد')}</h3><div class="meta num">${esc(c.number)}${c.start_date ? ` · يبدأ ${date(c.start_date)}` : ''}</div></div>${pill(c.status)}</div>`).join('')}</section>` : ''}
+        ${d.contracts.length ? `<section class="sec"><h2>العقود</h2>${d.contracts.map((c) => `<div class="c" style="margin-bottom:10px"><div class="q"><div><h3>${esc(c.title || 'عقد')}</h3><div class="meta"><span class="num">${esc(c.number)}</span>${c.total_value ? ` · ${money(c.total_value)} ر.س قبل الضريبة` : ''}${c.start_date ? ` · يبدأ ${date(c.start_date)}` : ''}</div></div>${pill(c.status)}</div>
+            <div class="acts" style="margin-top:10px"><button class="btn line" data-cview="${c.id}">عرض العقد</button>${c.can_sign ? `<button class="btn ok" data-sign="${c.id}">✍️ توقيع العقد</button>` : c.signed ? '<span class="meta" style="align-self:center">✓ وُقّع إلكترونياً</span>' : ''}</div></div>`).join('')}</section>` : ''}
         ${d.invoices.length ? `<section class="sec"><h2>الفواتير</h2>${d.invoices.map((i) => `<div class="c q" style="margin-bottom:8px"><div><h3>${esc(i.description || 'فاتورة')}</h3><div class="meta"><span class="num">${esc(i.number)}</span> · ${money(i.total)} ر.س${Number(i.paid) ? ` · المدفوع ${money(i.paid)}` : ''}${i.due_date ? ` · الاستحقاق ${date(i.due_date)}` : ''}</div></div>${pill(i.status)}</div>`).join('')}</section>` : ''}
         ${d.events.length ? `<section class="sec"><h2>آخر التحديثات</h2><div class="c">${d.events.map((e) => `<div class="ev"><time>${date(e.created_at)}</time><span>${esc(e.client_text)}</span></div>`).join('')}</div></section>` : ''}
       </main><footer class="foot">نُبل وابتكار للخدمات التسويقية — جدة · هذا الرابط خاص بك، لا تشاركه إلا مع من يهمه الأمر.</footer>`;
@@ -97,6 +101,47 @@
     document.querySelectorAll('[data-view]').forEach((b) => b.onclick = () => view(+b.dataset.view));
     document.querySelectorAll('[data-acc]').forEach((b) => b.onclick = () => respond(+b.dataset.acc, 'accept'));
     document.querySelectorAll('[data-rej]').forEach((b) => b.onclick = () => respond(+b.dataset.rej, 'note'));
+    document.querySelectorAll('[data-cview]').forEach((b) => b.onclick = () => viewContract(+b.dataset.cview));
+    document.querySelectorAll('[data-sign]').forEach((b) => b.onclick = () => signContract(+b.dataset.sign));
+  }
+  async function viewContract(id) {
+    const m = modal('العقد', '<div class="empty">جارٍ التحميل…</div>');
+    try {
+      const r = await call('/contract/' + id); $('.modal h3', m.el).textContent = r.title; $('.modal', m.el).style.maxWidth = '820px';
+      $('.empty', m.el).outerHTML = `<div class="docv">${r.html}</div>${r.can_sign ? '<div class="row" style="margin-top:14px"><button class="btn ok" id="sg">✍️ توقيع العقد</button></div>' : ''}`;
+      if ($('#sg', m.el)) $('#sg', m.el).onclick = () => { m.close(); signContract(id); };
+    } catch (e) { $('.empty', m.el).textContent = e.message; }
+  }
+  // لوحة التوقيع: رسم بالإصبع أو الفأرة على canvas ويُرسل PNG
+  function signPad(canvas) {
+    const ctx = canvas.getContext('2d'); let drawing = false, has = false;
+    ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0B2B3A';
+    const pos = (e) => { const r = canvas.getBoundingClientRect(); const p = e.touches ? e.touches[0] : e; return [(p.clientX - r.left) * canvas.width / r.width, (p.clientY - r.top) * canvas.height / r.height]; };
+    const down = (e) => { drawing = true; has = true; const [x, y] = pos(e); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 0.1, y); ctx.stroke(); e.preventDefault(); };
+    const move = (e) => { if (!drawing) return; const [x, y] = pos(e); ctx.lineTo(x, y); ctx.stroke(); e.preventDefault(); };
+    const up = () => { drawing = false; };
+    canvas.addEventListener('mousedown', down); canvas.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+    canvas.addEventListener('touchstart', down, { passive: false }); canvas.addEventListener('touchmove', move, { passive: false }); canvas.addEventListener('touchend', up);
+    return { clear() { ctx.clearRect(0, 0, canvas.width, canvas.height); has = false; }, data() { return has ? canvas.toDataURL('image/png') : ''; } };
+  }
+  function signContract(id) {
+    const c = D.contracts.find((x) => x.id === id);
+    const m = modal('توقيع العقد إلكترونياً',
+      `<p class="small">العقد <b class="num">${esc(c.number)}</b>${c.title ? ` — ${esc(c.title)}` : ''}. اقرأ العقد كاملاً (زر «عرض العقد») ثم وقّع هنا. يُعتد بهذا التوقيع وفق نظام التعاملات الإلكترونية، ويُسجَّل وقته ورمز تحقق خاص به.</p>
+       <input class="inp" id="sn" placeholder="اسمك الكامل كما في الهوية" maxlength="80" value="${esc(D.contact || '')}" style="width:100%;margin-bottom:8px">
+       <input class="inp" id="st" placeholder="صفتك (مثل: المدير العام / المالك)" maxlength="80" style="width:100%;margin-bottom:10px">
+       <div class="small" style="margin-bottom:6px">ارسم توقيعك داخل المربع:</div><canvas class="pad" id="pad" width="700" height="240"></canvas>
+       <div class="row" style="margin-top:6px"><button class="btn line" id="clr" type="button">مسح</button></div>
+       <label class="chk"><input type="checkbox" id="agree"> أقرّ بأنني اطلعت على العقد كاملاً وأوافق على جميع بنوده، وأن لي صفة التوقيع نيابة عن ${esc(D.name || 'الطرف الثاني')}.</label>`,
+      '<button class="btn ok" id="go">✍️ تأكيد التوقيع</button>');
+    const pad = signPad($('#pad', m.el)); $('#clr', m.el).onclick = () => pad.clear();
+    $('#go', m.el).onclick = async (e) => {
+      const name = $('#sn', m.el).value.trim(); const sig = pad.data();
+      if (name.length < 3) return toast('اكتب اسمك الكامل', 1); if (!sig) return toast('ارسم توقيعك داخل المربع', 1); if (!$('#agree', m.el).checked) return toast('أكّد الإقرار أولاً', 1);
+      e.target.disabled = true;
+      try { const r = await call(`/contract/${id}/sign`, { name, title: $('#st', m.el).value.trim(), agree: true, sig }); m.close(); toast(`تم التوقيع ✓ رمز التحقق ${r.code}`); await load(); }
+      catch (err) { toast(err.message, 1); e.target.disabled = false; }
+    };
   }
   async function view(id) {
     const m = modal('عرض السعر', '<div class="empty">جارٍ التحميل…</div>');

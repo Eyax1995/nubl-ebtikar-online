@@ -29,7 +29,7 @@ import { auditRoute } from './_lib/auditlog.js';
 import { portalRoute, portalsAdminRoute } from './_lib/portal.js';
 import { SECTIONS, ROUTE_SECTION, allowed, permsFor, sectionAllowed, parseSections } from './_lib/sections.js';
 import { publicJobs, publicApply, applicationCv } from './_lib/hiring.js';
-import { trackHooks, quoteMoved, newRequest, publicTrack, trackRoute } from './_lib/track.js';
+import { trackHooks, quoteMoved, newRequest, publicTrack, trackRoute, contractSendForSign } from './_lib/track.js';
 import { pushRoute } from './_lib/push.js';
 import { publicBook, sessionsRoute } from './_lib/sessions.js';
 import { googleRoute } from './_lib/google.js';
@@ -608,6 +608,19 @@ async function contractAction(db, request, user, id, action, env) {
     await audit(db, user, 'schedule', 'contracts', c.id, `${stmts.length} invoices`);
     await notifyRoles(db, env, ['finance'], `🧾 جُدولت ${stmts.length} فواتير للعقد <b>${hx(c.number)}</b> بواسطة ${hx(user.name)} — راجعها وأصدرها في موعدها`, { kind: 'finance', link: '#invoices' }, user.id);
     return json({ created: stmts.length });
+  }
+  // إرسال العقد للعميل ليوقّعه إلكترونياً من رابط المتابعة
+  if (action === 'send-sign' && request.method === 'POST') {
+    need(user, 'contracts', 'w');
+    const c = await db.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first();
+    if (!c) return bad('العقد غير موجود', 404);
+    if (!c.client_id) return bad('اربط العقد بعميل أولاً');
+    if (['موقّع', 'نشط', 'منتهي', 'ملغي'].includes(c.status)) return bad(`العقد «${c.status}» — لا يُرسل للتوقيع`);
+    let d = {}; try { d = await request.json(); } catch { /* */ }
+    const r = await contractSendForSign(db, env, c, user, String(d.note || '').trim().slice(0, 400));
+    if (!r) return bad('لا يوجد عميل أو رقم جوال لهذا العقد');
+    await audit(db, user, 'send-sign', 'contracts', c.id, d.note || '');
+    return json({ ok: true, ...r });
   }
   if (action === 'renew' && request.method === 'POST') {
     need(user, 'contracts', 'w');

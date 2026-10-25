@@ -118,6 +118,7 @@ export function contractBlocks(c, doc, ctx) {
     { t: 'subtitle', text: c.title || doc.subject || '' },
     { t: 'meta', label: 'رقم العقد', text: `${c.number || ''}${ctx.quoteNumber ? ` · مبني على عرض السعر ${ctx.quoteNumber}` : ''}` },
     c.status === 'مسودة' && { t: 'callout', label: 'مسودة', text: 'هذه نسخة أولية تُراجع قانونياً وتُعتمد من الطرفين قبل التوقيع.' },
+    c.status === 'بانتظار التوقيع' && { t: 'callout', label: 'بانتظار التوقيع', text: 'أُرسل هذا العقد للطرف الثاني لتوقيعه إلكترونياً من رابط المتابعة، ويُعتد بالتوقيع الإلكتروني وفق نظام التعاملات الإلكترونية.' },
     { t: 'p', text: `إنه في يوم ${arDate(c.start_date || ctx.today)} تم الاتفاق بين كل من:` },
     { t: 'table', cols: [{ label: 'الطرف', w: 1.6 }, { label: 'البيانات', w: 6.7 }], rows: [
       ['الطرف الأول', { text: `${s.legal_name || 'مؤسسة نبل وابتكار للأعمال التجارية'} (${s.company_name || 'نُبل وابتكار للخدمات التسويقية'})`, sub: `سجل تجاري ${s.cr_number || ''} · الرقم الضريبي ${s.vat_number || ''} · ${s.company_city || 'جدة'} · ويمثلها ${ctx.signName || 'إياد المغيرة'} — ${ctx.signTitle || 'مدير قطاع التسويق'}` }],
@@ -169,6 +170,8 @@ export function contractBlocks(c, doc, ctx) {
     { t: 'p', text: 'تُعد العناوين والبريد الإلكتروني وأرقام الجوال المسجلة في هذا العقد معتمدة للإشعارات بين الطرفين. وحُرر هذا العقد من نسختين أصليتين بيد كل طرف نسخة للعمل بموجبها، ويُعتد بالتوقيع الإلكتروني وفق نظام التعاملات الإلكترونية.' },
     { t: 'spacer', after: 200 },
     { t: 'signatures', left: 'الطرف الأول', right: 'الطرف الثاني', leftName: `${ctx.signName || 'إياد المغيرة'} — ${ctx.signTitle || 'مدير قطاع التسويق'}`, rightName: cl.contact_name || cl.name || '' },
+    // التوقيع الإلكتروني للعميل (من رابط المتابعة) يظهر أسفل جدول التواقيع
+    (() => { let e = null; try { e = c.esign ? JSON.parse(c.esign) : null; } catch { /* */ } return e && { t: 'esign', name: e.name, title: e.title, at: e.at, code: e.code, img: e.sig }; })(),
   ];
   return b;
 }

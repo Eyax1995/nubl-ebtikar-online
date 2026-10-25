@@ -89,6 +89,7 @@ export function render(blocks) {
       case 'signatures': return table({ cols: [{ label: b.left || 'الطرف الأول', align: 'center' }, { label: b.right || 'الطرف الثاني', align: 'center' }],
         rows: [[{ text: b.leftName || '', sub: 'الاسم والصفة', bold: true }, { text: b.rightName || '', sub: 'الاسم والصفة', bold: true }],
           [{ text: ' ', sub: 'التوقيع' }, { text: ' ', sub: 'التوقيع' }], [{ text: ' ', sub: 'الختم والتاريخ' }, { text: ' ', sub: 'الختم والتاريخ' }]] });
+      case 'esign': return para(run('توقيع إلكتروني معتمد: ', { b: true, color: NAVY, sz: 17 }) + run(`${b.name || ''}${b.title ? ' — ' + b.title : ''} · ${b.at || ''} · رمز التحقق ${b.code || ''}`, { color: GREY, sz: 17 }), { jc: 'right', before: 120, after: 60 });
       case 'pagebreak': return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
       case 'spacer': return para('', { after: b.after || 100 });
       default: return '';
@@ -145,6 +146,7 @@ export function renderHtml(blocks) {
       case 'closing': return '<p class="d-close">وتفضلوا بقبول فائق الود والتقدير</p>';
       case 'sign': return `<p class="d-sign"><b>${h(b.name || 'إياد المغيرة')}</b><br>${h(b.title || 'مدير قطاع التسويق')}<br>${h(b.org || 'نُبل وابتكار للخدمات التسويقية')}</p>`;
       case 'signatures': return `<div class="d-sigs"><div><b>${h(b.left || 'الطرف الأول')}</b><span>${h(b.leftName || '')}</span><small>الاسم والصفة</small><i></i><small>التوقيع</small><i></i><small>الختم والتاريخ</small></div><div><b>${h(b.right || 'الطرف الثاني')}</b><span>${h(b.rightName || '')}</span><small>الاسم والصفة</small><i></i><small>التوقيع</small><i></i><small>الختم والتاريخ</small></div></div>`;
+      case 'esign': return `<div class="d-esign" style="margin-top:14px;padding:10px 14px;border:1px solid #CFE3DF;border-radius:10px;background:#F3FAF8;display:flex;gap:14px;align-items:center;flex-wrap:wrap;page-break-inside:avoid">${/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(b.img || '') ? `<img src="${b.img}" alt="التوقيع" style="height:70px;max-width:220px;object-fit:contain;background:#fff;border-radius:6px">` : ''}<div style="font-size:13px"><b>وُقّع إلكترونياً من الطرف الثاني</b> — ${h(b.name)}${b.title ? ' — ' + h(b.title) : ''}<br><small>${h(b.at)} · رمز التحقق <span dir="ltr">${h(b.code)}</span></small></div></div>`;
       case 'pagebreak': return '<div class="d-pb"></div>';
       case 'spacer': return '<div style="height:8px"></div>';
       default: return '';

@@ -6,7 +6,7 @@ import { json, bad, audit, getSettings, today } from './core.js';
 import { notifyUser, notifyRoles, h as hx } from './telegram.js';
 import { quoteBlocks } from './docs.js';
 import { renderHtml } from './docx.js';
-import { legacyQuoteDoc } from './studio.js';
+import { legacyQuoteDoc, contractBlocksFor } from './studio.js';
 import { sendText } from '../../../../wa/_lib/engine.js';
 
 const SITE = 'https://nubl-ebtikar.online';
@@ -194,7 +194,8 @@ export async function flushOutbox(db, env, { limit = 20 } = {}) {
       if (tplOk === null) tplOk = await templateReady(db, env);
       if (tplOk) {
         res = await graph(env, `${env.WA_PHONE_ID || FROM_PHONE_ID}/messages`, { messaging_product: 'whatsapp', to: m.to_phone, type: 'template',
-          template: { name: TPL, language: { code: 'ar' }, components: [{ type: 'body', parameters: [String(m.name || 'عميلنا').split(/\s+/)[0], m.text.slice(0, 900), m.link].map((text) => ({ type: 'text', text })) }] } });
+          // معاملات القالب لا تقبل أسطراً جديدة أو مسافات متتالية (#132018) — تُسطَّح إلى سطر واحد
+          template: { name: TPL, language: { code: 'ar' }, components: [{ type: 'body', parameters: [String(m.name || 'عميلنا').split(/\s+/)[0], m.text.replace(/\s*[\r\n]+\s*/g, ' · ').replace(/\s{2,}/g, ' ').trim().slice(0, 900), m.link].map((text) => ({ type: 'text', text })) }] } });
         mode = 'template';
       }
     }
@@ -249,7 +250,7 @@ async function snapshot(db, s) {
   const { results: quotes } = await db.prepare(`SELECT id, number, title, status, total, valid_until, created_at, updated_at FROM quotes
     WHERE ${W} AND status IN (${VISIBLE.map(() => '?').join(',')}) ORDER BY id DESC LIMIT 30`).bind(...args, ...VISIBLE).all();
   const cid = s.client_id;
-  const contracts = cid ? (await db.prepare("SELECT id, number, title, status, start_date FROM contracts WHERE client_id = ? AND status != 'مسودة' AND status != 'ملغي' ORDER BY id DESC LIMIT 10").bind(cid).all()).results : [];
+  const contracts = cid ? (await db.prepare("SELECT id, number, title, status, start_date, total_value, (esign IS NOT NULL) AS signed FROM contracts WHERE client_id = ? AND status != 'مسودة' AND status != 'ملغي' ORDER BY id DESC LIMIT 10").bind(cid).all()).results.map((c) => ({ ...c, can_sign: c.status === 'بانتظار التوقيع' })) : [];
   const invoices = cid ? (await db.prepare("SELECT id, number, description, status, total, paid, due_date FROM invoices WHERE client_id = ? AND status NOT IN ('مسودة','ملغاة') ORDER BY id DESC LIMIT 20").bind(cid).all()).results : [];
   const projects = cid ? (await db.prepare("SELECT COUNT(*) AS n FROM projects WHERE client_id = ?").bind(cid).first('n')) : 0;
   const { results: events } = await db.prepare(`SELECT event, title, client_text, created_at FROM track_events WHERE ${W} AND client_text IS NOT NULL ORDER BY id DESC LIMIT 30`).bind(...args).all();
@@ -278,6 +279,7 @@ export async function publicTrack(db, env, request, parts) {
   if (!s) return bad('رابط المتابعة غير صالح — اطلب رابطاً جديداً من فريقنا', 404);
   const method = request.method.toUpperCase();
   if (!parts[3] && method === 'GET') return json(await snapshot(db, s), 200, { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' });
+  if (parts[3] === 'contract') return publicContract(db, env, request, s, Number(parts[4]) || 0, parts[5], method);
   const qid = Number(parts[4]) || 0;
   const or = []; const args = [];
   if (s.lead_id) { or.push('lead_id = ?'); args.push(s.lead_id); }
@@ -325,6 +327,55 @@ ${hx(note)}
     return json({ ok: true, status: action });
   }
   return bad('مسار غير معروف', 404);
+}
+
+// ---------- العقد في رابط المتابعة: عرضه وتوقيعه إلكترونياً ----------
+// GET public/track/<key>/contract/<id> → {title, html, can_sign} · POST .../contract/<id>/sign {name, title, agree, sig (PNG data URL)}
+// التوقيع يُحفظ في contracts.esign مع وقت التوقيع وIP والمتصفح ورمز تحقق (SHA-256 من بيانات التوقيع)، وتتحول الحالة إلى «موقّع» ويُبلَّغ الفريق.
+const ksaStamp = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 16).replace('T', ' ') + ' بتوقيت السعودية';
+async function publicContract(db, env, request, s, cid, sub, method) {
+  if (!s.client_id || !cid) return bad('العقد غير موجود', 404);
+  const c = await db.prepare("SELECT * FROM contracts WHERE id = ? AND client_id = ? AND status NOT IN ('مسودة','ملغي')").bind(cid, s.client_id).first();
+  if (!c) return bad('العقد غير موجود', 404);
+  const viewer = { id: null, name: `رابط المتابعة — ${subjectName(s)}`, role: 'client' };
+  if (!sub && method === 'GET') {
+    const st = await getSettings(db);
+    const ctx = { settings: st, today: today(), signName: st.sign_name || 'إياد المغيرة', signTitle: st.sign_title || 'مدير قطاع التسويق' };
+    await audit(db, viewer, 'view', 'contracts', c.id, 'رابط المتابعة');
+    return json({ title: `عقد ${c.number} — ${c.title || ''}`, html: renderHtml(await contractBlocksFor(db, c, ctx)), status: c.status, can_sign: c.status === 'بانتظار التوقيع', signer: s.client?.contact_name || '' }, 200, { 'cache-control': 'no-store' });
+  }
+  if (sub === 'sign' && method === 'POST') {
+    let d = {}; try { d = await request.json(); } catch { /* */ }
+    if (c.status !== 'بانتظار التوقيع') return bad('هذا العقد ليس بانتظار التوقيع الآن');
+    const name = String(d.name || '').trim().slice(0, 80); const title = String(d.title || '').trim().slice(0, 80); const sig = String(d.sig || '');
+    if (name.length < 3) return bad('اكتب اسمك الكامل كما في الهوية');
+    if (!d.agree) return bad('يلزم الإقرار بالاطلاع على العقد والموافقة على بنوده');
+    if (!/^data:image\/png;base64,[A-Za-z0-9+/=]{200,}$/.test(sig) || sig.length > 150000) return bad('ارسم توقيعك داخل المربع');
+    const at = ksaStamp();
+    const ip = request.headers.get('cf-connecting-ip') || ''; const ua = String(request.headers.get('user-agent') || '').slice(0, 200);
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${c.id}|${c.number}|${name}|${at}|${sig}`));
+    const code = [...new Uint8Array(buf)].slice(0, 6).map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    const esign = { name, title, at, ip, ua, code, sig, phone: s.client?.phone || '' };
+    const r = await db.prepare("UPDATE contracts SET esign = ?, status = 'موقّع', signed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'بانتظار التوقيع'").bind(JSON.stringify(esign), c.id).run();
+    if (!r.meta.changes) return bad('وُقّع العقد مسبقاً');
+    await audit(db, viewer, 'esign', 'contracts', c.id, `${name} · ${code}`);
+    await recordEvent(db, env, { client_id: s.client_id, event: 'contract_signed', dedupe: `contract:${c.id}`, title: `✍️ وقّع العميل العقد ${c.number} إلكترونياً — ${name}`, detail: `رمز التحقق ${code} · ${at}`,
+      client_text: `شكراً لك — وُقّع العقد ${c.number} إلكترونياً باسم ${name} (رمز التحقق ${code}). نبدأ التنفيذ بعد سداد الدفعة الأولى وفق جدول العقد.`, via: 'رابط المتابعة' });
+    const msg = `✍️ وقّع <b>${hx(subjectName(s))}</b> العقد <b>${hx(c.number)}</b> إلكترونياً من رابط المتابعة\nالموقّع: ${hx(name)}${title ? ' — ' + hx(title) : ''} · رمز التحقق <code>${code}</code>\n➡️ أصدر فاتورة الدفعة الأولى إن لم تُصدر، ثم فعّل العقد`;
+    const ids = new Set([c.owner_id, c.created_by, s.client?.account_manager_id].filter(Boolean));
+    for (const uid of ids) await notifyUser(db, env, uid, msg, null, { kind: 'deal', link: `#contract/${c.id}` });
+    await notifyRoles(db, env, ['admin', 'finance'], msg, { kind: 'finance', link: `#contract/${c.id}` }, [...ids][0] || null);
+    return json({ ok: true, code });
+  }
+  return bad('مسار غير معروف', 404);
+}
+
+// إرسال العقد للعميل لتوقيعه إلكترونياً (من صفحة العقد في المنصة): الحالة «بانتظار التوقيع» + رسالة واتساب برابط المتابعة والحساب البنكي
+export async function contractSendForSign(db, env, c, user, note) {
+  const s = await getSettings(db);
+  const text = `عقدك ${c.number}${c.title ? ` «${String(c.title).slice(0, 80)}»` : ''} جاهز للتوقيع الإلكتروني — راجعه ووقّعه من رابط المتابعة (زر «توقيع العقد»).${note ? ` ${note}` : ''}${s.bank_line ? `\nالسداد بالتحويل إلى: ${s.bank_line}` : ''}`;
+  await db.prepare("UPDATE contracts SET status = 'بانتظار التوقيع', updated_at = datetime('now') WHERE id = ?").bind(c.id).run();
+  return recordEvent(db, env, { client_id: c.client_id, event: 'contract_sent', dedupe: `contract_sent:${c.id}:${Date.now()}`, title: `📨 أُرسل العقد ${c.number} للتوقيع الإلكتروني`, detail: note || null, client_text: text, user, via: 'المنصة' });
 }
 
 // ---------- للفريق: GET track/info?lead_id|client_id|quote_id · POST track/send · POST track/retry/<id> · GET track/status ----------

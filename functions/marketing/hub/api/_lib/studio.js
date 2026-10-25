@@ -429,8 +429,22 @@ ${d.notes ? `توجيهات الفريق: ${str(d.notes, 1500)}` : ''}
   return json({ created: stmts.length, month, engine }, 201);
 }
 
+// كتل العقد من مستنده الذكي (أو من العرض/الباقة للعقود القديمة) — تُستخدم للطباعة وWord ورابط المتابعة
+export async function contractBlocksFor(db, c, ctx) {
+  const s = ctx.settings || {};
+  let doc = parse(c.doc, null);
+  if (!doc) {
+    const q = c.quote_id ? await db.prepare('SELECT * FROM quotes WHERE id = ?').bind(c.quote_id).first() : null;
+    const qd = q ? (parse(q.doc, null) || legacyQuoteDoc(q)) : { pricing: { setup: { items: [] }, monthly: { min_months: c.months, items: [{ name: c.package || c.title, price: c.monthly_value }] }, addons: { items: [] } } };
+    doc = { subject: c.title, scope: String(c.package || '').split('\n').filter(Boolean).map((l) => ({ item: l.replace(/^•\s*/, '').split(':')[0], details: l.split(':').slice(1).join(':').trim() })), totals: quoteTotals(qd, s.vat_rate || 15), quote_number: q?.number };
+  }
+  ctx.client = await db.prepare('SELECT * FROM clients WHERE id = ?').bind(c.client_id).first() || {};
+  ctx.quoteNumber = doc.quote_number;
+  return contractBlocks(c, doc, ctx);
+}
+
 // ---------- ملفات Word ----------
-const fname = (s) => String(s || 'مستند').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 90);
+const fname =(s) => String(s || 'مستند').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 90);
 async function docFile(db, user, kind, id, h, format) {
   const s = await getSettings(db);
   const ctx = { settings: s, today: today(), signName: s.sign_name || 'إياد المغيرة', signTitle: s.sign_title || 'مدير قطاع التسويق' };
@@ -453,15 +467,7 @@ async function docFile(db, user, kind, id, h, format) {
   } else if (kind === 'contract') {
     h.need(user, 'contracts', 'r');
     const c = await h.inScope(db, user, 'contracts', id); forOrg(c.org);
-    let doc = parse(c.doc, null);
-    if (!doc) {
-      const q = c.quote_id ? await db.prepare('SELECT * FROM quotes WHERE id = ?').bind(c.quote_id).first() : null;
-      const qd = q ? (parse(q.doc, null) || legacyQuoteDoc(q)) : { pricing: { setup: { items: [] }, monthly: { min_months: c.months, items: [{ name: c.package || c.title, price: c.monthly_value }] }, addons: { items: [] } } };
-      doc = { subject: c.title, scope: String(c.package || '').split('\n').filter(Boolean).map((l) => ({ item: l.replace(/^•\s*/, '').split(':')[0], details: l.split(':').slice(1).join(':').trim() })), totals: quoteTotals(qd, s.vat_rate || 15), quote_number: q?.number };
-    }
-    ctx.client = await db.prepare('SELECT * FROM clients WHERE id = ?').bind(c.client_id).first() || {};
-    ctx.quoteNumber = doc.quote_number;
-    blocks = contractBlocks(c, doc, ctx); name = `عقد ${c.number} — ${ctx.client.name || ''}`;
+    blocks = await contractBlocksFor(db, c, ctx); name = `عقد ${c.number} — ${ctx.client.name || ''}`;
   } else if (kind === 'plan') {
     h.need(user, 'plans', 'r');
     const p = await db.prepare('SELECT * FROM plans WHERE id = ?').bind(id).first(); if (!p) return bad('غير موجود', 404); forOrg(p.org);

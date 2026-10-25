@@ -601,12 +601,19 @@ async function contractView(id) {
   V().innerHTML = `<div class="toolbar"><a href="#/contracts" class="btn btn-g btn-s">→ العقود</a><span class="sp"></span>
     <button class="btn btn-g" id="pr">${I.print} طباعة العقد</button>
     ${can('invoices', 'w') && !inv.length ? '<button class="btn btn-n" id="sch">توليد جدول الفواتير</button>' : ''}
+    ${can('contracts', 'w') && !['موقّع', 'نشط', 'منتهي', 'ملغي'].includes(c.status) ? `<button class="btn btn-p" id="esg">✍️ ${c.status === 'بانتظار التوقيع' ? 'إعادة إرسال للتوقيع' : 'إرسال للتوقيع الإلكتروني'}</button>` : ''}
     ${can('contracts', 'w') ? '<button class="btn btn-g" id="rn">تجديد</button><button class="btn btn-g" id="ed">تعديل</button>' : ''}</div>
+    ${(() => { let e = null; try { e = c.esign ? JSON.parse(c.esign) : null; } catch { /* */ } return e ? `<div class="notice" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><img src="${/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(e.sig || '') ? e.sig : ''}" alt="" style="height:60px;background:#fff;border-radius:6px;padding:2px"><div>✍️ <b>وقّعه العميل إلكترونياً</b>: ${esc(e.name || '')}${e.title ? ' — ' + esc(e.title) : ''}<br><small class="muted">${esc(e.at || '')} · رمز التحقق <span class="num" dir="ltr">${esc(e.code || '')}</span>${e.ip ? ` · IP <span dir="ltr">${esc(e.ip)}</span>` : ''}</small></div></div>` : c.status === 'بانتظار التوقيع' ? '<div class="notice">📨 أُرسل العقد للعميل لتوقيعه إلكترونياً من رابط المتابعة — تصلك رسالة فور توقيعه.</div>' : ''; })()}
     ${daysLeft != null && daysLeft <= 30 && daysLeft >= 0 && ['نشط', 'موقّع'].includes(c.status) ? `<div class="notice">ينتهي العقد خلال ${daysLeft} يوماً — ${c.auto_renew ? 'التجديد تلقائي ما لم يُشعر العميل' : 'تواصل مع العميل للتجديد'}.</div>` : ''}
     <div class="grid g2"><div class="card"><h3>${esc(c.title || '')} ${pill(c.status)}</h3><dl class="dl">${fs.map((f) => `<dt>${f.l}</dt><dd>${cell(f, c) || '—'}</dd>`).join('')}</dl>
       <h3 style="margin-top:14px">النطاق</h3><p style="white-space:pre-wrap">${esc(c.package || '—')}</p></div>
     <div class="card"><h3>${I.bill} الفواتير</h3>${inv.length ? inv.map((i) => `<a class="list-i" href="#/invoice/${i.id}"><div class="g"><b>${esc(i.description || i.number)}</b><span class="small muted">${esc(i.number)} · ${fdate(i.due_date)}</span></div>${pill(i.status)} ${money(i.total)}</a>`).join('') : '<div class="empty small">لم يُولَّد جدول الفواتير بعد</div>'}</div></div>`;
   $('#pr').onclick = () => printContract(c, client);
+  $('#esg') && ($('#esg').onclick = async () => {
+    if (!(await confirmBox(`إرسال العقد <b>${esc(c.number)}</b> إلى ${esc(client?.name || 'العميل')} لتوقيعه إلكترونياً؟<br><small>تصله رسالة واتساب برابط المتابعة والحساب البنكي، وتتحول حالة العقد إلى «بانتظار التوقيع».</small>`))) return;
+    try { const r = await api(`contracts/${id}/send-sign`, { method: 'POST', body: {} }); invalidate('contracts'); toast(r.queued ? 'أُرسل العقد للتوقيع ✓' : 'حُدّثت الحالة — ولم تُرسل رسالة (تحقق من رقم العميل أو إعدادات الإشعارات)'); contractView(id); }
+    catch (e) { toast(e.message, 1); }
+  });
   $('#ed') && ($('#ed').onclick = () => openForm('contracts', c, {}, () => contractView(id)));
   $('#sch') && ($('#sch').onclick = async () => { try { const r = await api(`contracts/${id}/schedule`, { method: 'POST' }); toast(`تم إنشاء ${r.created} فاتورة (مسودة)`); contractView(id); } catch (e) { toast(e.message, 1); } });
   $('#rn') && ($('#rn').onclick = async () => { if (!(await confirmBox(`إنشاء عقد تجديد بزيادة ${S.meta.settings.renewal_uplift || 0}%؟`))) return; const r = await api(`contracts/${id}/renew`, { method: 'POST' }); toast('تم إنشاء ' + r.number); go(`#/contract/${r.contract_id}`); });
