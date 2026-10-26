@@ -3,6 +3,7 @@
 
 User-agent: *
 Allow: /
+Allow: /marketing/hub/api/public/
 Disallow: /marketing/hub/
 Disallow: /marketing/rep/
 Disallow: /marketing/client/
@@ -35,6 +36,7 @@ User-agent: Applebot-Extended
 User-agent: meta-externalagent
 User-agent: Amazonbot
 Allow: /
+Allow: /marketing/hub/api/public/
 Disallow: /marketing/hub/
 Disallow: /marketing/rep/
 Disallow: /marketing/client/
