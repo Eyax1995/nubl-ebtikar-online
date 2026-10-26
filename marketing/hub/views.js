@@ -631,7 +631,8 @@ async function invoiceView(id) {
     ${can('payments', 'w') && inv.total > inv.paid ? '<button class="btn btn-p" id="pay">تسجيل دفعة</button>' : ''}<button class="btn btn-g" id="ed">تعديل</button></div>
     ${late ? '<div class="notice">الفاتورة متأخرة عن موعد استحقاقها.</div>' : ''}
     <div class="grid g2"><div class="card"><h3>${esc(inv.description || '')} ${pill(late ? 'متأخرة' : inv.status)}</h3><dl class="dl">${ENT.invoices.fields.filter((f) => f.k !== 'notes').map((f) => `<dt>${f.l}</dt><dd>${cell(f, inv) || '—'}</dd>`).join('')}</dl></div>
-    <div class="card"><h3>${I.cash} الدفعات</h3>${pays.length ? pays.map((p) => `<div class="list-i"><div class="g"><b>${money(p.amount)}</b><span class="small muted">${fdate(p.paid_at)} · ${esc(p.method || '')} ${p.ref ? '· ' + esc(p.ref) : ''}</span></div></div>`).join('') : '<div class="empty small">لا دفعات بعد</div>'}
+    <div class="card"><h3>${I.cash} الدفعات</h3>${pays.length ? pays.map((p) => { const att = parseJ(p.attachments, []); return `<div class="list-i"><div class="g"><b>${money(p.amount)} ${p.status && p.status !== 'مرحّل' ? pill(p.status) : ''}</b><span class="small muted">${fdate(p.paid_at)} · ${esc(p.method || '')} ${p.ref ? '· ' + esc(p.ref) : ''}${p.number ? ' · ' + esc(p.number) : ''}</span>
+        ${att.length ? `<span class="fatt-list" style="margin-top:6px">${att.map((a) => { const aid = typeof a === 'object' ? a.id : a; const pdf = typeof a === 'object' && a.mime === 'application/pdf'; return `<a class="fatt" href="${API}files/${aid}" target="_blank" rel="noopener">${pdf ? '<span class="fpdf">PDF</span>' : `<img src="${API}files/${aid}" alt="">`}<small>${esc(typeof a === 'object' ? a.name : 'مرفق')}</small></a>`; }).join('')}</span>` : ''}</div></div>`; }).join('') : '<div class="empty small">لا دفعات بعد</div>'}
       <div class="totals" style="margin-top:10px"><div class="g"><span>المتبقي</span><span>${money(inv.total - inv.paid)}</span></div></div></div></div>`;
   $('#pr').onclick = () => printInvoice(inv, client);
   $('#ed').onclick = () => openForm('invoices', inv, {}, () => invoiceView(id));
@@ -639,8 +640,10 @@ async function invoiceView(id) {
   $('#pay') && ($('#pay').onclick = () => {
     const m = modal({ title: 'تسجيل دفعة', body: `<form class="fgrid"><label class="f"><span>المبلغ</span><input class="inp num" name="amount" type="number" step="any" value="${inv.total - inv.paid}"></label>
       <label class="f"><span>التاريخ</span><input class="inp" type="date" name="paid_at" value="${todayStr()}"></label><label class="f"><span>الطريقة</span>${input({ k: 'method', t: 'select', o: L.payMethod }, 'تحويل بنكي')}</label>
-      <label class="f"><span>المرجع</span><input class="inp" name="ref"></label></form>`, foot: '<button class="btn btn-p">حفظ</button>' });
-    $('.btn-p', m.el).onclick = async () => { const f = $('form', m.el); try { await api(`invoices/${id}/pay`, { method: 'POST', body: { amount: +f.amount.value, paid_at: f.paid_at.value, method: f.method.value, ref: f.ref.value } }); toast('تم تسجيل الدفعة'); m.close(); invoiceView(id); } catch (e) { toast(e.message, 1); } };
+      <label class="f"><span>المرجع</span><input class="inp" name="ref"></label>
+      <label class="f full"><span>إثبات السداد (صورة السند أو إيصال التحويل)</span>${filesInput({ k: 'attachments' }, [], false)}<small class="muted">${['admin', 'finance'].includes(me().role) ? 'يُرحَّل مباشرة' : 'تراجعه المالية ثم يُرحَّل'}</small></label></form>`, foot: '<button class="btn btn-p">حفظ</button>' });
+    bindFiles(m.el);
+    $('.btn-p', m.el).onclick = async (e) => { const f = $('form', m.el); e.target.disabled = true; try { await api(`invoices/${id}/pay`, { method: 'POST', body: { amount: +f.amount.value, paid_at: f.paid_at.value, method: f.method.value, ref: f.ref.value, attachments: f.attachments.value } }); toast('تم تسجيل الدفعة'); m.close(); invoiceView(id); } catch (err) { toast(err.message, 1); e.target.disabled = false; } };
   });
 }
 

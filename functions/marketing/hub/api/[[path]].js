@@ -678,14 +678,22 @@ async function invoiceAction(db, request, user, id, action, env) {
     const d = await body(request);
     const amount = round2(d.amount ?? (inv.total - inv.paid));
     if (!(amount > 0)) return bad('أدخل مبلغاً صحيحاً');
-    const pr = await db.prepare('INSERT INTO payments (invoice_id, client_id, amount, method, ref, paid_at, notes, user_id) VALUES (?,?,?,?,?,?,?,?)')
-      .bind(inv.id, inv.client_id, amount, d.method || 'تحويل بنكي', d.ref || null, d.paid_at || today(), d.notes || null, user.id).run();
+    // إثبات السداد (صور/PDF من files) + الحالة: المالية تُرحّل مباشرة، وغيرها «بانتظار المراجعة» (26 أكتوبر 2026)
+    let att = []; try { att = JSON.parse(d.attachments || '[]'); } catch { /* */ }
+    att = (Array.isArray(att) ? att : []).slice(0, 5).map((a) => (typeof a === 'object' ? { id: Number(a.id), name: String(a.name || '').slice(0, 120), mime: String(a.mime || '') } : { id: Number(a) })).filter((a) => a.id > 0);
+    const fin = ['admin', 'finance'].includes(user.role);
+    const status = fin ? 'مرحّل' : 'بانتظار المراجعة';
+    const number = await nextNumber(db, 'payments', 'RV', inv.org || 'nubl');
+    const pr = await db.prepare('INSERT INTO payments (number, invoice_id, client_id, amount, method, ref, paid_at, notes, user_id, status, attachments, org) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+      .bind(number, inv.id, inv.client_id, amount, d.method || 'تحويل بنكي', d.ref || null, d.paid_at || today(), d.notes || null, user.id, status, att.length ? JSON.stringify(att) : null, inv.org || 'nubl').run();
     await recalcInvoice(db, inv.id);
-    const comm = await accrueForPayment(db, env, pr.meta.last_row_id); // عمولة المندوب (إن وُجد) تُستحق آلياً مع التحصيل
-    await audit(db, user, 'pay', 'invoices', inv.id, amount);
+    const comm = fin ? await accrueForPayment(db, env, pr.meta.last_row_id) : null; // عمولة المندوب تُستحق مع الدفعة المرحّلة
+    await audit(db, user, 'pay', 'invoices', inv.id, `${amount} ${status}${att.length ? ` · ${att.length} مرفق` : ''}`);
     const cl = await db.prepare('SELECT name FROM clients WHERE id = ?').bind(inv.client_id).first('name');
-    await notifyRoles(db, env, ['finance', 'admin'], `💰 سُجّل سداد ${amount.toLocaleString('en-US')} ر.س للفاتورة <b>${hx(inv.number)}</b>${cl ? ' — ' + hx(cl) : ''}\nبواسطة ${hx(user.name)}`, { kind: 'finance', link: `#invoice/${inv.id}` }, user.id);
-    return json({ ok: true, commission: comm?.amount || 0 });
+    await notifyRoles(db, env, ['finance', 'admin'], fin
+      ? `💰 سُجّل سداد ${amount.toLocaleString('en-US')} ر.س للفاتورة <b>${hx(inv.number)}</b>${cl ? ' — ' + hx(cl) : ''}\nبواسطة ${hx(user.name)}${att.length ? ` · 📎 ${att.length}` : ''}`
+      : `🧾 دفعة بانتظار مراجعة المالية — ${amount.toLocaleString('en-US')} ر.س للفاتورة <b>${hx(inv.number)}</b>${cl ? ' — ' + hx(cl) : ''}\n📎 المرفقات: ${att.length} · سجّلها ${hx(user.name)}\n➡️ راجع إثبات السداد واعتمد السند ${hx(number)} من «سندات القبض»`, { kind: 'finance', link: fin ? `#invoice/${inv.id}` : '#/payments' }, user.id);
+    return json({ ok: true, status, number, commission: comm?.amount || 0 });
   }
   return bad('إجراء غير معروف', 404);
 }
