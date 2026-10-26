@@ -31,7 +31,31 @@
     const want = new URLSearchParams(location.search).get('job');
     const pick = jobs.find((j) => j.slug === want) || (jobs.length === 1 ? jobs[0] : null);
     renderJobs(jobs);
+    jobsSchema(jobs);
     if (pick) open(pick, jobs.length > 1);
+  }
+  /* بيانات JobPosting المنظّمة (وظائف Google) — تُبنى من قائمة الوظائف المفتوحة نفسها */
+  function jobsSchema(jobs) {
+    try {
+      const ORG = 'https://nubl-ebtikar.online/marketing/#org';
+      const old = document.getElementById('jobs-ld'); if (old) old.remove();
+      const posts = jobs.map((j) => {
+        const posted = (j.date_posted || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+        const until = new Date(new Date(posted).getTime() + 60 * 864e5).toISOString().slice(0, 10);
+        const remote = (j.modes || []).some((m) => /بُعد|بعد|remote/i.test(m));
+        return { '@type': 'JobPosting', title: j.title, description: '<p>' + [j.summary, j.details].filter(Boolean).join('</p><p>') + '</p>' +
+            (j.skills && j.skills.length ? '<p>المهارات: ' + j.skills.join('، ') + '</p>' : '') + (j.tools && j.tools.length ? '<p>البرامج: ' + j.tools.join('، ') + '</p>' : ''),
+          datePosted: posted, validThrough: until + 'T23:59:59+03:00', employmentType: 'FULL_TIME', directApply: true,
+          url: 'https://nubl-ebtikar.online/marketing/careers?job=' + encodeURIComponent(j.slug || ''), identifier: { '@type': 'PropertyValue', name: 'نُبل وابتكار للتسويق', value: String(j.slug || j.id) },
+          hiringOrganization: { '@type': 'Organization', '@id': ORG, name: 'نُبل وابتكار للخدمات التسويقية', sameAs: 'https://nubl-ebtikar.online/marketing/', logo: 'https://nubl-ebtikar.online/marketing/logo-large.png' },
+          jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', streetAddress: 'حي الحمدانية', addressLocality: 'جدة', addressRegion: 'منطقة مكة المكرمة', addressCountry: 'SA' } },
+          ...(remote ? { jobLocationType: 'TELECOMMUTE', applicantLocationRequirements: { '@type': 'Country', name: 'المملكة العربية السعودية' } } : {}),
+          skills: (j.skills || []).join('، '), industry: 'التسويق والإعلان', inLanguage: 'ar' };
+      });
+      const s = document.createElement('script'); s.type = 'application/ld+json'; s.id = 'jobs-ld';
+      s.textContent = JSON.stringify(posts.length === 1 ? { '@context': 'https://schema.org', ...posts[0] } : { '@context': 'https://schema.org', '@graph': posts });
+      document.head.appendChild(s);
+    } catch (e) { /* القياس والبيانات المنظمة لا توقف الصفحة */ }
   }
   function renderJobs(jobs) {
     $('#cr-jobs').innerHTML = `<h2 style="font-size:clamp(22px,3vw,30px)">الوظائف المتاحة</h2>` + jobs.map((j) => `<button type="button" class="cr-job" data-j="${j.id}">
@@ -174,6 +198,7 @@
         throw new Error(d.error || 'تعذّر الإرسال — أعد المحاولة');
       }
       store.del(key());
+      try { window.NBA && window.NBA.event('job_application', { job: job.slug || '', updated: d.updated ? 1 : 0 }); } catch (e) {}
       $('#cr-num').textContent = d.number; $('#cr-done-t').textContent = d.updated ? 'حدّثنا طلبك السابق، شكراً لك' : 'وصلنا طلبك، شكراً لك';
       form.hidden = true; $('.cr-head').hidden = true; $('#cr-done').hidden = false; $('#cr-done').focus(); $('#cr-done').scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch (err) {

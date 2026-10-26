@@ -1,5 +1,56 @@
+# nubl-ebtikar.online — نُبل وابتكار للتسويق
+# الموقع العام: /marketing/ — المسارات الخاصة (المنصة الإدارية، البوابات، روابط المتابعة الموقّعة) مستبعدة من الفهرسة.
+
 User-agent: *
 Allow: /
-Disallow: /marketing/hub
+Disallow: /marketing/hub/
+Disallow: /marketing/rep/
+Disallow: /marketing/client/
+Disallow: /marketing/portal/
+Disallow: /marketing/track/
+Disallow: /marketing/careers/interview/
+Disallow: /marketing/book/?s=
+Disallow: /wa/
+Disallow: /t/
+Disallow: /i/
+Disallow: /mirror/
+Disallow: /docs/
+Disallow: /tools/
+
+# محركات البحث والإجابة بالذكاء الاصطناعي — مرحّب بها على الصفحات العامة (نفس الاستثناءات)
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: anthropic-ai
+User-agent: Google-Extended
+User-agent: Bingbot
+User-agent: DuckAssistBot
+User-agent: Applebot
+User-agent: Applebot-Extended
+User-agent: meta-externalagent
+User-agent: Amazonbot
+Allow: /
+Disallow: /marketing/hub/
+Disallow: /marketing/rep/
+Disallow: /marketing/client/
+Disallow: /marketing/portal/
+Disallow: /marketing/track/
+Disallow: /marketing/careers/interview/
+Disallow: /marketing/book/?s=
+Disallow: /wa/
+Disallow: /t/
+Disallow: /i/
+Disallow: /mirror/
+Disallow: /docs/
+Disallow: /tools/
+
+# زواحف جمع بيانات التدريب فقط (لا تُستخدم للبحث أو الاقتباس)
+User-agent: CCBot
+Disallow: /
 
 Sitemap: https://nubl-ebtikar.online/marketing/sitemap.xml

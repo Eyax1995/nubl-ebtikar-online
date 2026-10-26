@@ -32,7 +32,8 @@ export function cleanPhone(p) {
 }
 
 const publicJob = (j) => ({ id: j.id, slug: j.slug, title: j.title, summary: j.summary, details: j.details, location: j.location,
-  modes: arr(j.modes).length ? arr(j.modes) : DEFAULT_MODES, skills: arr(j.skills), tools: arr(j.tools), extra_q: j.extra_q || '' });
+  modes: arr(j.modes).length ? arr(j.modes) : DEFAULT_MODES, skills: arr(j.skills), tools: arr(j.tools), extra_q: j.extra_q || '',
+  date_posted: (j.created_at || '').slice(0, 10) }); // لبيانات JobPosting المنظّمة في صفحة التوظيف
 
 export async function publicJobs(db) {
   const { results } = await db.prepare("SELECT * FROM jobs WHERE status = 'مفتوحة' ORDER BY sort, id DESC").all();

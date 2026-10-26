@@ -1,3 +1,37 @@
+# رؤوس أمان عامة (لا تؤثر على التضمين داخل الموقع نفسه)
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# مناطق خاصة لا تُفهرس (البوابات وروابط المتابعة الموقّعة ومساعد واتساب)
+/marketing/rep/*
+  X-Robots-Tag: noindex, nofollow
+/marketing/client/*
+  X-Robots-Tag: noindex, nofollow
+/marketing/portal/*
+  X-Robots-Tag: noindex, nofollow
+/marketing/track/*
+  X-Robots-Tag: noindex, nofollow
+/marketing/careers/interview/*
+  X-Robots-Tag: noindex, nofollow
+/wa/*
+  X-Robots-Tag: noindex, nofollow
+/mirror/*
+  X-Robots-Tag: noindex, nofollow
+
+# ملفات البحث بالذكاء الاصطناعي ومحركات البحث
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=3600
+/marketing/pricing.md
+  Content-Type: text/markdown; charset=utf-8
+  Cache-Control: public, max-age=3600
+/marketing/sitemap.xml
+  Cache-Control: public, max-age=3600
+/marketing/analytics.js
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
 /nd/*
   Cache-Control: public, max-age=86400
 /catalog/*
