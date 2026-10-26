@@ -5,7 +5,7 @@
    - الاستخدام من ملفات أخرى: window.NBA.event(name, params) · NBA.lead(method) · NBA.optOut() · NBA.optIn()
 */
 (function () {
-  var GA_ID = 'G-XXXXXXXXXX';          // معرّف قياس GA4 — خاصية «Nubl Ebtikar Marketing - nubl-ebtikar.online»
+  var GA_ID = 'G-V5G7HNYLGG';          // معرّف قياس GA4 — خاصية «Nubl Ebtikar Marketing - nubl-ebtikar.online»
   var PIXEL_ID = '993831000407341';    // بكسل Meta لموقع التسويق (مربوط بكتالوج «نبل وابتكار للتسويق — الباقات والخدمات»)
   var W = window, D = document, N = W.NBA = W.NBA || {};
   var optedOut = false;
