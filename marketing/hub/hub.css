@@ -234,3 +234,12 @@ table.t td.n{white-space:nowrap}
 .t.dbt th.small{white-space:nowrap}
 .lnk{background:none;border:0;padding:0;color:var(--terra);font:inherit;cursor:pointer}
 @media print{.dbt-sub>td{background:#fff}.dbt-acts{display:none}}
+
+/* مرفقات النماذج (صور السندات والتحويلات) — 26 أكتوبر 2026 */
+.fatts{display:flex;flex-direction:column;gap:8px}.fatt-list{display:flex;gap:8px;flex-wrap:wrap}
+.fatt{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;width:96px;text-decoration:none;color:inherit}
+.fatt img{width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line,#E3EAEE);background:#fff}
+.fatt .fpdf{width:96px;height:72px;display:grid;place-items:center;border-radius:8px;border:1px solid var(--line,#E3EAEE);background:#FBEFEF;color:#B4511C;font-weight:800;font-size:13px}
+.fatt small{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted,#5D7581)}
+.fatt .fx{position:absolute;top:-6px;inset-inline-end:-6px;width:20px;height:20px;border-radius:50%;border:0;background:#C62828;color:#fff;font-size:13px;line-height:20px;cursor:pointer}
+.fadd input{display:none}

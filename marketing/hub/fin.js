@@ -55,7 +55,11 @@
     ENT.payments.title = 'سندات القبض (المقبوضات)'; ENT.payments.one = 'سند قبض';
     ENT.payments.fields.unshift(F('number', 'رقم السند', 'text', { list: 1, ro: 1 }));
     addF('payments', [F('description', 'البيان', 'text', { w: 'full' }), F('cash_account', 'إلى حساب (الصندوق/البنك)', 'ref', { ref: 'accounts' }),
-      F('account_id', 'من حساب (الطرف الدائن)', 'ref', { ref: 'accounts', hint: 'فارغ = العملاء (ذمم مدينة)' }), F('status', 'الحالة', 'select', { o: ['مرحّل', 'ملغى'], list: 1, filter: 1, def: 'مرحّل' })], 'ref');
+      F('account_id', 'من حساب (الطرف الدائن)', 'ref', { ref: 'accounts', hint: 'فارغ = العملاء (ذمم مدينة)' }),
+      // غير المالية يسجّل الدفعة «بانتظار المراجعة» مع صورة السند/التحويل، والمالية تعتمدها → «مرحّل»
+      F('status', 'الحالة', 'select', { o: ['بانتظار المراجعة', 'مرحّل', 'ملغى'], list: 1, filter: 1, def: () => (['admin', 'finance'].includes(me().role) ? 'مرحّل' : 'بانتظار المراجعة') }),
+      F('attachments', 'المرفقات', 'files', { w: 'full', list: 1, hint: 'صورة السند أو إيصال التحويل البنكي — تراجعها المالية قبل الترحيل' })], 'ref');
+    Object.assign(PILL, { 'بانتظار المراجعة': 'o' });
   }
   if (ENT.expenses) {
     ENT.expenses.title = 'سندات الصرف (المصروفات)'; ENT.expenses.one = 'سند صرف';
@@ -93,7 +97,9 @@
     employees: { ent: 'employees', render: gate(() => listView('employees')) },
     advances: { ent: 'advances', render: gate(async () => { await refs('employees'); await refs('accounts'); return listView('advances', { rowActions: (r) => printBtn('advance', r.id), after: bindPrint }); }) },
     payroll: { ent: 'payroll', render: gate(payrollView) },
-    payments: { ent: 'payments', render: () => listView('payments', { rowActions: (r) => printBtn('receipt', r.id), after: bindPrint }) },
+    payments: { ent: 'payments', render: () => listView('payments', {
+      rowActions: (r) => (r.status === 'بانتظار المراجعة' && ['admin', 'finance'].includes(me().role) ? `<button class="btn btn-p btn-s" data-apv="${r.id}" title="اعتماد وترحيل">✓ اعتماد</button> ` : '') + printBtn('receipt', r.id),
+      after: () => { bindPrint(); $$('[data-apv]').forEach((b) => b.onclick = async (e) => { e.stopPropagation(); try { await api(`e/payments/${b.dataset.apv}`, { method: 'PUT', body: { status: 'مرحّل' } }); invalidate('payments'); toast('اعتُمدت الدفعة ورُحّلت'); rerender(); } catch (err) { toast(err.message, 1); } }); } }) },
     expenses: { ent: 'expenses', render: () => listView('expenses', { rowActions: (r) => printBtn('disb', r.id), after: bindPrint }) },
     fin: { title: 'القوائم المالية', render: gate(finView) },
   });

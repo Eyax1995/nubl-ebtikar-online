@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 24;
+export const SCHEMA_VERSION = 25;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -249,6 +249,10 @@ export const MIGRATIONS = [
   'ALTER TABLE applications ADD COLUMN followup_task_id INTEGER',
   // v24: تذكير صباح يوم المقابلة لمن لم يؤكد (hiringTick في /wa/health)
   'ALTER TABLE applications ADD COLUMN interview_reminded_at TEXT',
+  // v25: مرفقات سند القبض (صور السند/التحويل، JSON بمعرّفات files) ومراجعة المالية
+  'ALTER TABLE payments ADD COLUMN attachments TEXT',
+  'ALTER TABLE payments ADD COLUMN reviewed_by INTEGER',
+  'ALTER TABLE payments ADD COLUMN reviewed_at TEXT',
   'ALTER TABLE content ADD COLUMN publish_time TEXT',
   'ALTER TABLE content ADD COLUMN hashtags TEXT',
   'ALTER TABLE content ADD COLUMN cta TEXT',
@@ -377,7 +381,7 @@ export const ENTITIES = {
     perms: { ...ALL, finance: 'rwd' }, order: 'due_date DESC, id DESC',
   },
   payments: {
-    cols: ['invoice_id', 'client_id', 'amount', 'method', 'ref', 'paid_at', 'notes', 'user_id', 'number', 'cash_account', 'account_id', 'description', 'status'],
+    cols: ['invoice_id', 'client_id', 'amount', 'method', 'ref', 'paid_at', 'notes', 'user_id', 'number', 'cash_account', 'account_id', 'description', 'status', 'attachments', 'reviewed_by', 'reviewed_at'],
     search: ['ref', 'notes'],
     perms: { ...ALL, finance: 'rwd' }, order: 'paid_at DESC, id DESC',
   },

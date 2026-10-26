@@ -427,6 +427,21 @@ async function beforeSave(db, entity, rec, before) {
 }
 
 async function afterSave(db, user, entity, id, rec, before, env) {
+  // سندات القبض: غير المالية يسجّلها «بانتظار المراجعة» (مع صورة السند/التحويل)، والمالية تعتمدها → «مرحّل» (26 أكتوبر 2026)
+  if (entity === 'payments') {
+    const fin = ['admin', 'finance'].includes(user.role);
+    if (!fin && (rec.status === 'مرحّل' || (!before && !rec.status))) {
+      await db.prepare("UPDATE payments SET status = 'بانتظار المراجعة' WHERE id = ?").bind(id).run(); rec.status = 'بانتظار المراجعة';
+    }
+    if (rec.status === 'بانتظار المراجعة' && (!before || before.status !== 'بانتظار المراجعة')) {
+      const p = await db.prepare('SELECT p.number, p.amount, p.method, c.name AS client, (SELECT COUNT(*) FROM json_each(COALESCE(p.attachments,\'[]\'))) AS n_att FROM payments p LEFT JOIN clients c ON c.id = p.client_id WHERE p.id = ?').bind(id).first();
+      await notifyRoles(db, env, ['finance', 'admin'], `🧾 دفعة بانتظار مراجعة المالية — <b>${hx(p?.number || '#' + id)}</b>\n${hx(p?.client || '')} · ${Number(p?.amount || 0).toLocaleString('en-US')} ر.س · ${hx(p?.method || '')}\n📎 المرفقات: ${p?.n_att || 0} · سجّلها ${hx(user.name)}\n➡️ راجع المرفق واعتمد السند من «سندات القبض»`, { kind: 'finance', link: '#/payments' }, user.id);
+    }
+    if (rec.status === 'مرحّل' && before && before.status === 'بانتظار المراجعة') {
+      await db.prepare("UPDATE payments SET reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?").bind(user.id, id).run();
+      if (before.invoice_id) await recalcInvoice(db, before.invoice_id);
+    }
+  }
   // آخر تواصل يحدّث حالة العميل المحتمل وموعد المتابعة
   if (entity === 'activities' && rec.lead_id) {
     const lead = await db.prepare('SELECT status FROM leads WHERE id = ?').bind(rec.lead_id).first();
@@ -646,7 +661,8 @@ async function contractAction(db, request, user, id, action, env) {
 async function recalcInvoice(db, invoiceId) {
   const inv = await db.prepare('SELECT total, status FROM invoices WHERE id = ?').bind(invoiceId).first();
   if (!inv) return;
-  const paid = round2(await db.prepare('SELECT COALESCE(SUM(amount),0) AS s FROM payments WHERE invoice_id = ?').bind(invoiceId).first('s'));
+  // الدفعات الملغاة أو التي تنتظر مراجعة المالية لا تُحتسب في المسدد
+  const paid = round2(await db.prepare("SELECT COALESCE(SUM(amount),0) AS s FROM payments WHERE invoice_id = ? AND COALESCE(status,'مرحّل') NOT IN ('ملغى','بانتظار المراجعة')").bind(invoiceId).first('s'));
   let status = inv.status;
   if (paid >= inv.total - 0.01 && inv.total > 0) status = 'مدفوعة';
   else if (paid > 0) status = 'مدفوعة جزئياً';

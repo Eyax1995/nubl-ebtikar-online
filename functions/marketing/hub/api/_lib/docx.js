@@ -1,7 +1,10 @@
 // مولّد ملفات Word على أوراق «نُبل وابتكار للتسويق» — بنفس تنسيق عرض BBR المعتمد (14 أكتوبر 2026)
 // هوية 3.0: العناوين كحلي #18566D بخط سفلي برتقالي #D06429، الجداول برأس كحلي ونص أبيض، صناديق تنبيه بخلفية تركوازي 25٪ وحد برتقالي، خط DG Agnadeen مضمّن، من اليمين لليسار.
-import { LETTERHEAD } from './letterhead.js';
-import { MOROOJ_LETTERHEAD_PNG } from './letterhead-morooj.js';
+// صور الورق الرسمي (~450KB base64) تُحمَّل عند بناء ملف Word فقط لا مع كل طلب للمنصة (26 أكتوبر 2026)
+const letterheads = async () => {
+  const [{ LETTERHEAD }, { MOROOJ_LETTERHEAD_PNG }] = await Promise.all([import('./letterhead.js'), import('./letterhead-morooj.js')]);
+  return { LETTERHEAD, MOROOJ_LETTERHEAD_PNG };
+};
 import { zip, b64ToU8 } from './zip.js';
 
 // هوية 3.0: كحلي 18566D · برتقالي D06429 · بطاقات تركوازي 25% CCE2E2 · صفوف كحلي 25% · خط DG Agnadeen مضمّن
@@ -103,6 +106,7 @@ const SECT = (bottom) => `<w:sectPr><w:headerReference w:type="default" r:id="rI
 
 export async function buildDocx(blocks, { title = '', subject = '', org = 'nubl' } = {}) {
   const morooj = org === 'morooj';
+  const { LETTERHEAD, MOROOJ_LETTERHEAD_PNG } = await letterheads();
   const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${NS}><w:body>${render(blocks)}${SECT(morooj ? 2160 : 1588)}</w:body></w:document>`;
   const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
   const core = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${x(title)}</dc:title><dc:subject>${x(subject)}</dc:subject><dc:creator>إياد المغيرة — ${morooj ? 'مروج الحجاز للأعمال التجارية' : 'نُبل وابتكار للخدمات التسويقية'}</dc:creator><cp:lastModifiedBy>منصة نُبل وابتكار للتسويق</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`;

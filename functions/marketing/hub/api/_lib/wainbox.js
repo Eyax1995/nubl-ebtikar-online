@@ -105,22 +105,34 @@ export async function waInboxRoute(env, request, user, sub, id) {
               SUM(CASE WHEN e.kind='message' THEN 1 ELSE 0 END) AS n_in
          FROM wa_events e WHERE e.dept IN (${depts.map(() => '?').join(',')}) AND e.wa_id IS NOT NULL AND e.wa_id <> ''
         GROUP BY e.dept, e.wa_id ORDER BY last_at DESC, last_id DESC LIMIT 200`).bind(...depts).all()).results || [];
+    // (26 أكتوبر 2026) أربع استعلامات مجمّعة للقائمة كلها بدل أربعة لكل محادثة — كانت القائمة تكلّف ~800 استعلام كل 15 ثانية
+    const dq = depts.map(() => '?').join(',');
+    const [lastEv, sess, lastInRows, convs] = await Promise.all([
+      db.prepare(`SELECT id, dept, wa_id, kind, text, reply, at FROM (
+          SELECT id, dept, wa_id, kind, text, reply, at, ROW_NUMBER() OVER (PARTITION BY dept, wa_id ORDER BY at DESC, id DESC) AS rn
+            FROM wa_events WHERE dept IN (${dq}) AND wa_id IS NOT NULL AND wa_id <> '' AND kind IN ('message','reply','staff','echo')) WHERE rn <= 25`).bind(...depts).all(),
+      db.prepare(`SELECT session_key, customer_name, handoff_until FROM wa_sessions WHERE dept IN (${dq})`).bind(...depts).all(),
+      db.prepare(`SELECT dept, wa_id, MAX(at) AS at FROM wa_events WHERE dept IN (${dq}) AND kind = 'message' GROUP BY dept, wa_id`).bind(...depts).all(),
+      db.prepare(`SELECT dept, wa_id, status, labels, assignee FROM wa_conv WHERE dept IN (${dq})`).bind(...depts).all(),
+    ]);
+    const byKey = (rs, f) => { const m = {}; for (const r of rs.results || []) { const k = f(r); (m[k] ||= []).push(r); } return m; };
+    const EV = byKey(lastEv, (r) => r.dept + ':' + r.wa_id);
+    const SS = Object.fromEntries((sess.results || []).map((r) => [r.session_key, r]));
+    const LI = Object.fromEntries((lastInRows.results || []).map((r) => [r.dept + ':' + r.wa_id, r.at]));
+    const CV = Object.fromEntries((convs.results || []).map((r) => { let labels = []; try { labels = JSON.parse(r.labels || '[]'); } catch { /* */ } return [r.dept + ':' + r.wa_id, { status: r.status || 'open', labels, assignee: r.assignee || '' }]; }));
     const out = [];
     for (const r of rows) {
-      const DEPT = r.dept;
-      const clr = H.clr[DEPT + ':' + r.wa_id] || 0;
+      const DEPT = r.dept; const k = DEPT + ':' + r.wa_id;
+      const clr = H.clr[k] || 0;
       // آخر رسالة ظاهرة (بعد استبعاد المحذوف وما قبل مسح المحادثة)
-      const lastRows = (await db.prepare(`SELECT id, kind, text, reply, at FROM wa_events WHERE dept=? AND wa_id=? AND id > ? AND kind IN ('message','reply','staff','echo') ORDER BY at DESC, id DESC LIMIT 25`).bind(DEPT, r.wa_id, clr).all()).results || [];
-      const last = lastRows.find((x) => !H.del.has(x.id));
+      const last = (EV[k] || []).find((x) => x.id > clr && !H.del.has(x.id));
       if (clr && !last) continue; // محادثة ممسوحة بلا رسائل جديدة
-      const s = await db.prepare('SELECT customer_name, handoff_until FROM wa_sessions WHERE session_key = ?').bind(DEPT + ':' + r.wa_id).first();
-      const lastIn = await db.prepare(`SELECT at FROM wa_events WHERE dept=? AND wa_id=? AND kind='message' ORDER BY at DESC, id DESC LIMIT 1`).bind(DEPT, r.wa_id).first();
-      const cv = await convOf(db, DEPT, r.wa_id);
+      const s = SS[k]; const cv = CV[k] || { status: 'open', labels: [], assignee: '' };
       out.push({
         key: threadKey(DEPT, r.wa_id), line: DEPT, line_label: lineOf(DEPT).label, status: cv.status, labels: cv.labels, assignee: cv.assignee,
         wa_id: r.wa_id, name: (s && s.customer_name) || '', last_at: clr && last ? last.at : r.last_at, n_in: r.n_in,
         last_kind: last && last.kind, last_text: last ? (last.kind === 'reply' || last.kind === 'staff' ? (last.reply || last.text) : last.text) : '',
-        last_customer_at: lastIn ? lastIn.at : null,
+        last_customer_at: LI[k] || null,
         bot_paused_until: (s && s.handoff_until) || '',
       });
     }

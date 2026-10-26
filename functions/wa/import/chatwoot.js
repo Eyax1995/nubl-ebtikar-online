@@ -10,6 +10,7 @@ const sqlTime = (unix) => new Date((Number(unix) || 0) * 1000).toISOString().sli
 
 export async function ensureCwTables(db) {
   await db.batch([
+    db.prepare('CREATE INDEX IF NOT EXISTS wa_events_thread ON wa_events(dept, wa_id, at, id)'), // قائمة المحادثات والمحادثة الواحدة (26 أكتوبر 2026)
     db.prepare(`CREATE TABLE IF NOT EXISTS wa_labels (dept TEXT NOT NULL, title TEXT NOT NULL, color TEXT, description TEXT, PRIMARY KEY (dept, title))`),
     db.prepare(`CREATE TABLE IF NOT EXISTS wa_quick (id INTEGER PRIMARY KEY AUTOINCREMENT, dept TEXT NOT NULL, short_code TEXT, content TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')))`),
     db.prepare(`CREATE TABLE IF NOT EXISTS wa_conv (dept TEXT NOT NULL, wa_id TEXT NOT NULL, status TEXT DEFAULT 'open', labels TEXT DEFAULT '[]', assignee TEXT, updated_at TEXT, PRIMARY KEY (dept, wa_id))`),

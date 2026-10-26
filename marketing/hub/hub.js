@@ -396,6 +396,7 @@ function cell(f, row) {
     case 'lines': return esc(parseJ(v, []).length + ' خطوة');
     case 'qs': return esc(parseJ(v, []).length + ' سؤال');
     case 'url': return v ? `<a href="${esc(v)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">فتح ↗</a>` : '';
+    case 'files': { const n = parseJ(v, []).length; return n ? `📎 ${n}` : '<span class="muted">—</span>'; }
     default: { const s = String(v ?? ''); return esc(s.length > 70 ? s.slice(0, 70) + '…' : s); }
   }
 }
@@ -405,6 +406,7 @@ function input(f, val, ro) {
   const name = `name="${f.k}"`; const req = f.req ? 'required' : '';
   const v = val ?? '';
   if ((ro || f.ro) && f.t === 'checklist') return input({ ...f, ro: 0 }, val).replace(/<input type="checkbox"/g, '<input type="checkbox" disabled');
+  if (f.t === 'files') return filesInput(f, parseJ(v, []), ro || f.ro);
   if (ro || f.ro) return `<div class="inp" style="background:var(--soft)">${f.t === 'money' ? money(v) : f.t === 'ref' ? esc(refLabel(f.ref, v)) : esc(v) || '—'}</div>`;
   switch (f.t) {
     case 'textarea': return `<textarea class="inp" ${name} ${req} rows="${f.rows || 4}">${esc(v)}</textarea>`;
@@ -434,10 +436,49 @@ function input(f, val, ro) {
     default: return `<input class="inp" type="text" ${name} ${req} value="${esc(v)}">`;
   }
 }
+// مرفقات (صور/PDF) تُرفع إلى files وتُحفظ معرّفاتها JSON في الحقل — الصور تُصغَّر في المتصفح قبل الرفع
+function filesInput(f, ids, ro) {
+  const items = ids.map((x) => { const id = typeof x === 'object' ? x.id : x; const name = typeof x === 'object' ? x.name : ''; const pdf = /\.pdf$/i.test(name) || (typeof x === 'object' && x.mime === 'application/pdf');
+    return `<a class="fatt" href="${API}files/${id}" target="_blank" rel="noopener" data-id="${id}">${pdf ? '<span class="fpdf">PDF</span>' : `<img src="${API}files/${id}" alt="">`}<small>${esc(name || 'ملف')}</small>${ro ? '' : '<button type="button" class="fx" title="إزالة">×</button>'}</a>`; }).join('');
+  return `<div class="fatts" data-files="${f.k}"><input type="hidden" name="${f.k}" value="${esc(JSON.stringify(ids))}"><div class="fatt-list">${items}</div>
+    ${ro ? '' : `<label class="btn btn-g btn-s fadd">📎 إضافة صورة أو PDF<input type="file" accept="image/*,application/pdf" multiple hidden></label><small class="muted"> حتى 5 ملفات · الصور تُصغَّر تلقائياً</small>`}</div>`;
+}
+async function shrinkImage(file) {
+  if (!/^image\//.test(file.type) || file.type === 'image/gif') return file;
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
+  const max = 1600; const sc = Math.min(1, max / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.82));
+  return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+}
+async function uploadFile(file) {
+  const f = await shrinkImage(file);
+  if (f.size > 1_400_000) throw new Error(`«${file.name}» أكبر من 1.4MB`);
+  const data = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.readAsDataURL(f); });
+  const r = await api('files', { method: 'POST', body: { name: f.name, mime: f.type, data } });
+  return { id: r.id, name: f.name, mime: f.type };
+}
+function bindFiles(root) {
+  $$('.fatts', root).forEach((box) => {
+    const hid = $('input[type=hidden]', box); const list = $('.fatt-list', box); const inp = $('input[type=file]', box);
+    const get = () => parseJ(hid.value, []); const set = (a) => { hid.value = JSON.stringify(a); };
+    list.addEventListener('click', (e) => { const x = e.target.closest('.fx'); if (!x) return; e.preventDefault(); const a = x.closest('.fatt'); set(get().filter((it) => String(typeof it === 'object' ? it.id : it) !== a.dataset.id)); a.remove(); });
+    if (inp) inp.onchange = async () => {
+      const files = [...inp.files]; inp.value = '';
+      if (get().length + files.length > 5) return toast('الحد 5 مرفقات', 1);
+      for (const file of files) {
+        try { const it = await uploadFile(file); set([...get(), it]); list.insertAdjacentHTML('beforeend', `<a class="fatt" href="${API}files/${it.id}" target="_blank" rel="noopener" data-id="${it.id}">${it.mime === 'application/pdf' ? '<span class="fpdf">PDF</span>' : `<img src="${API}files/${it.id}" alt="">`}<small>${esc(it.name)}</small><button type="button" class="fx" title="إزالة">×</button></a>`); toast('رُفع ' + it.name); }
+        catch (e) { toast(e.message, 1); }
+      }
+    };
+  });
+}
 function readForm(form, fields) {
   const out = {};
   for (const f of fields) {
     if (f.ro) continue;
+    if (f.t === 'files') { const el = form.elements[f.k]; if (el) out[f.k] = el.value || '[]'; continue; }
     if (f.t === 'checklist') { const box = form.querySelector(`[data-ck="${f.k}"]`); if (!box) continue; out[f.k] = JSON.stringify($$('input', box).map((c, i) => ({ t: $('span', box.children[i]).textContent, d: c.checked ? 1 : 0 }))); continue; }
     if (f.t === 'qs') { out[f.k] = JSON.stringify(readQs(form, f.k)); continue; }
     const el = form.elements[f.k]; if (!el) continue;
@@ -487,6 +528,7 @@ async function openForm(ent, row = null, preset = {}, onSaved) {
     + (row && can(ent, 'd') ? '<button class="btn btn-d" data-del>حذف</button>' : '');
   const m = modal({ title: (row ? 'تعديل ' : 'إضافة ') + def.one, body, foot, wide: def.fields.length > 10 });
   $('[data-cancel]', m.el).onclick = m.close;
+  bindFiles(m.el);
   const save = $('[data-save]', m.el);
   if (save) save.onclick = async () => {
     const form = $('form', m.el);

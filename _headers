@@ -27,3 +27,9 @@
   Cache-Control: public, max-age=2592000
 /designs/*
   Cache-Control: public, max-age=2592000
+
+# ملفات المنصة الداخلية مُرقّمة بـ ?v= في index.html → تُخزَّن طويلاً (index.html نفسه no-cache أعلاه)
+/marketing/hub/*.js
+  Cache-Control: public, max-age=31536000, immutable
+/marketing/hub/*.css
+  Cache-Control: public, max-age=31536000, immutable
