@@ -641,9 +641,10 @@ async function invoiceView(id) {
     const m = modal({ title: 'تسجيل دفعة', body: `<form class="fgrid"><label class="f"><span>المبلغ</span><input class="inp num" name="amount" type="number" step="any" value="${inv.total - inv.paid}"></label>
       <label class="f"><span>التاريخ</span><input class="inp" type="date" name="paid_at" value="${todayStr()}"></label><label class="f"><span>الطريقة</span>${input({ k: 'method', t: 'select', o: L.payMethod }, 'تحويل بنكي')}</label>
       <label class="f"><span>المرجع</span><input class="inp" name="ref"></label>
-      <label class="f full"><span>إثبات السداد (صورة السند أو إيصال التحويل)</span>${filesInput({ k: 'attachments' }, [], false)}<small class="muted">${['admin', 'finance'].includes(me().role) ? 'يُرحَّل مباشرة' : 'تراجعه المالية ثم يُرحَّل'}</small></label></form>`, foot: '<button class="btn btn-p">حفظ</button>' });
-    bindFiles(m.el);
-    $('.btn-p', m.el).onclick = async (e) => { const f = $('form', m.el); e.target.disabled = true; try { await api(`invoices/${id}/pay`, { method: 'POST', body: { amount: +f.amount.value, paid_at: f.paid_at.value, method: f.method.value, ref: f.ref.value, attachments: f.attachments.value } }); toast('تم تسجيل الدفعة'); m.close(); invoiceView(id); } catch (err) { toast(err.message, 1); e.target.disabled = false; } };
+      <label class="f full"><span>إثبات السداد (صورة السند أو إيصال التحويل)</span>${filesInput({ k: 'attachments' }, [], false)}<small class="muted">بعد الرفع يقرأ الذكاء الاصطناعي المبلغ والمرجع والمرسل ويملأ الحقول · ${['admin', 'finance'].includes(me().role) ? 'يُرحَّل مباشرة' : 'تراجعه المالية ثم يُرحَّل'}</small></label>
+      <label class="f full"><span>ملاحظات</span><textarea class="inp" name="notes" rows="2"></textarea></label></form>`, foot: '<button class="btn btn-p">حفظ</button>' });
+    bindFiles(m.el, (it) => fillPaymentFromReceipt(m.el, it));
+    $('.btn-p', m.el).onclick = async (e) => { const f = $('form', m.el); e.target.disabled = true; try { await api(`invoices/${id}/pay`, { method: 'POST', body: { amount: +f.amount.value, paid_at: f.paid_at.value, method: f.method.value, ref: f.ref.value, notes: f.notes.value, attachments: f.attachments.value } }); toast('تم تسجيل الدفعة'); m.close(); invoiceView(id); } catch (err) { toast(err.message, 1); e.target.disabled = false; } };
   });
 }
 

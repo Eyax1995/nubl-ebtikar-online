@@ -6,6 +6,7 @@ import {
 } from './_lib/core.js';
 import { SECRET_SETTINGS, SCHEMA_VERSION } from './_lib/schema.js';
 import { tgCall, tgToken, notifyUser, notifyRoles, waBridge, h as hx } from './_lib/telegram.js';
+import { aiVisionJSON } from './_lib/ai.js';
 import { handleUpdate, dailyDigest, newLinkCode } from './_lib/bot.js';
 import { loadTemplate, templatesFor, tplAllowed, runTemplate, taskChanged } from './_lib/engine.js';
 import { ENTITIES, HIDDEN, ROLES, ORGS } from './_lib/schema.js';
@@ -144,7 +145,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'quotes': return quoteAction(db, request, user, parts[1], parts[2], env);
       case 'contracts': return contractAction(db, request, user, parts[1], parts[2], env);
       case 'invoices': return invoiceAction(db, request, user, parts[1], parts[2], env);
-      case 'files': return filesRoute(db, request, user, parts[1]);
+      case 'files': return filesRoute(db, request, user, parts[1], env);
       case 'import': return importRoute(db, request, user, parts[1]);
       case 'export': return exportAll(db, user);
       case 'backups': return backupsRoute(db, request, user, parts[1]);
@@ -928,7 +929,39 @@ async function usersRoute(db, request, user, id, action) {
 }
 
 // ---------- الملفات (صور إثبات الزيارات وغيرها) ----------
-async function filesRoute(db, request, user, id) {
+// قراءة إيصال التحويل/السند بالذكاء الاصطناعي: POST files/<id>/extract {expect_amount?} → المبلغ والتاريخ والمرجع والمرسل والبنك والمستلم ومطابقة حسابنا (26 أكتوبر 2026)
+async function receiptExtract(db, env, user, id, request) {
+  need(user, 'payments', 'w');
+  const f = await db.prepare('SELECT name, mime, data, size FROM files WHERE id = ?').bind(id).first();
+  if (!f) return bad('المرفق غير موجود', 404);
+  if (!/^image\/(jpeg|png|webp)$|^application\/pdf$/.test(f.mime)) return bad('يُقرأ من الصور وملفات PDF فقط');
+  const d = await body(request).catch(() => ({}));
+  const s = await getSettings(db);
+  const block = f.mime === 'application/pdf' ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.data } } : { type: 'image', source: { type: 'base64', media_type: f.mime, data: f.data } };
+  const system = `أنت محاسب في «نُبل وابتكار للخدمات التسويقية» تقرأ إيصالات التحويل البنكي وسندات القبض وصور الدفع (عربية أو إنجليزية، سعودية غالباً: الراجحي، الأهلي، الإنماء، البلاد، STC Pay، مدى…).
+استخرج الحقول التالية كما هي في المستند دون تخمين، واترك ما لم يظهر null:
+{"is_receipt": true|false, "doc_type": "تحويل بنكي|سند قبض|إيصال مدى|رابط دفع|شيك|أخرى", "amount": رقم بالريال بلا فواصل, "currency": "SAR", "date": "YYYY-MM-DD", "time": "HH:MM" أو null,
+ "reference": "رقم المرجع/العملية", "sender_name": "اسم المحوِّل", "sender_bank": "بنك المحوِّل", "sender_account": "آخر 4 أرقام أو الآيبان كما ظهر",
+ "receiver_name": "اسم المستفيد", "receiver_bank": "بنك المستفيد", "receiver_iban": "آيبان المستفيد كما ظهر", "status": "ناجح|معلّق|فاشل|غير واضح",
+ "method": "تحويل بنكي|نقداً|مدى / شبكة|رابط دفع|شيك", "confidence": 0..1, "notes": "ملاحظة قصيرة إن وُجد ما يلفت (مبلغ مشطوب، صورة مقصوصة، تاريخ قديم…)"}
+حساب المؤسسة المستفيدة المتوقع: ${s.bank_line || 'غير مضبوط'}${s.morooj_bank_line ? `\nأو حساب مروج الحجاز: ${s.morooj_bank_line}` : ''}.
+أضف "receiver_match": true إذا كان المستفيد في المستند هو أحد حسابينا (بالاسم أو الآيبان)، false إذا كان حساباً آخر بوضوح، null إذا لم يظهر المستفيد.`;
+  const expect = Number(d.expect_amount) || 0;
+  const text = `اقرأ هذا المستند${f.name ? ` (${f.name})` : ''} وأعد JSON بالحقول المطلوبة.${expect ? ` المبلغ المتوقع في النظام: ${expect} ريال — إن اختلف فأعد المبلغ كما في المستند وأضف "amount_mismatch": true.` : ''}`;
+  const r = await aiVisionJSON(env, system, [block, { type: 'text', text }], { tier: 'smart', max: 1200 });
+  const x = r.data || {};
+  const num = (v) => { const n = Number(String(v ?? '').replace(/[^\d.]/g, '')); return Number.isFinite(n) && n > 0 ? round2(n) : null; };
+  const out = { is_receipt: x.is_receipt !== false, doc_type: x.doc_type || null, amount: num(x.amount), date: /^\d{4}-\d{2}-\d{2}$/.test(String(x.date || '')) ? x.date : null, time: x.time || null,
+    reference: x.reference ? String(x.reference).slice(0, 80) : null, sender_name: x.sender_name || null, sender_bank: x.sender_bank || null, sender_account: x.sender_account || null,
+    receiver_name: x.receiver_name || null, receiver_bank: x.receiver_bank || null, receiver_iban: x.receiver_iban || null, receiver_match: typeof x.receiver_match === 'boolean' ? x.receiver_match : null,
+    status: x.status || null, method: ['تحويل بنكي', 'نقداً', 'مدى / شبكة', 'رابط دفع', 'شيك'].includes(x.method) ? x.method : null, confidence: Number(x.confidence) || null, notes: x.notes || null,
+    amount_mismatch: !!(expect && num(x.amount) && Math.abs(num(x.amount) - expect) > 0.5), engine: r.engine };
+  await audit(db, user, 'extract', 'files', Number(id), `${out.doc_type || ''} ${out.amount ?? ''} ${out.reference || ''}`.trim());
+  return json(out);
+}
+
+async function filesRoute(db, request, user, id, env) {
+  if (request.method === 'POST' && id && new URL(request.url).pathname.endsWith('/extract')) return receiptExtract(db, env, user, id, request);
   if (request.method === 'POST' && !id) {
     const d = await body(request);
     if (!d.data || !/^[A-Za-z0-9+/=]+$/.test(d.data)) return bad('ملف غير صالح');

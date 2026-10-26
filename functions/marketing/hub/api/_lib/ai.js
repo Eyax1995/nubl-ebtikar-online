@@ -136,6 +136,16 @@ export async function aiJSON(env, system, user, { max = 8000, tier = 'smart' } =
   e.status = 503; throw e;
 }
 
+// قراءة صورة/PDF (إيصال تحويل، سند) بالرؤية — Claude فقط (Gemini وWorkers هنا نصّيان). blocks: مصفوفة محتوى Anthropic (image/document + text)
+export async function aiVisionJSON(env, system, blocks, { max = 1500, tier = 'smart' } = {}) {
+  const sys = `${system}\n\nأعد JSON صالحاً فقط دون أي نص قبله أو بعده ودون علامات Markdown.`;
+  const r = await claude(env, sys, blocks, max, tier);
+  if (!r.ok) { const e = new Error(r.skip ? 'الذكاء الاصطناعي غير مفعّل: أضف ANTHROPIC_API_KEY' : 'تعذّرت قراءة المرفق — ' + String(r.error).slice(0, 300)); e.status = 503; throw e; }
+  const data = extractJSON(r.text);
+  if (!data) { const e = new Error('تعذّر فهم المرفق (رد غير منظم)'); e.status = 502; throw e; }
+  return { data, engine: r.engine };
+}
+
 // السياق الثابت للكيان — يُرسل مع كل طلب
 export const BRAND = `أنت فريق «نُبل وابتكار للخدمات التسويقية» في جدة (قطاع التسويق في مجموعة نُبل وابتكار، ويتكامل مع قطاع الإنتاج للتصوير والمونتاج).
 اكتب بعربية فصحى مهنية معاصرة بمصطلحات سعودية/خليجية، واضحة ومقنعة تجارياً، بلا مبالغة ولا وعود بأرقام مضمونة، ولا تختلق أرقاماً عن العميل أو السوق.

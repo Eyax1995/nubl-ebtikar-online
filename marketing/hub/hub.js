@@ -459,7 +459,34 @@ async function uploadFile(file) {
   const r = await api('files', { method: 'POST', body: { name: f.name, mime: f.type, data } });
   return { id: r.id, name: f.name, mime: f.type };
 }
-function bindFiles(root) {
+// بعد رفع إثبات السداد: الذكاء يقرأ المبلغ والتاريخ والمرجع والمرسل والبنك والمستلم ويملأ النموذج ويعرض ملخصاً للتحقق
+async function fillPaymentFromReceipt(root, it) {
+  const form = root.querySelector('form'); if (!form) return;
+  const box = root.querySelector('.fatts'); let panel = root.querySelector('.ai-rc');
+  if (!panel) { panel = document.createElement('div'); panel.className = 'ai-rc small'; (box || form).after(panel); }
+  panel.innerHTML = `${I.ai || '✨'} يقرأ الذكاء الاصطناعي المرفق «${esc(it.name)}»…`;
+  try {
+    const expect = Number(form.elements.amount?.value) || 0;
+    const r = await api(`files/${it.id}/extract`, { method: 'POST', body: { expect_amount: expect } });
+    if (!r.is_receipt) { panel.innerHTML = `⚠️ لا يبدو المرفق إيصال سداد${r.notes ? ' — ' + esc(r.notes) : ''}`; return; }
+    const set = (k, v) => { const el = form.elements[k]; if (el && v != null && v !== '') { el.value = v; el.classList.add('ai-filled'); } };
+    if (r.amount) set('amount', r.amount);
+    if (r.date) set('paid_at', r.date);
+    if (r.method) set('method', r.method);
+    if (r.reference) set('ref', r.reference);
+    const who = [r.sender_name, r.sender_bank, r.sender_account && `حساب ${r.sender_account}`].filter(Boolean).join(' — ');
+    const line = `${r.doc_type || 'إثبات سداد'}: ${r.amount ? money(r.amount) + ' ر.س' : ''}${r.date ? ' · ' + r.date + (r.time ? ' ' + r.time : '') : ''}${r.reference ? ' · مرجع ' + r.reference : ''}${who ? ' · من ' + who : ''}${r.receiver_name || r.receiver_bank ? ' · إلى ' + [r.receiver_name, r.receiver_bank].filter(Boolean).join(' — ') : ''}${r.status ? ' · ' + r.status : ''}`;
+    const notes = form.elements.notes; if (notes && !notes.value.includes(line)) notes.value = (notes.value ? notes.value + '\n' : '') + line;
+    const warn = [];
+    if (r.amount_mismatch) warn.push(`المبلغ في المرفق ${money(r.amount)} يختلف عن المدخل ${money(expect)} — عُدّل إلى مبلغ المرفق`);
+    if (r.receiver_match === false) warn.push('المستفيد في الإيصال ليس حساب المؤسسة');
+    if (r.status && /فاشل|معلّق/.test(r.status)) warn.push(`حالة العملية في الإيصال: ${r.status}`);
+    if (r.confidence != null && r.confidence < 0.6) warn.push('قراءة غير مؤكدة — راجع الأرقام');
+    if (r.notes) warn.push(r.notes);
+    panel.innerHTML = `<b>✅ قُرئ المرفق:</b> ${esc(line)}${r.receiver_match ? ' · <span style="color:var(--ok,#1F7C79)">المستفيد حسابنا ✓</span>' : ''}${warn.length ? `<div style="color:#B4511C;margin-top:4px">⚠️ ${warn.map(esc).join('<br>⚠️ ')}</div>` : ''}`;
+  } catch (e) { panel.innerHTML = `⚠️ ${esc(e.message)}`; }
+}
+function bindFiles(root, onUpload) {
   $$('.fatts', root).forEach((box) => {
     const hid = $('input[type=hidden]', box); const list = $('.fatt-list', box); const inp = $('input[type=file]', box);
     const get = () => parseJ(hid.value, []); const set = (a) => { hid.value = JSON.stringify(a); };
@@ -468,7 +495,7 @@ function bindFiles(root) {
       const files = [...inp.files]; inp.value = '';
       if (get().length + files.length > 5) return toast('الحد 5 مرفقات', 1);
       for (const file of files) {
-        try { const it = await uploadFile(file); set([...get(), it]); list.insertAdjacentHTML('beforeend', `<a class="fatt" href="${API}files/${it.id}" target="_blank" rel="noopener" data-id="${it.id}">${it.mime === 'application/pdf' ? '<span class="fpdf">PDF</span>' : `<img src="${API}files/${it.id}" alt="">`}<small>${esc(it.name)}</small><button type="button" class="fx" title="إزالة">×</button></a>`); toast('رُفع ' + it.name); }
+        try { const it = await uploadFile(file); set([...get(), it]); list.insertAdjacentHTML('beforeend', `<a class="fatt" href="${API}files/${it.id}" target="_blank" rel="noopener" data-id="${it.id}">${it.mime === 'application/pdf' ? '<span class="fpdf">PDF</span>' : `<img src="${API}files/${it.id}" alt="">`}<small>${esc(it.name)}</small><button type="button" class="fx" title="إزالة">×</button></a>`); toast('رُفع ' + it.name); if (onUpload) await onUpload(it); }
         catch (e) { toast(e.message, 1); }
       }
     };
@@ -528,7 +555,7 @@ async function openForm(ent, row = null, preset = {}, onSaved) {
     + (row && can(ent, 'd') ? '<button class="btn btn-d" data-del>حذف</button>' : '');
   const m = modal({ title: (row ? 'تعديل ' : 'إضافة ') + def.one, body, foot, wide: def.fields.length > 10 });
   $('[data-cancel]', m.el).onclick = m.close;
-  bindFiles(m.el);
+  bindFiles(m.el, ent === 'payments' ? (it) => fillPaymentFromReceipt(m.el, it) : null);
   const save = $('[data-save]', m.el);
   if (save) save.onclick = async () => {
     const form = $('form', m.el);
