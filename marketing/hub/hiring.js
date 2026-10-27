@@ -149,7 +149,7 @@
         ${f('salary', 'الراتب الشهري الإجمالي (ر.س)', 'number', o?.salary ?? a.salary?.replace(/\D/g, '') ?? '')}${f('salary_note', 'ملاحظة الراتب', 'text', o?.salary_note ?? 'قابل للزيادة بعد اجتياز فترة التجربة')}
         ${f('start_date', 'تاريخ المباشرة', 'date', o?.start_date ?? '')}${f('probation_days', 'فترة التجربة (يوم)', 'number', o?.probation_days ?? 90)}
         ${f('hours', 'الدوام', 'text', o?.hours ?? 'دوام كامل حضوري — 8 ساعات يومياً، 5 أيام أسبوعياً')}${f('location', 'مقر العمل', 'text', o?.location ?? 'جدة — حي الحمدانية')}
-        ${f('duties', 'المهام والمسؤوليات (سطر لكل مهمة)', 'textarea', o ? J(o.duties).join('\n') : '')}${f('benefits', 'المزايا (سطر لكل ميزة)', 'textarea', o ? J(o.benefits).join('\n') : '')}
+        ${f('duties', `المهام والمسؤوليات (${o ? J(o.duties).length : 0} مهمة — سطر لكل مهمة)`, 'textarea', o ? J(o.duties).join('\n') : '')}${f('benefits', `المزايا (${o ? J(o.benefits).length : 0} — سطر لكل ميزة)`, 'textarea', o ? J(o.benefits).join('\n') : '')}
         ${f('valid_days', 'صلاحية العرض (أيام)', 'number', o?.valid_days ?? 5)}
       </form>
       ${o ? `<div class="small muted" style="margin-top:8px">${o.jd ? `📘 يتضمن الخطاب الوصف الوظيفي المعتمد كاملاً (${esc(parseJ(o.jd, {}).source || '')}): بطاقة الوظيفة، الهدف، 4 أقسام للمهام، المهارات، 7 مؤشرات أداء، الطاقة والحدود، التجربة والتقييم.` : 'بلا وصف وظيفي مضمّن.'}${me().role === 'admin' ? ' <button type="button" class="btn btn-g btn-s" data-of="jd">📘 تضمين/تحديث الوصف الوظيفي المعتمد</button>' : ''}</div>` : ''}

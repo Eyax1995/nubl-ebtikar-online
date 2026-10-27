@@ -314,7 +314,8 @@ export async function offerRoute(db, env, request, user, appId, sub, need) {
     if (o && o.status !== 'مسودة' && user.role !== 'admin') return bad('العرض خرج من المسودة — لا يُعدَّل إلا بإعادته للمسودة');
     const salary = Math.round(Number(d.salary) || 0); if (!(salary > 0)) return bad('أدخل الراتب');
     const lines = (v, def) => { const arr = Array.isArray(v) ? v : String(v || '').split('\n'); const out = arr.map((x) => s(x, 300)).filter(Boolean); return JSON.stringify(out.length ? out : def); };
-    const vals = [salary, s(d.salary_note, 160) || null, /^\d{4}-\d{2}-\d{2}$/.test(d.start_date || '') ? d.start_date : null, Math.min(180, Math.max(0, Number(d.probation_days) || 90)), s(d.hours, 120) || 'دوام كامل حضوري — 8 ساعات يومياً، 5 أيام أسبوعياً', s(d.location, 160) || 'جدة — حي الحمدانية', lines(d.duties, DEF_DUTIES), lines(d.benefits, DEF_BENEFITS), Math.min(30, Math.max(1, Number(d.valid_days) || 5))];
+    const JD_DUTIES = DESIGNER_JD.sections.flatMap((sec) => sec.items.map((x) => `${sec.h}: ${x}`)); // المهام من الوصف المعتمد (افتراضياً)
+    const vals = [salary, s(d.salary_note, 160) || null, /^\d{4}-\d{2}-\d{2}$/.test(d.start_date || '') ? d.start_date : null, Math.min(180, Math.max(0, Number(d.probation_days) || 90)), s(d.hours, 120) || 'دوام كامل حضوري — 8 ساعات يومياً، 5 أيام أسبوعياً', s(d.location, 160) || 'جدة — حي الحمدانية', lines(d.duties, JD_DUTIES), lines(d.benefits, DEF_BENEFITS), Math.min(30, Math.max(1, Number(d.valid_days) || 5))];
     if (!o) {
       const number = await nextNumber(db, 'job_offers', 'OFR', a.org || 'nubl');
       const r = await db.prepare(`INSERT INTO job_offers (number, application_id, name, job_title, salary, salary_note, start_date, probation_days, hours, location, duties, benefits, valid_days, status, approvals, org, created_by, jd)
@@ -336,7 +337,9 @@ export async function offerRoute(db, env, request, user, appId, sub, need) {
   const title = `${o.number} — ${a.name} (${Number(o.salary).toLocaleString('en-US')} ر.س)`;
   if (sub === 'jd' && method === 'POST') { // تضمين/تحديث الوصف الوظيفي المعتمد في العرض (للمدير)
     if (user.role !== 'admin') return bad('للمدير العام فقط', 403);
-    await db.prepare("UPDATE job_offers SET jd = ?, updated_at = datetime('now') WHERE id = ?").bind(JSON.stringify(DESIGNER_JD), o.id).run();
+    // تضمين الوصف + ضمّ مهامه كاملة في حقل «المهام» ليظهرا في بطاقة العرض والخطاب
+    const duties = DESIGNER_JD.sections.flatMap((sec) => sec.items.map((x) => `${sec.h}: ${x}`));
+    await db.prepare("UPDATE job_offers SET jd = ?, duties = ?, updated_at = datetime('now') WHERE id = ?").bind(JSON.stringify(DESIGNER_JD), JSON.stringify(duties), o.id).run();
     await audit(db, user, 'jd', 'job_offers', o.id, DESIGNER_JD.source);
     o = await db.prepare('SELECT * FROM job_offers WHERE id = ?').bind(o.id).first();
     return view();
