@@ -152,6 +152,7 @@
         ${f('duties', 'المهام والمسؤوليات (سطر لكل مهمة)', 'textarea', o ? J(o.duties).join('\n') : '')}${f('benefits', 'المزايا (سطر لكل ميزة)', 'textarea', o ? J(o.benefits).join('\n') : '')}
         ${f('valid_days', 'صلاحية العرض (أيام)', 'number', o?.valid_days ?? 5)}
       </form>
+      ${o ? `<div class="small muted" style="margin-top:8px">${o.jd ? `📘 يتضمن الخطاب الوصف الوظيفي المعتمد كاملاً (${esc(parseJ(o.jd, {}).source || '')}): بطاقة الوظيفة، الهدف، 4 أقسام للمهام، المهارات، 7 مؤشرات أداء، الطاقة والحدود، التجربة والتقييم.` : 'بلا وصف وظيفي مضمّن.'}${me().role === 'admin' ? ' <button type="button" class="btn btn-g btn-s" data-of="jd">📘 تضمين/تحديث الوصف الوظيفي المعتمد</button>' : ''}</div>` : ''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
         ${w && c.edit ? '<button class="btn btn-p btn-s" data-of="save">💾 حفظ المسودة</button>' : ''}
         ${w && c.submit ? '<button class="btn btn-n btn-s" data-of="submit">📝 إرسال لاعتماد مدير التسويق</button>' : ''}
@@ -175,6 +176,7 @@
       if (k === 'approve') return act('approve', {}, 'تم الاعتماد ✓', `اعتماد العرض الوظيفي لـ <b>${esc(a.name)}</b> (${esc(String(o.salary))} ر.س)؟`);
       if (k === 'reject') { const note = prompt('سبب الإعادة للمسودة (اختياري):') ?? null; if (note === null) return; return act('reject', { note }, 'أُعيد العرض للمسودة'); }
       if (k === 'send') return act('send', {}, 'أُرسل العرض للمرشح ✓', `إرسال العرض إلى <b>${esc(a.name)}</b> على واتساب برابط القبول؟`);
+      if (k === 'jd') return act('jd', {}, 'ضُمّن الوصف الوظيفي المعتمد في العرض');
       if (k === 'print') return window.nublPrintOfficial ? window.nublPrintOfficial('offer', o.id) : toast('افتح الاستوديو أولاً', 1);
       if (k === 'copy') { try { await navigator.clipboard.writeText(b.dataset.link); toast('نُسخ الرابط'); } catch { prompt('انسخ الرابط:', b.dataset.link); } }
     });

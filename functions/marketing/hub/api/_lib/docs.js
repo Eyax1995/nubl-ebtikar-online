@@ -180,6 +180,7 @@ export function contractBlocks(c, doc, ctx) {
 export function offerBlocks(o, ctx) {
   const s = ctx.settings || {}; const J = (v, d = []) => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) && a.length ? a : d; } catch { return d; } };
   const duties = J(o.duties); const benefits = J(o.benefits);
+  let jd = null; try { jd = o.jd ? JSON.parse(o.jd) : null; } catch { /* */ }
   let ap = []; try { ap = JSON.parse(o.approvals || '[]'); } catch { /* */ }
   const ceo = ap.find((a) => a.step === 'ceo'); const mgr = ap.find((a) => a.step === 'manager');
   let es = null; try { es = o.esign ? JSON.parse(o.esign) : null; } catch { /* */ }
@@ -190,10 +191,26 @@ export function offerBlocks(o, ctx) {
     { t: 'meta', label: 'رقم العرض', text: o.number || '' },
     { t: 'meta', label: 'المرشّح/ة', text: o.name || '', shade: true },
     { t: 'p', text: `الأستاذ/ة ${o.name || ''} المحترم/ة،\nتحية طيبة وبعد،` },
-    { t: 'p', text: `يسرّ ${s.company_name || 'نُبل وابتكار للخدمات التسويقية'} (${s.legal_name || 'مؤسسة نبل وابتكار للأعمال التجارية'}) أن تقدّم لك عرضاً للانضمام إلى فريقها في وظيفة **${o.job_title || ''}**، بعد ما لمسناه في مقابلتك من كفاءة وتميّز في أعمالك. ونضع بين يديك فيما يلي تفاصيل العرض:` },
-    { t: 'h1', text: 'أولاً: المهام والمسؤوليات' },
-    { t: 'bullets', items: duties },
-    { t: 'h1', text: 'ثانياً: الراتب والمزايا' },
+    { t: 'p', text: `يسرّ ${s.company_name || 'نُبل وابتكار للخدمات التسويقية'} (${s.legal_name || 'مؤسسة نبل وابتكار للأعمال التجارية'}) أن تقدّم لك عرضاً للانضمام إلى فريقها في وظيفة **${(jd && jd.title) || o.job_title || ''}**، بعد ما لمسناه في مقابلتك من كفاءة وتميّز في أعمالك. ونضع بين يديك فيما يلي تفاصيل العرض${jd ? ' مع الوصف الوظيفي المعتمد الذي يُعدّ مرجعاً لعقد العمل ومهامك ومؤشرات أدائك' : ''}:` },
+    jd && jd.intro && { t: 'callout', label: 'عن هذا الوصف', text: jd.intro },
+    ...(jd ? [
+      // الوصف الوظيفي المعتمد كاملاً (بطاقة الوظيفة، الهدف، الأقسام، المهارات، المؤشرات، الطاقة)
+      { t: 'h1', text: 'أولاً: بطاقة الوظيفة' },
+      { t: 'table', cols: [{ label: 'البند', w: 2.4 }, { label: 'البيان', w: 5.9 }], rows: [['المسمى الوظيفي', { text: jd.title || o.job_title || '', bold: true }], ['المسمى بالإنجليزية', { text: jd.title_en || '', align: 'left' }], ...(jd.card || []),
+        ['نمط العمل والدوام', `${o.hours || ''} — ${o.location || ''}`], ['المباشرة', arDate(o.start_date || '')]] },
+      jd.objective && { t: 'h2', text: 'الهدف من الوظيفة' }, jd.objective && { t: 'p', text: jd.objective },
+      { t: 'h1', text: 'ثانياً: المهام والمسؤوليات' },
+      ...(jd.sections || []).flatMap((sec, i) => [{ t: 'h2', text: `${ORD[i] || ''}: ${sec.h}` }, { t: 'bullets', items: sec.items || [] }]),
+      { t: 'h1', text: 'ثالثاً: المهارات المطلوبة' }, { t: 'bullets', items: jd.skills || [] },
+      { t: 'h1', text: 'رابعاً: مؤشرات الأداء' },
+      { t: 'table', cols: [{ label: 'المؤشر', w: 4.3 }, { label: 'الهدف', w: 2 , align: 'center' }, { label: 'القياس', w: 2, align: 'center' }], rows: (jd.kpis || []).map(([k, g, m]) => [k, { text: g, align: 'center' }, { text: m, align: 'center' }]) },
+      jd.capacity && { t: 'h1', text: 'خامساً: الطاقة والحدود' }, jd.capacity && { t: 'p', text: jd.capacity },
+      { t: 'h1', text: 'سادساً: الراتب والمزايا' },
+    ] : [
+      { t: 'h1', text: 'أولاً: المهام والمسؤوليات' },
+      { t: 'bullets', items: duties },
+      { t: 'h1', text: 'ثانياً: الراتب والمزايا' },
+    ]),
     { t: 'table', cols: [{ label: 'البند', w: 2.6 }, { label: 'التفاصيل', w: 5.7 }], rows: [
       ['الراتب الشهري الإجمالي', { text: `${arMoney(o.salary)} ريال سعودي${o.salary_note ? ` — ${o.salary_note}` : ''}`, bold: true }],
       ['تاريخ المباشرة', arDate(o.start_date || '')],
@@ -201,7 +218,8 @@ export function offerBlocks(o, ctx) {
       ['الدوام ومقر العمل', `${o.hours || 'دوام كامل حضوري'} — ${o.location || s.company_city || 'جدة — حي الحمدانية'}`],
       ...benefits.map((x, i) => [i === 0 ? 'المزايا' : '', x]),
     ] },
-    { t: 'h1', text: 'ثالثاً: أحكام عامة' },
+    jd && jd.probation && { t: 'h1', text: 'سابعاً: فترة التجربة والتقييم' }, jd && jd.probation && { t: 'p', text: jd.probation },
+    { t: 'h1', text: jd ? 'ثامناً: أحكام عامة' : 'ثالثاً: أحكام عامة' },
     { t: 'bullets', items: [
       'يخضع هذا العرض لإتمام إجراءات التعاقد وتوقيع عقد العمل وفق نظام العمل السعودي ولوائحه.',
       `هذا العرض ساري المفعول لمدة (${arDigits(o.valid_days || 5)}) أيام من تاريخه، ويُعدّ لاغياً بعدها ما لم يُمدَّد كتابياً.`,

@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 26;
+export const SCHEMA_VERSION = 27;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -259,6 +259,8 @@ export const MIGRATIONS = [
     status TEXT DEFAULT 'مسودة', approvals TEXT, sent_at TEXT, response TEXT, response_note TEXT, responded_at TEXT, esign TEXT, org TEXT DEFAULT 'nubl',
     created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
   'CREATE INDEX IF NOT EXISTS ix_offers_app ON job_offers(application_id)',
+  // v27: الوصف الوظيفي الكامل مضمّن في العرض (JSON: بطاقة الوظيفة، الأقسام، المهارات، المؤشرات، الطاقة، التجربة) — نسخة ثابتة لكل عرض
+  'ALTER TABLE job_offers ADD COLUMN jd TEXT',
   'ALTER TABLE content ADD COLUMN publish_time TEXT',
   'ALTER TABLE content ADD COLUMN hashtags TEXT',
   'ALTER TABLE content ADD COLUMN cta TEXT',
