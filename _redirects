@@ -8,3 +8,5 @@
 /book/s/:key  /marketing/book/?s=:key 302
 # دعوة المقابلة للمتقدم (hiring.js): /i/<مفتاح موقّع> ← صفحة التأكيد
 /i/:key   /marketing/careers/interview/?k=:key 302
+# العرض الوظيفي للمرشح (hiring.js): /o/<مفتاح موقّع> ← صفحة العرض
+/o/:key   /marketing/careers/offer/?k=:key 302

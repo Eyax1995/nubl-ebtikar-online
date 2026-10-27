@@ -101,6 +101,12 @@
           ${a.answer ? `<div class="list-i"><div class="g"><span class="small muted">إجابة سؤال الختام</span><div style="white-space:pre-wrap">${esc(a.answer)}</div></div></div>` : ''}
         </div>
       </div>`;
+    // بطاقة العرض الوظيفي (تظهر عند مرحلة «عرض وظيفي» أو «مقبول» أو عند وجود عرض)
+    if (['عرض وظيفي', 'مقبول'].includes(a.status) || w) {
+      const host = document.createElement('div'); host.className = 'card'; host.style.marginTop = '14px'; host.innerHTML = '<h3>📄 العرض الوظيفي</h3><div class="small muted">جارٍ التحميل…</div>';
+      $('.grid.g2 > div', V()).appendChild(host);
+      offerCard(host, a, w).catch((e) => { host.innerHTML = `<h3>📄 العرض الوظيفي</h3><div class="small muted">${esc(e.message)}</div>`; });
+    }
     const put = async (data, msg) => { try { await api('e/applications/' + a.id, { method: 'PUT', body: data }); invalidate('applications'); toast(msg); rerender(); } catch (e) { toast(e.message, 1); } };
     $$('[data-st]').forEach((b) => b.onclick = () => b.dataset.st !== a.status && put({ status: b.dataset.st }, `المرحلة: ${b.dataset.st}`));
     $$('[data-rt]').forEach((b) => b.onclick = () => put({ rating: +b.dataset.rt === a.rating ? null : +b.dataset.rt }, 'تم حفظ التقييم'));
@@ -125,6 +131,54 @@
       catch (e) { toast(e.message, 1); iv.disabled = false; }
     };
   } };
+
+  /* ---------- العرض الوظيفي: مسودة → اعتماد مدير التسويق → اعتماد الرئيس التنفيذي → إرسال → قبول ---------- */
+  Object.assign(PILL, { 'بانتظار مدير التسويق': 'o', 'بانتظار الرئيس التنفيذي': 'o', 'معتمد': 't', 'مرسل': 'b' });
+  async function offerCard(host, a, w) {
+    const d = await api(`applications/${a.id}/offer`);
+    const o = d.offer; const c = d.can; const J = (v) => parseJ(v, []);
+    const ap = o ? parseJ(o.approvals, []) : [];
+    const STEP = { submit: '📝 أُرسل للاعتماد', manager: '✅ اعتماد مدير التسويق', ceo: '🖋️ اعتماد الرئيس التنفيذي', return: '↩️ أُعيد للمسودة', send: '📨 أُرسل للمرشح' };
+    if (!o && !w) { host.innerHTML = '<h3>📄 العرض الوظيفي</h3><div class="small muted">لا عرض بعد</div>'; return; }
+    const ro = o && !c.edit;
+    const f = (k, l, type, v, extra = '') => `<label class="f${type === 'textarea' ? ' full' : ''}"><span>${l}</span>${type === 'textarea' ? `<textarea class="inp" name="${k}" rows="4" ${ro ? 'readonly' : ''}>${esc(v)}</textarea>` : `<input class="inp${type === 'number' ? ' num' : ''}" type="${type}" name="${k}" value="${esc(v)}" ${ro ? 'readonly' : ''} ${extra}>`}</label>`;
+    host.innerHTML = `<h3>📄 العرض الوظيفي ${o ? pill(o.status) : '<span class="pill x">لا عرض بعد</span>'}${o ? ` <span class="small muted num">${esc(o.number)}</span>` : ''}</h3>
+      ${ap.length ? `<div class="small" style="margin:6px 0 10px;line-height:1.9">${ap.map((x) => `${STEP[x.step] || x.step} — ${esc(x.by)} <span class="muted num">${fdate(x.at)}</span>${x.note ? ` · <i>${esc(x.note)}</i>` : ''}`).join('<br>')}</div>` : ''}
+      ${o && o.status === 'مقبول' ? `<div class="notice">🎉 قبِل/ت العرض${(() => { const e = parseJ(o.esign, null); return e ? ` — ${esc(e.name)} · ${esc(e.at)} · رمز <span class="num" dir="ltr">${esc(e.code)}</span>` : ''; })()}${o.response_note ? `<br>💬 ${esc(o.response_note)}` : ''}</div>` : o && o.status === 'مرفوض' ? `<div class="notice">✖️ اعتذر/ت عن العرض${o.response_note ? ` — ${esc(o.response_note)}` : ''}</div>` : o && o.response_note ? `<div class="notice">💬 استفسار المرشح: ${esc(o.response_note)}</div>` : ''}
+      <form class="fgrid" id="of-form">
+        ${f('salary', 'الراتب الشهري الإجمالي (ر.س)', 'number', o?.salary ?? a.salary?.replace(/\D/g, '') ?? '')}${f('salary_note', 'ملاحظة الراتب', 'text', o?.salary_note ?? 'قابل للزيادة بعد اجتياز فترة التجربة')}
+        ${f('start_date', 'تاريخ المباشرة', 'date', o?.start_date ?? '')}${f('probation_days', 'فترة التجربة (يوم)', 'number', o?.probation_days ?? 90)}
+        ${f('hours', 'الدوام', 'text', o?.hours ?? 'دوام كامل حضوري — 8 ساعات يومياً، 5 أيام أسبوعياً')}${f('location', 'مقر العمل', 'text', o?.location ?? 'جدة — حي الحمدانية')}
+        ${f('duties', 'المهام والمسؤوليات (سطر لكل مهمة)', 'textarea', o ? J(o.duties).join('\n') : '')}${f('benefits', 'المزايا (سطر لكل ميزة)', 'textarea', o ? J(o.benefits).join('\n') : '')}
+        ${f('valid_days', 'صلاحية العرض (أيام)', 'number', o?.valid_days ?? 5)}
+      </form>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+        ${w && c.edit ? '<button class="btn btn-p btn-s" data-of="save">💾 حفظ المسودة</button>' : ''}
+        ${w && c.submit ? '<button class="btn btn-n btn-s" data-of="submit">📝 إرسال لاعتماد مدير التسويق</button>' : ''}
+        ${c.approve_mgr ? '<button class="btn btn-p btn-s" data-of="approve">✅ اعتماد مدير التسويق</button>' : ''}
+        ${c.approve_ceo ? '<button class="btn btn-p btn-s" data-of="approve">🖋️ اعتماد الرئيس التنفيذي</button>' : ''}
+        ${c.send ? `<button class="btn btn-wa btn-s" data-of="send">📨 ${o.status === 'مرسل' ? 'إعادة إرسال للمرشح' : 'إرسال للمرشح عبر واتساب'}</button>` : ''}
+        ${c.reject ? '<button class="btn btn-g btn-s" data-of="reject">↩️ إعادة للمسودة</button>' : ''}
+        ${o ? `<button class="btn btn-g btn-s" data-of="print">🖨️ طباعة / PDF</button><a class="btn btn-g btn-s" href="${API}studio/doc/offer/${o.id}">Word</a>` : ''}
+        ${o?.link ? `<button class="btn btn-g btn-s" data-of="copy" data-link="${esc(o.link)}">🔗 نسخ رابط العرض</button>` : ''}
+      </div>`;
+    const form = $('#of-form', host);
+    const vals = () => Object.fromEntries([...form.elements].filter((e) => e.name).map((e) => [e.name, e.value]));
+    const act = async (sub, body, msg, confirmMsg) => {
+      if (confirmMsg && !(await confirmBox(confirmMsg))) return;
+      try { await api(`applications/${a.id}/offer${sub ? '/' + sub : ''}`, { method: 'POST', body }); toast(msg); invalidate('applications'); offerCard(host, a, w); } catch (e) { toast(e.message, 1); }
+    };
+    $$('[data-of]', host).forEach((b) => b.onclick = async () => {
+      const k = b.dataset.of;
+      if (k === 'save') return act('', vals(), 'حُفظت مسودة العرض');
+      if (k === 'submit') { if (c.edit && o) await api(`applications/${a.id}/offer`, { method: 'POST', body: vals() }).catch(() => {}); return act('submit', {}, 'أُرسل العرض لاعتماد مدير التسويق', `إرسال عرض <b>${esc(a.name)}</b> لاعتماد مدير التسويق؟`); }
+      if (k === 'approve') return act('approve', {}, 'تم الاعتماد ✓', `اعتماد العرض الوظيفي لـ <b>${esc(a.name)}</b> (${esc(String(o.salary))} ر.س)؟`);
+      if (k === 'reject') { const note = prompt('سبب الإعادة للمسودة (اختياري):') ?? null; if (note === null) return; return act('reject', { note }, 'أُعيد العرض للمسودة'); }
+      if (k === 'send') return act('send', {}, 'أُرسل العرض للمرشح ✓', `إرسال العرض إلى <b>${esc(a.name)}</b> على واتساب برابط القبول؟`);
+      if (k === 'print') return window.nublPrintOfficial ? window.nublPrintOfficial('offer', o.id) : toast('افتح الاستوديو أولاً', 1);
+      if (k === 'copy') { try { await navigator.clipboard.writeText(b.dataset.link); toast('نُسخ الرابط'); } catch { prompt('انسخ الرابط:', b.dataset.link); } }
+    });
+  }
 
   // إن سبق الإقلاعُ تحميلَ هذه الوحدة: أعد بناء القائمة والصفحة
   if (S.meta && $('.side')) { renderShell(); rerender(); }

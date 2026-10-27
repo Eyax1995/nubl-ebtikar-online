@@ -176,6 +176,47 @@ export function contractBlocks(c, doc, ctx) {
   return b;
 }
 
+// ---------- العرض الوظيفي (خطاب رسمي للمرشح) ----------
+export function offerBlocks(o, ctx) {
+  const s = ctx.settings || {}; const J = (v, d = []) => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) && a.length ? a : d; } catch { return d; } };
+  const duties = J(o.duties); const benefits = J(o.benefits);
+  let ap = []; try { ap = JSON.parse(o.approvals || '[]'); } catch { /* */ }
+  const ceo = ap.find((a) => a.step === 'ceo'); const mgr = ap.find((a) => a.step === 'manager');
+  let es = null; try { es = o.esign ? JSON.parse(o.esign) : null; } catch { /* */ }
+  const b = [
+    { t: 'date', text: `${(s.company_city || 'جدة').split('—')[0].trim()}، في ${arDate(o.sent_at ? o.sent_at.slice(0, 10) : ctx.today)}` },
+    { t: 'title', text: 'عرض وظيفي' },
+    { t: 'subtitle', text: o.job_title || '' },
+    { t: 'meta', label: 'رقم العرض', text: o.number || '' },
+    { t: 'meta', label: 'المرشّح/ة', text: o.name || '', shade: true },
+    { t: 'p', text: `الأستاذ/ة ${o.name || ''} المحترم/ة،\nتحية طيبة وبعد،` },
+    { t: 'p', text: `يسرّ ${s.company_name || 'نُبل وابتكار للخدمات التسويقية'} (${s.legal_name || 'مؤسسة نبل وابتكار للأعمال التجارية'}) أن تقدّم لك عرضاً للانضمام إلى فريقها في وظيفة **${o.job_title || ''}**، بعد ما لمسناه في مقابلتك من كفاءة وتميّز في أعمالك. ونضع بين يديك فيما يلي تفاصيل العرض:` },
+    { t: 'h1', text: 'أولاً: المهام والمسؤوليات' },
+    { t: 'bullets', items: duties },
+    { t: 'h1', text: 'ثانياً: الراتب والمزايا' },
+    { t: 'table', cols: [{ label: 'البند', w: 2.6 }, { label: 'التفاصيل', w: 5.7 }], rows: [
+      ['الراتب الشهري الإجمالي', { text: `${arMoney(o.salary)} ريال سعودي${o.salary_note ? ` — ${o.salary_note}` : ''}`, bold: true }],
+      ['تاريخ المباشرة', arDate(o.start_date || '')],
+      ['فترة التجربة', `${arDigits(o.probation_days || 90)} يوماً من تاريخ المباشرة، وفق نظام العمل السعودي`],
+      ['الدوام ومقر العمل', `${o.hours || 'دوام كامل حضوري'} — ${o.location || s.company_city || 'جدة — حي الحمدانية'}`],
+      ...benefits.map((x, i) => [i === 0 ? 'المزايا' : '', x]),
+    ] },
+    { t: 'h1', text: 'ثالثاً: أحكام عامة' },
+    { t: 'bullets', items: [
+      'يخضع هذا العرض لإتمام إجراءات التعاقد وتوقيع عقد العمل وفق نظام العمل السعودي ولوائحه.',
+      `هذا العرض ساري المفعول لمدة (${arDigits(o.valid_days || 5)}) أيام من تاريخه، ويُعدّ لاغياً بعدها ما لم يُمدَّد كتابياً.`,
+      'للقبول: اضغط «أقبل العرض» في رابط العرض، أو وقّع هذه الصفحة وأعدها إلينا.',
+    ] },
+    { t: 'p', text: 'نتطلع إلى انضمامك إلى فريقنا، ونتمنى لك التوفيق.' },
+    { t: 'closing' }, { t: 'sign', name: ctx.signName, title: ctx.signTitle, org: ctx.signOrg },
+    ceo && { t: 'small', jc: 'center', text: `اعتُمد من الرئيس التنفيذي: **${ceo.by}** — ${arDate(String(ceo.at).slice(0, 10))}${mgr ? ` · واعتمده مدير التسويق: ${mgr.by} — ${arDate(String(mgr.at).slice(0, 10))}` : ''}` },
+    { t: 'spacer', after: 160 },
+    { t: 'signatures', left: 'صاحب العمل', right: 'المرشّح/ة (إقرار بالقبول)', leftName: `${ctx.signName || 'إياد المغيرة'} — ${ctx.signTitle || 'مدير قطاع التسويق'}`, rightName: o.name || '' },
+    es && { t: 'esign', name: es.name, title: es.title || 'قبول العرض', at: es.at, code: es.code, img: es.sig },
+  ];
+  return b;
+}
+
 // ---------- الخطة التسويقية ----------
 export function planBlocks(p, doc, ctx) {
   const s = ctx.settings || {}; const n = { i: 0 }; const H = (text) => ({ t: 'h1', text: `${ORD[n.i++]}: ${text}` });

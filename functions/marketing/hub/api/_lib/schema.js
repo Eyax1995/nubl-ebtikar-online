@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 25;
+export const SCHEMA_VERSION = 26;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -253,6 +253,12 @@ export const MIGRATIONS = [
   'ALTER TABLE payments ADD COLUMN attachments TEXT',
   'ALTER TABLE payments ADD COLUMN reviewed_by INTEGER',
   'ALTER TABLE payments ADD COLUMN reviewed_at TEXT',
+  // v26: العروض الوظيفية — مسودة → اعتماد مدير التسويق → اعتماد الرئيس التنفيذي → إرسال للمرشح → قبول/رفض (hiring.js)
+  `CREATE TABLE IF NOT EXISTS job_offers (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT, application_id INTEGER NOT NULL, name TEXT, job_title TEXT,
+    salary REAL DEFAULT 0, salary_note TEXT, start_date TEXT, probation_days INTEGER DEFAULT 90, hours TEXT, location TEXT, duties TEXT, benefits TEXT, valid_days INTEGER DEFAULT 5,
+    status TEXT DEFAULT 'مسودة', approvals TEXT, sent_at TEXT, response TEXT, response_note TEXT, responded_at TEXT, esign TEXT, org TEXT DEFAULT 'nubl',
+    created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  'CREATE INDEX IF NOT EXISTS ix_offers_app ON job_offers(application_id)',
   'ALTER TABLE content ADD COLUMN publish_time TEXT',
   'ALTER TABLE content ADD COLUMN hashtags TEXT',
   'ALTER TABLE content ADD COLUMN cta TEXT',

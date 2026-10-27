@@ -7,6 +7,10 @@ import { notifyRoles, h as hx } from './telegram.js';
 import { secret, templateReady } from './track.js';
 import { sendText } from '../../../../wa/_lib/engine.js';
 import { upsertEvent, googleReady } from './google.js';
+import { renderHtml } from './docx.js';
+import { offerBlocks } from './docs.js';
+import { notifyUser } from './telegram.js';
+import { today as todayStr } from './core.js';
 
 export const EXPERIENCE = ['أقل من سنة', 'من سنة إلى سنتين', 'من 3 إلى 5 سنوات', 'أكثر من 5 سنوات'];
 export const START_WHEN = ['خلال أسبوع', 'خلال أسبوعين', 'خلال شهر', 'أكثر من شهر'];
@@ -264,6 +268,130 @@ export async function hiringTick(db, env) {
     r.ok ? sent++ : failed++;
   }
   return { sent, failed };
+}
+
+// ---------- العرض الوظيفي: مسودة → اعتماد مدير التسويق (admin/manager) → اعتماد الرئيس التنفيذي (executive/admin) → إرسال للمرشح برابط موقّع → قبول/رفض ----------
+// الفريق: GET/POST applications/<id>/offer · POST .../offer/submit|approve|reject|send · المرشح: GET/POST public/offer/O<id>.<sig>
+const OFFER_FLOW = ['مسودة', 'بانتظار مدير التسويق', 'بانتظار الرئيس التنفيذي', 'معتمد', 'مرسل', 'مقبول', 'مرفوض'];
+const ksaStamp = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 16).replace('T', ' ') + ' بتوقيت السعودية';
+const DEF_DUTIES = ['تصميم منشورات وسائل التواصل الاجتماعي وفق هوية كل عميل وخطته الشهرية.', 'مونتاج مقاطع الفيديو والريلز للعملاء والقطاع.', 'كتابة المحتوى العربي للمنشورات والإعلانات ومراجعته لغوياً.', 'تصميم المطبوعات (بروشورات، أغلفة، لوحات، هدايا) بالتنسيق مع قطاع الإنتاج.', 'إعداد الموشن جرافيك والهويات البصرية عند الحاجة.', 'الالتزام بالجدول الزمني واعتمادات العملاء ورفع الأعمال على منصة القطاع.'];
+const DEF_BENEFITS = ['التأمينات الاجتماعية والتأمين الطبي وفق النظام بعد التثبيت.', 'إجازة سنوية وإجازات رسمية وفق نظام العمل السعودي.', 'بيئة عمل في فريق تسويق متكامل مع فرص تدريب وتطوير.'];
+const olink = async (db, id) => `${SITE}/o/O${id}.${await isign(db, 'O' + id)}`;
+const parseAp = (o) => { try { return JSON.parse(o.approvals || '[]'); } catch { return []; } };
+async function offerOf(db, appId) { return db.prepare('SELECT * FROM job_offers WHERE application_id = ? ORDER BY id DESC LIMIT 1').bind(appId).first(); }
+export async function offerRoute(db, env, request, user, appId, sub, need) {
+  const method = request.method.toUpperCase();
+  need(user, 'applications', method === 'GET' ? 'r' : 'w');
+  const a = await db.prepare('SELECT * FROM applications WHERE id = ?').bind(appId).first();
+  if (!a) return bad('الطلب غير موجود', 404);
+  let o = await offerOf(db, appId);
+  const isMgr = ['admin', 'manager'].includes(user.role); const isCeo = ['admin', 'executive'].includes(user.role);
+  const view = async () => json({ offer: o ? { ...o, link: o.status === 'مرسل' || o.status === 'مقبول' || o.status === 'مرفوض' ? await olink(db, o.id) : null } : null,
+    can: { edit: !o || o.status === 'مسودة', submit: !!o && o.status === 'مسودة', approve_mgr: !!o && o.status === 'بانتظار مدير التسويق' && isMgr, approve_ceo: !!o && o.status === 'بانتظار الرئيس التنفيذي' && isCeo, send: !!o && ['معتمد', 'مرسل'].includes(o.status), reject: !!o && ['بانتظار مدير التسويق', 'بانتظار الرئيس التنفيذي', 'معتمد'].includes(o.status) && (isMgr || isCeo) }, flow: OFFER_FLOW });
+  if (method === 'GET' && !sub) return view();
+  let d = {}; try { d = await request.json(); } catch { /* */ }
+  if (method === 'POST' && !sub) { // حفظ المسودة (إنشاء أو تعديل)
+    if (o && o.status !== 'مسودة' && user.role !== 'admin') return bad('العرض خرج من المسودة — لا يُعدَّل إلا بإعادته للمسودة');
+    const salary = Math.round(Number(d.salary) || 0); if (!(salary > 0)) return bad('أدخل الراتب');
+    const lines = (v, def) => { const arr = Array.isArray(v) ? v : String(v || '').split('\n'); const out = arr.map((x) => s(x, 300)).filter(Boolean); return JSON.stringify(out.length ? out : def); };
+    const vals = [salary, s(d.salary_note, 160) || null, /^\d{4}-\d{2}-\d{2}$/.test(d.start_date || '') ? d.start_date : null, Math.min(180, Math.max(0, Number(d.probation_days) || 90)), s(d.hours, 120) || 'دوام كامل حضوري — 8 ساعات يومياً، 5 أيام أسبوعياً', s(d.location, 160) || 'جدة — حي الحمدانية', lines(d.duties, DEF_DUTIES), lines(d.benefits, DEF_BENEFITS), Math.min(30, Math.max(1, Number(d.valid_days) || 5))];
+    if (!o) {
+      const number = await nextNumber(db, 'job_offers', 'OFR', a.org || 'nubl');
+      const r = await db.prepare(`INSERT INTO job_offers (number, application_id, name, job_title, salary, salary_note, start_date, probation_days, hours, location, duties, benefits, valid_days, status, approvals, org, created_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'مسودة','[]',?,?)`).bind(number, a.id, a.name, a.job_title, ...vals, a.org || 'nubl', user.id).run();
+      o = await db.prepare('SELECT * FROM job_offers WHERE id = ?').bind(r.meta.last_row_id).first();
+      await audit(db, user, 'create', 'job_offers', o.id, `${number} ${a.name} ${salary}`);
+    } else {
+      await db.prepare(`UPDATE job_offers SET salary=?, salary_note=?, start_date=?, probation_days=?, hours=?, location=?, duties=?, benefits=?, valid_days=?, status='مسودة', updated_at=datetime('now') WHERE id=?`).bind(...vals, o.id).run();
+      o = await db.prepare('SELECT * FROM job_offers WHERE id = ?').bind(o.id).first();
+      await audit(db, user, 'update', 'job_offers', o.id, `${salary}`);
+    }
+    if (a.status !== 'عرض وظيفي' && a.status !== 'مقبول') await db.prepare("UPDATE applications SET status = 'عرض وظيفي', updated_at = datetime('now') WHERE id = ?").bind(a.id).run();
+    return view();
+  }
+  if (!o) return bad('أنشئ العرض أولاً');
+  const ap = parseAp(o); const push = (step, note) => { ap.push({ step, by: user.name, user_id: user.id, at: new Date().toISOString(), note: note || null }); return JSON.stringify(ap); };
+  const setStatus = (st, step, note) => db.prepare("UPDATE job_offers SET status = ?, approvals = ?, updated_at = datetime('now') WHERE id = ?").bind(st, push(step, note), o.id).run();
+  const link = `#/application/${a.id}`;
+  const title = `${o.number} — ${a.name} (${Number(o.salary).toLocaleString('en-US')} ر.س)`;
+  if (sub === 'submit' && method === 'POST') {
+    if (o.status !== 'مسودة') return bad('العرض ليس مسودة');
+    await setStatus('بانتظار مدير التسويق', 'submit', s(d.note, 300));
+    await notifyRoles(db, env, ['admin', 'manager'], `📝 عرض وظيفي بانتظار اعتماد مدير التسويق\n<b>${hx(title)}</b>\nمباشرة ${hx(o.start_date || '—')} · تجربة ${o.probation_days} يوماً\nأعدّه ${hx(user.name)} ➡️ راجعه واعتمده من ملف المتقدم`, { kind: 'hr', title: `📝 اعتماد عرض وظيفي — ${a.name}`, link }, user.id);
+    await audit(db, user, 'submit', 'job_offers', o.id, '');
+  } else if (sub === 'approve' && method === 'POST') {
+    if (o.status === 'بانتظار مدير التسويق') {
+      if (!isMgr) return bad('اعتماد هذه المرحلة لمدير التسويق', 403);
+      await setStatus('بانتظار الرئيس التنفيذي', 'manager', s(d.note, 300));
+      const execs = (await db.prepare("SELECT id FROM users WHERE role = 'executive' AND active = 1").all()).results || [];
+      for (const u of execs) await notifyUser(db, env, u.id, `✅ اعتمد مدير التسويق العرض الوظيفي <b>${hx(title)}</b> — بانتظار اعتمادك كرئيس تنفيذي\nمباشرة ${hx(o.start_date || '—')} · تجربة ${o.probation_days} يوماً · ${hx(o.job_title || '')}\n➡️ افتح ملف المتقدم واضغط «اعتماد الرئيس التنفيذي»`, null, { kind: 'hr', title: `🖋️ اعتماد الرئيس التنفيذي — ${a.name}`, link, urgent: true });
+      if (!execs.length) await notifyRoles(db, env, ['admin'], `⚠️ لا يوجد مستخدم بدور «الرئيس التنفيذي» لاعتماد العرض ${hx(o.number)} — يعتمده المدير العام`, { kind: 'hr', link }, user.id);
+    } else if (o.status === 'بانتظار الرئيس التنفيذي') {
+      if (!isCeo) return bad('اعتماد هذه المرحلة للرئيس التنفيذي', 403);
+      await setStatus('معتمد', 'ceo', s(d.note, 300));
+      await notifyRoles(db, env, ['admin', 'manager'], `🖋️ اعتمد الرئيس التنفيذي ${hx(user.name)} العرض الوظيفي <b>${hx(title)}</b>\n➡️ أرسله للمرشحة من ملف المتقدم`, { kind: 'hr', title: `✅ العرض معتمد — ${a.name}`, link }, user.id);
+    } else return bad(`العرض «${o.status}» — لا اعتماد مطلوب الآن`);
+    await audit(db, user, 'approve', 'job_offers', o.id, o.status);
+  } else if (sub === 'reject' && method === 'POST') {
+    if (!(isMgr || isCeo)) return bad('غير مصرّح', 403);
+    await setStatus('مسودة', 'return', s(d.note, 300) || 'أُعيد للمسودة');
+    if (o.created_by) await notifyUser(db, env, o.created_by, `↩️ أُعيد العرض الوظيفي <b>${hx(title)}</b> إلى المسودة بواسطة ${hx(user.name)}${d.note ? `\n💬 ${hx(s(d.note, 300))}` : ''}`, null, { kind: 'hr', link });
+    await audit(db, user, 'return', 'job_offers', o.id, s(d.note, 200));
+  } else if (sub === 'send' && method === 'POST') {
+    if (!['معتمد', 'مرسل'].includes(o.status)) return bad('يُرسل العرض بعد اعتماده');
+    const L = await olink(db, o.id);
+    const text = `يسعدنا إبلاغك بقبولك للعمل معنا في وظيفة «${o.job_title || ''}» بعد المقابلة. تجد تفاصيل العرض الوظيفي (المهام، الراتب ${Number(o.salary).toLocaleString('en-US')} ر.س، المباشرة ${o.start_date ? whenAr(o.start_date + ' 00:00').replace(/ الساعة.*$/, '') : ''}، فترة التجربة) في الرابط، ويمكنك قبوله أو إرسال استفسارك منه. العرض ساري ${o.valid_days || 5} أيام.${d.note ? ' ' + s(d.note, 300) : ''}`;
+    const w = await sendWa(db, env, a, text, L, 'عرض وظيفي');
+    if (!w.ok) return bad('تعذّر الإرسال: ' + w.error, 409);
+    await db.prepare("UPDATE job_offers SET status = 'مرسل', sent_at = COALESCE(sent_at, datetime('now')), approvals = ?, updated_at = datetime('now') WHERE id = ?").bind(push('send'), o.id).run();
+    await audit(db, user, 'send', 'job_offers', o.id, w.via);
+  } else return bad('مسار غير معروف', 404);
+  o = await db.prepare('SELECT * FROM job_offers WHERE id = ?').bind(o.id).first();
+  return view();
+}
+export async function publicOffer(db, env, request, key) {
+  const m = /^O(\d{1,9})\.([a-f0-9]{16})$/.exec(String(key || '')); if (!m || (await isign(db, 'O' + m[1])) !== m[2]) return bad('رابط العرض غير صالح — تواصل معنا على واتساب', 404);
+  const o = await db.prepare('SELECT * FROM job_offers WHERE id = ?').bind(+m[1]).first();
+  if (!o || !['مرسل', 'مقبول', 'مرفوض'].includes(o.status)) return bad('العرض غير متاح حالياً', 404);
+  const st = await getSettings(db);
+  const ctx = { settings: st, today: todayStr(), signName: st.sign_name || 'إياد المغيرة', signTitle: st.sign_title || 'مدير قطاع التسويق' };
+  const method = request.method.toUpperCase();
+  const expired = o.sent_at && Date.now() - Date.parse(String(o.sent_at).replace(' ', 'T') + 'Z') > (o.valid_days || 5) * 864e5;
+  const view = () => ({ number: o.number, name: o.name, job: o.job_title, status: o.status, note: o.response_note || '', html: renderHtml(offerBlocks(o, ctx)), can_act: o.status === 'مرسل' && !expired, expired: !!expired && o.status === 'مرسل', wa: '966563413040' });
+  if (method === 'GET') return json(view(), 200, { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' });
+  if (method !== 'POST') return bad('مسار غير معروف', 404);
+  let d = {}; try { d = await request.json(); } catch { /* */ }
+  const note = s(d.note, 800); const a = await db.prepare('SELECT id, name, phone, status FROM applications WHERE id = ?').bind(o.application_id).first();
+  const viewer = { id: null, name: `رابط العرض — ${o.name}`, role: 'applicant' };
+  if (d.action === 'note') {
+    if (!note) return bad('اكتب استفسارك أولاً');
+    await db.prepare("UPDATE job_offers SET response_note = ?, updated_at = datetime('now') WHERE id = ?").bind(note, o.id).run();
+    await notifyRoles(db, env, ['admin', 'manager'], `💬 استفسار من <b>${hx(o.name)}</b> على العرض الوظيفي ${hx(o.number)}:\n${hx(note)}`, { kind: 'hr', title: `💬 استفسار على العرض — ${o.name}`, link: `#/application/${o.application_id}` });
+    o.response_note = note; return json({ ok: true, ...view() });
+  }
+  if (o.status !== 'مرسل') return bad('سبق الرد على هذا العرض');
+  if (expired) return bad('انتهت مدة العرض — تواصل معنا على واتساب لتجديده');
+  if (d.action === 'accept') {
+    const name = s(d.name, 80); if (name.length < 3) return bad('اكتب اسمك الكامل');
+    if (!d.agree) return bad('يلزم الإقرار بالاطلاع على العرض والموافقة عليه');
+    const at = ksaStamp();
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`offer|${o.id}|${o.number}|${name}|${at}`));
+    const code = [...new Uint8Array(buf)].slice(0, 6).map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    const sig = /^data:image\/png;base64,[A-Za-z0-9+/=]{200,}$/.test(String(d.sig || '')) && String(d.sig).length <= 150000 ? d.sig : null;
+    await db.prepare("UPDATE job_offers SET status = 'مقبول', response = 'مقبول', response_note = ?, responded_at = datetime('now'), esign = ?, updated_at = datetime('now') WHERE id = ? AND status = 'مرسل'")
+      .bind(note || null, JSON.stringify({ name, title: 'قبول العرض', at, code, sig, ip: request.headers.get('cf-connecting-ip') || '', phone: a?.phone || '' }), o.id).run();
+    await db.prepare("UPDATE applications SET status = 'مقبول', updated_at = datetime('now') WHERE id = ?").bind(o.application_id).run();
+    await audit(db, viewer, 'accept', 'job_offers', o.id, `${name} · ${code}`);
+    await notifyRoles(db, env, ['admin', 'manager', 'executive', 'finance'], `🎉 قبِل <b>${hx(o.name)}</b> العرض الوظيفي ${hx(o.number)} (${Number(o.salary).toLocaleString('en-US')} ر.س، مباشرة ${hx(o.start_date || '—')})\nالموقّع: ${hx(name)} · رمز التحقق <code>${code}</code>${note ? `\n💬 ${hx(note)}` : ''}\n➡️ جهّز عقد العمل وملف الموظف`, { kind: 'hr', title: `🎉 قبول العرض — ${o.name}`, link: `#/application/${o.application_id}`, urgent: true });
+    o.status = 'مقبول'; o.esign = JSON.stringify({ name, at, code, sig }); return json({ ok: true, code, ...view() });
+  }
+  if (d.action === 'decline') {
+    await db.prepare("UPDATE job_offers SET status = 'مرفوض', response = 'مرفوض', response_note = ?, responded_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'مرسل'").bind(note || null, o.id).run();
+    await audit(db, viewer, 'decline', 'job_offers', o.id, note);
+    await notifyRoles(db, env, ['admin', 'manager', 'executive'], `✖️ اعتذر <b>${hx(o.name)}</b> عن قبول العرض الوظيفي ${hx(o.number)}${note ? `\n💬 ${hx(note)}` : ''}`, { kind: 'hr', title: `✖️ رفض العرض — ${o.name}`, link: `#/application/${o.application_id}` });
+    o.status = 'مرفوض'; return json({ ok: true, ...view() });
+  }
+  return bad('إجراء غير معروف');
 }
 
 // رسالة اعتذار لطيفة للمستبعد: نحتفظ ببياناته لأي احتياج أو توظيف مستقبلي — POST applications/<id>/regret
