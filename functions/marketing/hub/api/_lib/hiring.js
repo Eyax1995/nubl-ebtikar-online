@@ -323,7 +323,10 @@ export async function offerRoute(db, env, request, user, appId, sub, need) {
       o = await db.prepare('SELECT * FROM job_offers WHERE id = ?').bind(r.meta.last_row_id).first();
       await audit(db, user, 'create', 'job_offers', o.id, `${number} ${a.name} ${salary}`);
     } else {
-      await db.prepare(`UPDATE job_offers SET salary=?, salary_note=?, start_date=?, probation_days=?, hours=?, location=?, duties=?, benefits=?, valid_days=?, status='مسودة', updated_at=datetime('now') WHERE id=?`).bind(...vals, o.id).run();
+      // المدير العام يعدّل عرضاً معتمداً/مرسلاً دون إرجاعه للمسودة (يُعاد إرساله فقط)؛ غيره يعيده للمسودة
+      const keep = user.role === 'admin' && ['معتمد', 'مرسل'].includes(o.status);
+      await db.prepare(`UPDATE job_offers SET salary=?, salary_note=?, start_date=?, probation_days=?, hours=?, location=?, duties=?, benefits=?, valid_days=?, status=?, approvals=?, updated_at=datetime('now') WHERE id=?`)
+        .bind(...vals, keep ? o.status : 'مسودة', keep ? JSON.stringify([...parseAp(o), { step: 'edit', by: user.name, user_id: user.id, at: new Date().toISOString(), note: 'تعديل بعد الاعتماد' }]) : o.approvals, o.id).run();
       o = await db.prepare('SELECT * FROM job_offers WHERE id = ?').bind(o.id).first();
       await audit(db, user, 'update', 'job_offers', o.id, `${salary}`);
     }
