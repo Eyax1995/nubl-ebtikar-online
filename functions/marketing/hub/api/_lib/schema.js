@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 27;
+export const SCHEMA_VERSION = 28;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -261,6 +261,10 @@ export const MIGRATIONS = [
   'CREATE INDEX IF NOT EXISTS ix_offers_app ON job_offers(application_id)',
   // v27: الوصف الوظيفي الكامل مضمّن في العرض (JSON: بطاقة الوظيفة، الأقسام، المهارات، المؤشرات، الطاقة، التجربة) — نسخة ثابتة لكل عرض
   'ALTER TABLE job_offers ADD COLUMN jd TEXT',
+  // v28: التعاميد — خطابات اعتماد الرئيس التنفيذي (tamim.js)
+  `CREATE TABLE IF NOT EXISTS tamims (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT, title TEXT NOT NULL, subject TEXT, blocks TEXT, items TEXT, decisions TEXT,
+    attachments TEXT, signed_files TEXT, status TEXT DEFAULT 'بانتظار الاعتماد', notes TEXT, to_user_id INTEGER, cfo_user_id INTEGER, decided_by INTEGER, decided_at TEXT,
+    cfo_seen_at TEXT, org TEXT DEFAULT 'nubl', created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
   'ALTER TABLE content ADD COLUMN publish_time TEXT',
   'ALTER TABLE content ADD COLUMN hashtags TEXT',
   'ALTER TABLE content ADD COLUMN cta TEXT',

@@ -8,6 +8,7 @@ import { notifyRoles, notifyUser, h as hx } from './telegram.js';
 import { aiJSON, aiReady, aiPing, BRAND } from './ai.js';
 import { buildDocx, renderHtml } from './docx.js';
 import { quoteBlocks, contractBlocks, planBlocks, offerBlocks, quoteTotals } from './docs.js';
+import { tamimBlocks } from './tamim.js';
 
 const APPROVERS = ['admin', 'manager', 'finance'];
 const PLATFORMS = ['إنستقرام', 'تيك توك', 'سناب شات', 'X', 'لينكدإن', 'فيسبوك', 'يوتيوب', 'قوقل بزنس', 'واتساب'];
@@ -468,6 +469,11 @@ async function docFile(db, user, kind, id, h, format) {
     h.need(user, 'contracts', 'r');
     const c = await h.inScope(db, user, 'contracts', id); forOrg(c.org);
     blocks = await contractBlocksFor(db, c, ctx); name = `عقد ${c.number} — ${ctx.client.name || ''}`;
+  } else if (kind === 'tamim') {
+    if (!['admin', 'manager', 'executive', 'finance'].includes(user.role)) return bad('لا تملك صلاحية التعاميد', 403);
+    const t = await db.prepare('SELECT * FROM tamims WHERE id = ?').bind(id).first(); if (!t) return bad('غير موجود', 404);
+    const um = Object.fromEntries(((await db.prepare('SELECT id, name FROM users').all()).results || []).map((u) => [u.id, u.name]));
+    blocks = tamimBlocks(t, um); name = `${t.title} — ${t.number}`;
   } else if (kind === 'offer') {
     h.need(user, 'applications', 'r');
     const o = await db.prepare('SELECT * FROM job_offers WHERE id = ?').bind(id).first(); if (!o) return bad('غير موجود', 404); forOrg(o.org);

@@ -7,6 +7,7 @@ import {
 import { SECRET_SETTINGS, SCHEMA_VERSION } from './_lib/schema.js';
 import { tgCall, tgToken, notifyUser, notifyRoles, waBridge, h as hx } from './_lib/telegram.js';
 import { aiVisionJSON } from './_lib/ai.js';
+import { tamimRoute } from './_lib/tamim.js';
 import { handleUpdate, dailyDigest, newLinkCode } from './_lib/bot.js';
 import { loadTemplate, templatesFor, tplAllowed, runTemplate, taskChanged } from './_lib/engine.js';
 import { ENTITIES, HIDDEN, ROLES, ORGS } from './_lib/schema.js';
@@ -147,6 +148,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'contracts': return contractAction(db, request, user, parts[1], parts[2], env);
       case 'invoices': return invoiceAction(db, request, user, parts[1], parts[2], env);
       case 'files': return filesRoute(db, request, user, parts[1], env);
+      case 'tamim': return tamimRoute(db, env, request, user, parts[1], parts[2]);
       case 'import': return importRoute(db, request, user, parts[1]);
       case 'export': return exportAll(db, user);
       case 'backups': return backupsRoute(db, request, user, parts[1]);
@@ -969,7 +971,8 @@ async function filesRoute(db, request, user, id, env) {
     if (!d.data || !/^[A-Za-z0-9+/=]+$/.test(d.data)) return bad('ملف غير صالح');
     const size = Math.floor(d.data.length * 3 / 4);
     if (size > 1_400_000) return bad('حجم الملف أكبر من المسموح (1.4MB) — صغّر الصورة');
-    const mime = /^image\/(jpeg|png|webp)$|^application\/pdf$/.test(d.mime) ? d.mime : 'application/octet-stream';
+    // صور وPDF وملفات Office (مرفقات التعاميد: الخطط والخطابات بصيغة Word)
+    const mime = /^image\/(jpeg|png|webp)$|^application\/pdf$|^application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)$/.test(d.mime) ? d.mime : 'application/octet-stream';
     const r = await db.prepare('INSERT INTO files (name, mime, size, data, user_id) VALUES (?,?,?,?,?)').bind(d.name || 'file', mime, size, d.data, user.id).run();
     return json({ id: r.meta.last_row_id }, 201);
   }
@@ -977,7 +980,11 @@ async function filesRoute(db, request, user, id, env) {
     const f = await db.prepare('SELECT name, mime, data FROM files WHERE id = ?').bind(id).first();
     if (!f) return bad('غير موجود', 404);
     const bin = Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0));
-    return new Response(bin, { headers: { 'content-type': f.mime, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff' } });
+    // الاسم الأصلي عند التنزيل (?dl=1 تنزيل، وإلا عرض في المتصفح للصور وPDF)
+    const dl = new URL(request.url).searchParams.get('dl') || !/^image\/|^application\/pdf$/.test(f.mime);
+    const fname = encodeURIComponent(f.name || 'file');
+    return new Response(bin, { headers: { 'content-type': f.mime, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff',
+      'content-disposition': `${dl ? 'attachment' : 'inline'}; filename*=UTF-8''${fname}` } });
   }
   return bad('طريقة غير مدعومة', 405);
 }

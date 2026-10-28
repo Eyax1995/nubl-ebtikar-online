@@ -356,7 +356,7 @@ export async function offerRoute(db, env, request, user, appId, sub, need) {
     if (o.status === 'بانتظار مدير التسويق') {
       if (!isMgr) return bad('اعتماد هذه المرحلة لمدير التسويق', 403);
       await setStatus('بانتظار الرئيس التنفيذي', 'manager', s(d.note, 300));
-      const execs = (await db.prepare("SELECT id FROM users WHERE role = 'executive' AND active = 1").all()).results || [];
+      const execs = (await db.prepare("SELECT id FROM users WHERE active = 1 AND (role = 'executive' OR title LIKE '%التنفيذي%')").all()).results || [];
       for (const u of execs) await notifyUser(db, env, u.id, `✅ اعتمد مدير التسويق العرض الوظيفي <b>${hx(title)}</b> — بانتظار اعتمادك كرئيس تنفيذي\nمباشرة ${hx(o.start_date || '—')} · تجربة ${o.probation_days} يوماً · ${hx(o.job_title || '')}\n➡️ افتح ملف المتقدم واضغط «اعتماد الرئيس التنفيذي»`, null, { kind: 'hr', title: `🖋️ اعتماد الرئيس التنفيذي — ${a.name}`, link, urgent: true });
       if (!execs.length) await notifyRoles(db, env, ['admin'], `⚠️ لا يوجد مستخدم بدور «الرئيس التنفيذي» لاعتماد العرض ${hx(o.number)} — يعتمده المدير العام`, { kind: 'hr', link }, user.id);
     } else if (o.status === 'بانتظار الرئيس التنفيذي') {
