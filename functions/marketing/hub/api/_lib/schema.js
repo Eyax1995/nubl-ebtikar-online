@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 30;
+export const SCHEMA_VERSION = 31;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -274,6 +274,9 @@ export const MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS user_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, token_hash TEXT NOT NULL, expires_at TEXT NOT NULL,
     used_at TEXT, revoked_at TEXT, sent_at TEXT, sent_via TEXT, sent_error TEXT, created_by INTEGER, created_at TEXT DEFAULT (datetime('now')))`,
   'CREATE INDEX IF NOT EXISTS ix_invites_user ON user_invites(user_id, id)',
+  // v31: الجولة التدريبية داخل المنصة (tour.js) — تقدّم كل عضو ودرجة اختباره الذاتي، والمحاولات السابقة في history (لا حذف عند الإعادة)
+  `CREATE TABLE IF NOT EXISTS user_tours (user_id INTEGER NOT NULL, tour TEXT NOT NULL, step INTEGER DEFAULT 0, total INTEGER, status TEXT DEFAULT 'جارية', score INTEGER, score_of INTEGER,
+    answers TEXT, history TEXT, started_at TEXT, completed_at TEXT, snoozed_at TEXT, assigned_by INTEGER, assigned_at TEXT, updated_at TEXT, PRIMARY KEY (user_id, tour))`,
   'ALTER TABLE content ADD COLUMN publish_time TEXT',
   'ALTER TABLE content ADD COLUMN hashtags TEXT',
   'ALTER TABLE content ADD COLUMN cta TEXT',

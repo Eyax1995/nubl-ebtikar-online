@@ -36,6 +36,7 @@ import { pushRoute } from './_lib/push.js';
 import { publicBook, sessionsRoute } from './_lib/sessions.js';
 import { googleRoute } from './_lib/google.js';
 import { profileRoute, fileAllowed, selfPct, createInvite, inviteStatus, publicActivate } from './_lib/profile.js';
+import { tourRoute } from './_lib/tour.js';
 
 export async function onRequest(ctx) {
   const { request, env, params } = ctx;
@@ -151,6 +152,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'invoices': return invoiceAction(db, request, user, parts[1], parts[2], env);
       case 'files': return filesRoute(db, request, user, parts[1], env);
       case 'profile': return profileRoute(db, env, request, user, parts[1], parts[2]);
+      case 'tour': return tourRoute(db, env, request, user, parts[1]);
       case 'tamim': return tamimRoute(db, env, request, user, parts[1], parts[2]);
       case 'import': return importRoute(db, request, user, parts[1]);
       case 'export': return exportAll(db, user);
