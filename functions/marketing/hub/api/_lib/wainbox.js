@@ -165,7 +165,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
     if (!L0.token(env)) return noToken(L0);
     if (!L0.waba(env)) return bad(`معرّف حساب واتساب «${L0.label}» غير مضبوط (MOROOJ_WABA_ID)`, 503);
     const r = await graph(env, `${L0.waba(env)}/message_templates?fields=name,status,category,language,components&limit=100`, {}, L0);
-    if (!r.ok) return bad('تعذّر جلب القوالب: ' + gErr(r), 502);
+    if (!r.ok) return bad('تعذّر جلب القوالب: ' + gErr(r), 424);
     const all = (r.data.data || []).map((t) => {
       const body = (t.components || []).find((c) => c.type === 'BODY') || {};
       const btns = ((t.components || []).find((c) => c.type === 'BUTTONS') || {}).buttons || [];
@@ -196,7 +196,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
     await db.prepare(`INSERT INTO wa_events (dept, wa_id, kind, msg_id, text, reply, status, detail) VALUES (?,?,?,?,?,?,?,?)`)
       .bind(DEPT, to, 'staff', ok ? r.data.messages[0].id : null, null, rendered, ok ? 'sent' : 'send_failed',
         JSON.stringify({ by: user.name, template: tpl, error: ok ? null : gErr(r) }).slice(0, 1500)).run();
-    if (!ok) return bad('تعذّر الإرسال: ' + gErr(r), 502);
+    if (!ok) return bad('تعذّر الإرسال: ' + gErr(r), 424);
     const name = String(b.name || '').trim().slice(0, 80);
     await mergeIntoSession(db, DEPT + ':' + to, to, { r: 'staff', t: rendered, at: new Date().toISOString() },
       new Date(Date.now() + STAFF_PAUSE_H * 3600e3).toISOString(), true, name, DEPT);
@@ -212,7 +212,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
         graph(env, `${phoneId}/whatsapp_business_profile?fields=about,address,description,email,profile_picture_url,websites,vertical`, {}, L0),
         graph(env, `${phoneId}?fields=verified_name,name_status,display_phone_number,quality_rating,messaging_limit_tier`, {}, L0),
       ]);
-      if (!p.ok) return bad('تعذّر جلب الملف التجاري: ' + gErr(p), 502);
+      if (!p.ok) return bad('تعذّر جلب الملف التجاري: ' + gErr(p), 424);
       return json({ profile: (p.data.data || [])[0] || {}, phone: n.data || {}, verticals: VERTICALS, line: L0.dept, line_label: L0.label });
     }
     if (sub === 'profile' && method === 'POST') {
@@ -224,7 +224,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
       if (b.websites !== undefined) body.websites = (Array.isArray(b.websites) ? b.websites : []).map((x) => String(x).trim()).filter((x) => /^https?:\/\//.test(x)).slice(0, 2);
       if (b.vertical !== undefined) { if (!VERTICALS.includes(b.vertical)) return bad('تصنيف غير معروف', 400); body.vertical = b.vertical; }
       const r = await graph(env, `${phoneId}/whatsapp_business_profile`, { method: 'POST', body: JSON.stringify(body) }, L0);
-      if (!r.ok) return bad('لم يُحفظ: ' + gErr(r), 502);
+      if (!r.ok) return bad('لم يُحفظ: ' + gErr(r), 424);
       return json({ ok: true });
     }
     if (sub === 'photo' && method === 'POST') {
@@ -235,12 +235,12 @@ export async function waInboxRoute(env, request, user, sub, id) {
       if (!bytes.length || bytes.length > 5 * 1024 * 1024) return bad('حجم الصورة يجب ألا يتجاوز 5 ميجابايت', 400);
       if (!L0.appId(env)) return bad(`معرّف تطبيق Meta لخط «${L0.label}» غير مضبوط (MOROOJ_APP_ID)`, 503);
       const s1 = await graph(env, `${L0.appId(env)}/uploads?file_name=profile.${type === 'image/png' ? 'png' : 'jpg'}&file_length=${bytes.length}&file_type=${encodeURIComponent(type)}`, { method: 'POST' }, L0);
-      if (!s1.ok || !s1.data.id) return bad('تعذّر بدء الرفع: ' + gErr(s1), 502);
+      if (!s1.ok || !s1.data.id) return bad('تعذّر بدء الرفع: ' + gErr(s1), 424);
       const up = await fetch(`${GRAPH}/${s1.data.id}`, { method: 'POST', headers: { authorization: 'OAuth ' + L0.token(env), file_offset: '0' }, body: bytes });
       const ud = await up.json().catch(() => ({}));
-      if (!up.ok || !ud.h) return bad('تعذّر رفع الصورة: ' + ((ud.error && ud.error.message) || up.status), 502);
+      if (!up.ok || !ud.h) return bad('تعذّر رفع الصورة: ' + ((ud.error && ud.error.message) || up.status), 424);
       const r = await graph(env, `${phoneId}/whatsapp_business_profile`, { method: 'POST', body: JSON.stringify({ messaging_product: 'whatsapp', profile_picture_handle: ud.h }) }, L0);
-      if (!r.ok) return bad('لم تُعتمد الصورة: ' + gErr(r), 502);
+      if (!r.ok) return bad('لم تُعتمد الصورة: ' + gErr(r), 424);
       return json({ ok: true });
     }
   }
@@ -261,7 +261,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
     fd.append('file', file, file.name || 'file');
     const r = await fetch(`${GRAPH}/${L0.phoneId(env)}/media`, { method: 'POST', headers: { authorization: 'Bearer ' + L0.token(env) }, body: fd });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.id) return bad('تعذّر رفع الملف إلى واتساب: ' + ((d.error && (d.error.error_user_msg || d.error.message)) || r.status), 502);
+    if (!r.ok || !d.id) return bad('تعذّر رفع الملف إلى واتساب: ' + ((d.error && (d.error.error_user_msg || d.error.message)) || r.status), 424);
     if (env.FILES) { try { await env.FILES.put('wa/' + d.id, file.stream ? file.stream() : await file.arrayBuffer(), { httpMetadata: { contentType: mime }, customMetadata: { name: file.name || '' } }); } catch { /* */ } }
     return json({ id: d.id, kind, mime, name: file.name || '', size: file.size });
   }
@@ -292,7 +292,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
     for (const x of cands) { const m = await graph(env, mid, {}, x); if (m.ok && m.data.url) { meta = m; ML = x; break; } }
     if (!meta) return bad('الوسائط غير متاحة (تنتهي صلاحيتها لدى واتساب بعد 30 يوماً)', 404);
     const f = await fetch(meta.data.url, { headers: { authorization: 'Bearer ' + ML.token(env) } });
-    if (!f.ok) return bad('تعذّر تنزيل الوسائط', 502);
+    if (!f.ok) return bad('تعذّر تنزيل الوسائط', 424);
     const buf = await f.arrayBuffer();
     const mt = meta.data.mime_type || f.headers.get('content-type') || '';
     if (env.FILES) { try { await env.FILES.put('wa/' + mid, buf, { httpMetadata: { contentType: mt }, customMetadata: wantName ? { name: wantName } : {} }); } catch { /* */ } }
@@ -438,7 +438,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
     if (built.msg.type === 'reaction') {
       await db.prepare(`INSERT INTO wa_events (dept, wa_id, kind, msg_id, status, detail) VALUES (?,?,?,?,?,?)`)
         .bind(DEPT, waId, 'reaction_out', wamid, ok ? 'sent' : 'send_failed', JSON.stringify({ by: user.name, target: built.msg.reaction.message_id, emoji: built.msg.reaction.emoji })).run();
-      if (!ok) return bad('تعذّر الإرسال: ' + gErr(r), 502);
+      if (!ok) return bad('تعذّر الإرسال: ' + gErr(r), 424);
       return json({ ok: true });
     }
     const m = built.media ? { ...built.media } : null;
@@ -446,7 +446,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
     const det = { by: user.name, error: ok ? null : gErr(r) }; if (m || built.media) det.m = m || built.media;
     await db.prepare(`INSERT INTO wa_events (dept, wa_id, kind, msg_id, text, reply, status, detail) VALUES (?,?,?,?,?,?,?,?)`)
       .bind(DEPT, waId, 'staff', wamid, null, built.label, ok ? 'sent' : 'send_failed', JSON.stringify(det).slice(0, 1500)).run();
-    if (!ok) return bad('تعذّر الإرسال: ' + gErr(r), 502);
+    if (!ok) return bad('تعذّر الإرسال: ' + gErr(r), 424);
     await mergeIntoSession(db, key, waId, { r: 'staff', t: built.label, at: new Date().toISOString() },
       new Date(Date.now() + STAFF_PAUSE_H * 3600e3).toISOString(), true, '', DEPT);
     return json({ ok: true, wamid });
@@ -483,7 +483,7 @@ export async function waInboxRoute(env, request, user, sub, id) {
 - اكتب النص النهائي فقط بلا مقدمات ولا علامات اقتباس ولا شرح${mode === 'summary' ? '' : '، بصيغة رسالة واتساب جاهزة للإرسال'}.`;
     const userMsg = `اسم العميل: ${(s && s.customer_name) || 'غير معروف'}\n\nالمحادثة (الأقدم أولاً):\n${transcript}\n\n${draft ? `مسودة الموظف:\n${draft}\n\n` : ''}${hint ? `توجيه الموظف: ${hint}\n\n` : ''}المطلوب: ${TASK}`;
     const r = await askAI(env, system, userMsg, true);
-    if (!r.ok) return bad('تعذّر التوليد الآن: ' + String(r.error || '').slice(0, 200), 502);
+    if (!r.ok) return bad('تعذّر التوليد الآن: ' + String(r.error || '').slice(0, 200), 424);
     const out = r.text.replace(/^["«]|["»]$/g, '').trim();
     return json({ text: DEPT === 'morooj' && mode !== 'summary' ? moroojWording(out) : out, engine: r.engine });
   }
