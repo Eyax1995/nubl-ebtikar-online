@@ -28,6 +28,7 @@ export async function tokenUser(db, raw) {
             u.id, u.name, u.email, u.role, u.title, u.must_change, u.active, u.commission_rate, u.tg_chat_id, u.tg_username, u.sections
      FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?`).bind(hash).first();
   if (!row || row.revoked_at || !row.active || row.must_change) return null;
+  if (row.role !== 'admin') return null; // ربط الذكاء الاصطناعي بالمنصة للمدير العام وحده (قرار إياد 29 أكتوبر 2026)
   if (row.token_expires && row.token_expires < new Date().toISOString()) return null;
   // تحديث آخر استخدام مرة كل دقيقة على الأكثر
   if (!row.last_used_at || Date.now() - Date.parse(row.last_used_at + 'Z') > 60e3) {
@@ -60,6 +61,7 @@ export async function tokensRoute(db, request, user, id) {
     return json({ rows: results });
   }
   if (method === 'POST' && !id) {
+    if (user.role !== 'admin') return bad('ربط الذكاء الاصطناعي بالمنصة للمدير العام فقط', 403);
     let d = {}; try { d = await request.json(); } catch { /* */ }
     const name = String(d.name || 'وكيل ذكاء اصطناعي').trim().slice(0, 60);
     const scope = d.scope === 'write' ? 'write' : 'read';
