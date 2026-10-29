@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 29;
+export const SCHEMA_VERSION = 30;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -267,6 +267,13 @@ export const MIGRATIONS = [
     cfo_seen_at TEXT, org TEXT DEFAULT 'nubl', created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
   // v29: توقيع الرئيس التنفيذي الإلكتروني على التعميد (صورة التوقيع + رمز التحقق) ووقت آخر تذكير
   'ALTER TABLE tamims ADD COLUMN ceo_sign TEXT', 'ALTER TABLE tamims ADD COLUMN reminded_at TEXT',
+  // v30: الملف الشخصي لكل عضو (profile.js) — بيانات JSON + مستندات + حالة تأكيد كل قسم، والصورة الشخصية، ونطاق خصوصية الملفات، ودعوات التفعيل
+  `CREATE TABLE IF NOT EXISTS user_profiles (user_id INTEGER PRIMARY KEY, data TEXT, files TEXT, status TEXT, confirm TEXT, updated_by INTEGER, updated_at TEXT)`,
+  'ALTER TABLE users ADD COLUMN avatar INTEGER',
+  'ALTER TABLE files ADD COLUMN scope TEXT',
+  `CREATE TABLE IF NOT EXISTS user_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, token_hash TEXT NOT NULL, expires_at TEXT NOT NULL,
+    used_at TEXT, revoked_at TEXT, sent_at TEXT, sent_via TEXT, sent_error TEXT, created_by INTEGER, created_at TEXT DEFAULT (datetime('now')))`,
+  'CREATE INDEX IF NOT EXISTS ix_invites_user ON user_invites(user_id, id)',
   'ALTER TABLE content ADD COLUMN publish_time TEXT',
   'ALTER TABLE content ADD COLUMN hashtags TEXT',
   'ALTER TABLE content ADD COLUMN cta TEXT',

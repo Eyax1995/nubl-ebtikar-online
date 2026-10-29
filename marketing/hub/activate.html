@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>تفعيل الحساب — منصة نُبل وابتكار للتسويق</title>
+<link rel="icon" href="../logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="hub.css?v=10">
+<link rel="stylesheet" href="theme.css?v=7">
+<style>
+  .act-ok{background:#E3F2F1;color:#1E6765;border-radius:12px;padding:10px 14px;font-size:13.5px;margin-bottom:12px}
+  .act-err{background:#FCE9E5;color:#A3321F;border-radius:12px;padding:10px 14px;font-size:13.5px;margin-bottom:12px}
+  .act-list{list-style:none;margin:6px 0 16px;padding:0;font-size:13px;color:var(--muted);line-height:2}
+  .act-list li::before{content:"○ ";color:var(--gold)}
+  .act-meter{height:5px;border-radius:4px;background:var(--soft);overflow:hidden;margin-top:6px}.act-meter i{display:block;height:100%;width:0;transition:.3s}
+</style>
+</head>
+<body>
+<div class="login"><div class="login-card" id="card">
+  <img src="../logo.png" alt="نُبل وابتكار"><h1>تفعيل حسابك</h1>
+  <p class="sub" id="sub">جارٍ التحقق من الرابط…</p>
+  <div id="box"></div>
+  <div class="login-strip"></div>
+</div></div>
+<div id="toast"></div>
+<script>
+(() => {
+  'use strict';
+  const API = '/marketing/hub/api/public/activate/';
+  const key = decodeURIComponent((location.hash || '').replace(/^#/, '')).trim();
+  const box = document.getElementById('box'); const sub = document.getElementById('sub');
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fail = (msg) => { sub.textContent = 'تعذّر التفعيل'; box.innerHTML = `<div class="act-err">${esc(msg)}</div><a class="btn btn-g" style="width:100%" href="/marketing/hub/">الذهاب إلى صفحة الدخول</a>`; };
+  if (!/^\d+\.[0-9a-f]{24}$/.test(key)) { fail('رابط التفعيل غير مكتمل — افتحه كما وصلك في الرسالة.'); return; }
+  fetch(API + encodeURIComponent(key), { credentials: 'same-origin' }).then(async (r) => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return fail(d.error || 'رابط غير صالح');
+    sub.innerHTML = `أهلاً بك ${esc(d.first || d.name)} في فريق نُبل وابتكار للتسويق 🌟<br>اختر كلمة مرورك لتدخل المنصة، ثم أكمل ملفك الشخصي.`;
+    box.innerHTML = `<form id="af" novalidate>
+      <label class="f"><span>بريد الدخول</span><input class="inp" dir="ltr" value="${esc(d.email)}" readonly autocomplete="username" name="email"></label>
+      <label class="f"><span>كلمة المرور الجديدة</span><input class="inp" name="pw" type="password" dir="ltr" minlength="8" autocomplete="new-password" required>
+        <div class="act-meter"><i id="m"></i></div><small class="muted">8 أحرف على الأقل — يُفضَّل أرقام وحروف ورموز</small></label>
+      <label class="f"><span>تأكيد كلمة المرور</span><input class="inp" name="again" type="password" dir="ltr" minlength="8" autocomplete="new-password" required></label>
+      <ul class="act-list"><li>صورة الهوية ورقمها وتاريخ انتهائها</li><li>الآيبان واسم البنك وصاحب الحساب</li><li>بريدك الشخصي وجوالك وتاريخ الميلاد</li><li>جهة اتصال للطوارئ وحساباتك على المنصات</li></ul>
+      <p class="small muted" style="margin:-8px 0 10px">🔒 بياناتك سرية ولا يطّلع عليها إلا الإدارة والمالية.</p>
+      <button class="btn btn-p">تفعيل الحساب والدخول</button></form>`;
+    const f = document.getElementById('af'); const m = document.getElementById('m');
+    f.pw.oninput = () => { const v = f.pw.value; let s = 0; if (v.length >= 8) s++; if (/\d/.test(v)) s++; if (/[A-Za-z؀-ۿ]/.test(v)) s++; if (/[^A-Za-z0-9؀-ۿ]/.test(v) || v.length >= 12) s++;
+      m.style.width = (s * 25) + '%'; m.style.background = ['#C2412D', '#C2412D', '#DC9C47', '#308D8B', '#2E8B57'][s]; };
+    f.onsubmit = async (e) => {
+      e.preventDefault(); const b = f.querySelector('button');
+      const err = (t) => { let x = box.querySelector('.act-err'); if (!x) { x = document.createElement('div'); x.className = 'act-err'; f.prepend(x); } x.textContent = t; };
+      if (f.pw.value.length < 8) return err('كلمة المرور 8 أحرف على الأقل');
+      if (f.pw.value !== f.again.value) return err('كلمتا المرور غير متطابقتين');
+      b.disabled = true; b.textContent = 'جارٍ التفعيل…';
+      try {
+        const r2 = await fetch(API + encodeURIComponent(key), { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: f.pw.value }) });
+        const d2 = await r2.json().catch(() => ({}));
+        if (!r2.ok) { err(d2.error || 'تعذّر التفعيل'); b.disabled = false; b.textContent = 'تفعيل الحساب والدخول'; return; }
+        box.innerHTML = '<div class="act-ok">✅ فُعّل حسابك — ننقلك الآن إلى ملفك الشخصي…</div>';
+        history.replaceState(null, '', location.pathname); // لا يبقى المفتاح في الشريط
+        setTimeout(() => { location.href = d2.redirect || '/marketing/hub/#/me/welcome'; }, 900);
+      } catch { err('تعذّر الاتصال — أعد المحاولة'); b.disabled = false; b.textContent = 'تفعيل الحساب والدخول'; }
+    };
+  }).catch(() => fail('تعذّر الاتصال — أعد المحاولة'));
+})();
+</script>
+</body>
+</html>

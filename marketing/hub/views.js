@@ -678,8 +678,8 @@ async function teamView() {
   const admin = me().role === 'admin';
   V().innerHTML = `<div class="toolbar"><span class="muted">كل عضو يرى ما يخص دوره فقط — الأرقام المالية مخفية عن التصميم عدا تقرير أعمار الديون المتاح للجميع.</span><span class="sp"></span>${admin ? `<button class="btn btn-p" id="add">${I.plus} عضو جديد</button>` : ''}</div>
     <div class="tbl-wrap"><table class="t"><thead><tr><th>الاسم</th><th>المسمى</th><th>الدور</th><th>البريد</th><th>الجوال</th><th>العمولة %</th><th>آخر دخول</th><th>الحالة</th>${admin ? '<th></th>' : ''}</tr></thead>
-    <tbody>${rows.map((u) => `<tr data-id="${u.id}"><td><b>${esc(u.name)}</b></td><td>${esc(u.title || '')}</td><td>${esc(S.meta.roles[u.role] || u.role)}</td><td dir="ltr">${esc(u.email)}</td><td class="num">${esc(u.phone || '')}</td>
-      <td class="num">${u.commission_rate || 0}</td><td>${u.last_login ? fdate(u.last_login) : '—'}</td><td>${u.active ? pill('نشط') : pill('موقوف مؤقتاً')}</td>${admin ? `<td class="n"><button class="btn btn-g btn-s" data-reset="${u.id}">كلمة مؤقتة</button></td>` : ''}</tr>`).join('')}</tbody></table></div>
+    <tbody>${rows.map((u) => `<tr data-id="${u.id}"><td><a href="#/me/${u.id}" class="tm-pf" title="الملف الشخصي">${typeof avatarHtml === 'function' ? avatarHtml(u, 26) : ''}<b>${esc(u.name)}</b></a></td><td>${esc(u.title || '')}</td><td>${esc(S.meta.roles[u.role] || u.role)}</td><td dir="ltr">${esc(u.email)}</td><td class="num">${esc(u.phone || '')}</td>
+      <td class="num">${u.commission_rate || 0}</td><td>${u.last_login ? fdate(u.last_login) : '—'}</td><td>${u.active ? pill('نشط') : pill('موقوف مؤقتاً')}</td>${admin ? `<td class="n">${!u.last_login && u.active ? `<button class="btn btn-g btn-s" data-inv="${u.id}">✉️ دعوة تفعيل</button> ` : ''}<button class="btn btn-g btn-s" data-reset="${u.id}">كلمة مؤقتة</button></td>` : ''}</tr>`).join('')}</tbody></table></div>
     <div class="card" style="margin-top:14px"><h3>مصفوفة الصلاحيات</h3><div class="tbl-wrap"><table class="t"><thead><tr><th>الدور</th><th>يرى ويعمل على</th></tr></thead><tbody>
       <tr><td>المدير العام</td><td>كل شيء + الفريق والإعدادات والنسخ الاحتياطي</td></tr><tr><td>مدير الخدمات التسويقية</td><td>كل الوحدات التشغيلية والمالية والتقارير</td></tr>
       <tr><td>مبيعات / مندوب</td><td>عملاؤه المحتملون وغير المسندين، صفقاته، زياراته، عروضه، المهام المسندة إليه</td></tr>
@@ -691,13 +691,18 @@ async function teamView() {
       <label class="f"><span>الجوال</span><input class="inp" name="phone" dir="ltr" value="${esc(u?.phone || '')}"></label><label class="f"><span>المسمى الوظيفي</span><input class="inp" name="title" value="${esc(u?.title || '')}"></label>
       <label class="f"><span>الدور</span><select class="inp" name="role">${Object.entries(S.meta.roles).map(([k, l]) => `<option value="${k}" ${u?.role === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="f"><span>نسبة العمولة %</span><input class="inp num" name="commission_rate" type="number" step="any" value="${u?.commission_rate || 0}"></label>
+      ${!u ? `<label class="f full" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="invite" checked style="margin-top:5px"><span style="margin:0">✉️ إرسال دعوة تفعيل عبر واتساب<br><small class="muted">رابط لمرة واحدة (72 ساعة) يختار به العضو كلمة مروره ثم يُكمل ملفه الشخصي — بلا كلمة مرور مؤقتة في المحادثات. بلا جوال: يظهر الرابط لتنسخه.</small></span></label>` : ''}
       ${u ? `<label class="f"><span>الحالة</span><select class="inp" name="active"><option value="1" ${u.active ? 'selected' : ''}>نشط</option><option value="0" ${!u.active ? 'selected' : ''}>موقوف</option></select></label>` : ''}</form>`,
       foot: '<button class="btn btn-p">حفظ</button>' });
     $('.btn-p', m.el).onclick = async () => {
       const f = $('form', m.el); const body = { name: f.name.value, email: f.email.value, phone: f.phone.value, title: f.title.value, role: f.role.value, commission_rate: +f.commission_rate.value };
       try {
         if (u) { body.active = +f.active.value; await api(`e/users/${u.id}`, { method: 'PUT', body }); toast('تم الحفظ'); }
-        else { const r = await api('users', { method: 'POST', body }); showTemp(body.email, r.temp_password); }
+        else {
+          body.invite = !!f.invite?.checked;
+          const r = await api('users', { method: 'POST', body });
+          if (r.invite && typeof inviteResult === 'function') inviteResult({ id: r.id, name: body.name }, r.invite); else showTemp(body.email, r.temp_password);
+        }
         m.close(); S.meta = await api('meta'); teamView();
       } catch (e) { toast(e.message, 1); }
     };
@@ -705,7 +710,8 @@ async function teamView() {
   const showTemp = (email, pw) => modal({ title: 'بيانات الدخول المؤقتة', body: `<p>أرسلها للعضو بشكل خاص — سيُطلب منه تغييرها عند أول دخول:</p>
     <div class="card" style="margin-top:10px" dir="ltr"><div>${location.origin}/marketing/hub/</div><div>${esc(email)}</div><div><b class="num">${esc(pw)}</b></div></div>` });
   $('#add') && ($('#add').onclick = () => userForm(null));
-  if (admin) $$('tbody tr[data-id]').forEach((tr) => tr.onclick = (e) => { if (e.target.closest('button')) return; userForm(rows.find((u) => u.id == tr.dataset.id)); });
+  if (admin) $$('tbody tr[data-id]').forEach((tr) => tr.onclick = (e) => { if (e.target.closest('button,a')) return; userForm(rows.find((u) => u.id == tr.dataset.id)); });
+  $$('[data-inv]').forEach((b) => b.onclick = () => { const u = rows.find((x) => x.id == b.dataset.inv); if (typeof inviteModal === 'function') inviteModal(u); });
   $$('[data-reset]').forEach((b) => b.onclick = async () => { const u = rows.find((x) => x.id == b.dataset.reset); if (!(await confirmBox(`إنشاء كلمة مرور مؤقتة جديدة لـ ${u.name}؟`))) return; const r = await api(`users/${u.id}/reset`, { method: 'POST' }); showTemp(u.email, r.temp_password); });
 }
 async function settingsView() {

@@ -35,6 +35,7 @@ import { trackHooks, quoteMoved, newRequest, publicTrack, trackRoute, contractSe
 import { pushRoute } from './_lib/push.js';
 import { publicBook, sessionsRoute } from './_lib/sessions.js';
 import { googleRoute } from './_lib/google.js';
+import { profileRoute, fileAllowed, selfPct, createInvite, inviteStatus, publicActivate } from './_lib/profile.js';
 
 export async function onRequest(ctx) {
   const { request, env, params } = ctx;
@@ -58,6 +59,7 @@ export async function onRequest(ctx) {
     if (parts[0] === 'public' && parts[1] === 'apply' && method === 'POST') return await publicApply(db, env, request);
     if (parts[0] === 'public' && parts[1] === 'interview') return await publicInterview(db, env, request, parts[2]); // دعوة المقابلة (رابط موقّع)
     if (parts[0] === 'public' && parts[1] === 'offer') return await publicOffer(db, env, request, parts[2]); // العرض الوظيفي (رابط موقّع)
+    if (parts[0] === 'public' && parts[1] === 'activate') return await publicActivate(db, env, request, parts[2]); // تفعيل حساب الموظف الجديد (رابط دعوة لمرة واحدة)
     if (parts[0] === 'hook') return await hookRoute(db, env, request, parts[1]);
     if (parts[0] === 'xq' && parts[1] === 'bridge') return await xqBridge(db, env, request, ctx); // من منصة الدعاية والإعلان — موقّع HMAC
     if (parts[0] === 'auth' && parts[1] === 'login' && method === 'POST') return await login(db, request);
@@ -131,7 +133,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'debts': return debts(db, user);
       case 'xq': return xqRoute(db, env, request, user, parts[1], parts[2], (m, ent, id, data) => entityCall(db, env, request, user, m, ent, id, data));
       case 'settings': return settingsRoute(db, request, user);
-      case 'users': return usersRoute(db, request, user, parts[1], parts[2]);
+      case 'users': return usersRoute(db, request, user, parts[1], parts[2], env);
       case 'notifications': return notificationsRoute(db, env, request, user, parts[1]);
       case 'tokens': return tokensRoute(db, request, user, parts[1]);
       case 'commissions': return commissionsRoute(db, env, request, user, parts[1], parts[2]);
@@ -148,6 +150,7 @@ async function dispatch(db, env, request, user, parts) {
       case 'contracts': return contractAction(db, request, user, parts[1], parts[2], env);
       case 'invoices': return invoiceAction(db, request, user, parts[1], parts[2], env);
       case 'files': return filesRoute(db, request, user, parts[1], env);
+      case 'profile': return profileRoute(db, env, request, user, parts[1], parts[2]);
       case 'tamim': return tamimRoute(db, env, request, user, parts[1], parts[2]);
       case 'import': return importRoute(db, request, user, parts[1]);
       case 'export': return exportAll(db, user);
@@ -230,11 +233,16 @@ async function changePassword(db, request, user) {
 
 // ---------- البيانات الوصفية ----------
 async function meta(db, user) {
-  const { results: users } = await db.prepare('SELECT id, name, role, title, active, (tg_chat_id IS NOT NULL) AS tg FROM users ORDER BY active DESC, name').all();
+  let users;
+  try { ({ results: users } = await db.prepare('SELECT id, name, role, title, active, avatar, (tg_chat_id IS NOT NULL) AS tg FROM users ORDER BY active DESC, name').all()); }
+  catch { ({ results: users } = await db.prepare('SELECT id, name, role, title, active, (tg_chat_id IS NOT NULL) AS tg FROM users ORDER BY active DESC, name').all()); }
+  const mine = users.find((x) => x.id === user.id);
   const settings = await publicSettings(db);
   const perms = {};
   for (const k of Object.keys(ENTITIES)) perms[k] = permsFor(user, k);
-  return json({ user: publicUser(user), users, roles: ROLES, perms, settings, sectors: SECTORS, sections: SECTIONS });
+  // الملف الشخصي: الصورة ونسبة الاكتمال (تظهر أسفل القائمة)
+  const pu = { ...publicUser(user), avatar: mine?.avatar || null, profile_pct: await selfPct(db, user.id) };
+  return json({ user: pu, users, roles: ROLES, perms, settings, sectors: SECTORS, sections: SECTIONS });
 }
 
 // ---------- CRUD عام ----------
@@ -282,7 +290,7 @@ async function entityRoute(db, request, user, entity, id, env) {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '500', 10) || 500, 2000);
     const offset = parseInt(url.searchParams.get('offset') || '0', 10) || 0;
     const w = where.length ? ' WHERE ' + where.join(' AND ') : '';
-    const sel = entity === 'users' ? 'id, name, email, phone, role, title, active, commission_rate, last_login, created_at, tg_username, (tg_chat_id IS NOT NULL) AS tg_linked, sections'
+    const sel = entity === 'users' ? 'id, name, email, phone, role, title, active, commission_rate, last_login, created_at, tg_username, (tg_chat_id IS NOT NULL) AS tg_linked, sections, avatar, must_change'
       : entity === 'files' ? 'id, name, mime, size' : '*';
     const { results } = await db.prepare(`SELECT ${sel} FROM ${entity}${w} ORDER BY ${def.order} LIMIT ? OFFSET ?`)
       .bind(...args, limit, offset).all();
@@ -889,7 +897,7 @@ async function settingsRoute(db, request, user) {
   return bad('طريقة غير مدعومة', 405);
 }
 
-async function usersRoute(db, request, user, id, action) {
+async function usersRoute(db, request, user, id, action, env) {
   if (user.role !== 'admin') return bad('إدارة المستخدمين للمدير فقط', 403);
   if (!id && request.method === 'POST') {
     const d = await body(request);
@@ -900,6 +908,11 @@ async function usersRoute(db, request, user, id, action) {
       const r = await db.prepare(`INSERT INTO users (name, email, phone, role, title, pass_hash, pass_salt, must_change, commission_rate) VALUES (?,?,?,?,?,?,?,1,?)`)
         .bind(d.name, String(d.email).trim().toLowerCase(), d.phone || null, d.role, d.title || null, h.hash, h.salt, Number(d.commission_rate) || 0).run();
       await audit(db, user, 'create', 'users', r.meta.last_row_id, d.email);
+      // دعوة تفعيل: رابط لمرة واحدة يختار به العضو كلمة مروره — فلا تُرسل كلمة مرور مؤقتة في المحادثات
+      if (d.invite) {
+        let invite; try { invite = await createInvite(db, env, user, r.meta.last_row_id, { send: d.invite_send !== false }); } catch (e) { invite = { error: e.message }; }
+        return json({ id: r.meta.last_row_id, invite }, 201);
+      }
       return json({ id: r.meta.last_row_id, temp_password: pw }, 201);
     } catch (e) {
       if (String(e.message).includes('UNIQUE')) return bad('البريد مستخدم مسبقاً');
@@ -921,6 +934,11 @@ async function usersRoute(db, request, user, id, action) {
     await db.prepare('UPDATE users SET sections = ? WHERE id = ?').bind(val, id).run();
     await audit(db, user, 'sections', 'users', id, val === null ? 'كل الأقسام' : val || 'بلا أقسام');
     return json({ id: Number(id), sections: parseSections(val) });
+  }
+  // دعوة التفعيل لعضو لم يدخل بعد: GET الحالة · POST {send:true|false} رابط جديد (يُلغي السابق) ويُرسل واتساب أو يُعاد للنسخ
+  if (id && action === 'invite') {
+    if (request.method === 'GET') return json(await inviteStatus(db, Number(id)));
+    if (request.method === 'POST') { const d = await request.json().catch(() => ({})); return json(await createInvite(db, env, user, Number(id), { send: d.send !== false })); }
   }
   if (id && action === 'reset' && request.method === 'POST') {
     const pw = tempPassword(); const h = await hashPassword(pw);
@@ -965,6 +983,8 @@ async function receiptExtract(db, env, user, id, request) {
 }
 
 async function filesRoute(db, request, user, id, env) {
+  // مستندات الملف الشخصي (الهوية والسيرة): لصاحبها والإدارة والمالية فقط
+  if (id && !(await fileAllowed(db, user, id))) return bad('هذا المستند خاص بصاحبه والإدارة والمالية', 403);
   if (request.method === 'POST' && id && new URL(request.url).pathname.endsWith('/extract')) return receiptExtract(db, env, user, id, request);
   if (request.method === 'POST' && !id) {
     const d = await body(request);
