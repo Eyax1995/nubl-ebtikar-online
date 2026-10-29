@@ -54,3 +54,22 @@ footer{background:var(--navy);color:#C5D5DA}footer:before{content:"";display:blo
 .slide.dark .slide-bg,.slide.terra .slide-bg{background-size:min(18vw,200px) auto;opacity:.05}
 .nav ul a{white-space:nowrap;padding:8px 9px;font-size:13.5px}.nav{gap:12px}@media (max-width:1280px){.nav ul a{padding:7px 6px;font-size:12.8px}.nav .logo img{height:42px}}
 .badge-big{background:#fff!important;color:#18566D!important}
+/* work.html: prior work, platforms, client logos */
+.wk-sec:not(:has(.wk:not([style*="none"]))){display:none}
+.wk-sec .sec-head,.platforms .sec-head{max-width:760px}
+.pf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.pf{position:relative;display:flex;flex-direction:column;gap:10px;min-height:0}
+.pf-chev{position:absolute;top:22px;inset-inline-end:22px;width:26px;height:16px;fill:none;stroke:var(--gold);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.pf-k{font-size:13px;font-weight:700;color:var(--gold)}
+.pf h3{padding-inline-end:36px}
+.pf p{color:#C5D5DA;font-size:15px}
+.pf-f{list-style:none;padding:0;margin:6px 0 0;display:flex;flex-wrap:wrap;gap:8px}
+.pf-f li{font-size:13px;border:1px solid #ffffff2e;background:#ffffff0d;border-radius:999px;padding:6px 12px;color:#fff}
+.pf-cta{margin-top:26px;text-align:center}
+.logo-wall{--n:6;--g:12px;list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;justify-content:center;gap:var(--g)}
+.logo-wall li{flex:0 0 calc((100% - (var(--n) - 1) * var(--g)) / var(--n));box-sizing:border-box;background:#fff;border:1px solid var(--line);border-radius:var(--r);height:96px;display:flex;align-items:center;justify-content:center;padding:14px 16px}
+.logo-wall img{max-width:100%;max-height:56px;width:auto;height:auto;object-fit:contain;transition:transform .25s}
+.logo-wall li:hover img{transform:scale(1.06)}
+@media(max-width:1100px){.pf-grid{grid-template-columns:1fr 1fr}.logo-wall{--n:4}}
+@media(max-width:900px){.work-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.pf-grid,.work-grid{grid-template-columns:1fr}.logo-wall{--n:3;--g:8px}.logo-wall li{height:72px;padding:10px}.logo-wall img{max-height:42px}}
