@@ -8,6 +8,7 @@
 // - الملفات لا تُنسخ: يجلبها الطرف الآخر عند الفتح بـ file.get الموقّع
 // - كل رسالة صادرة تمر بصندوق صادر xq_outbox ويُعاد إرسالها تلقائياً — والطرفان يتجاهلان المكرر (uid / event_uid)
 import { json, HttpError, getSettings, randomToken, audit } from './core.js';
+import { approvalsFeed, approvalDoc, approvalFile } from './tamim.js';
 import { notifyUser, notifyRoles, h, HUB_URL } from './telegram.js';
 
 export const XQ_SELF = 'mkt';
@@ -312,6 +313,10 @@ export async function xqBridge(db, env, request, ctx) {
         const bin = Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0));
         return new Response(bin, { headers: { 'content-type': f.mime || 'application/octet-stream', 'x-file-name': encodeURIComponent(f.name || 'file'), 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
       }
+      // منصة القيادة: اعتمادات الرئيس التنفيذي (tamim.js)
+      case 'approvals.list': return out({ ok: true, ...(await approvalsFeed(db)) });
+      case 'approval.doc': return await approvalDoc(db, d);
+      case 'approval.file': return await approvalFile(db, d);
       default: return out({ ok: false, error: 'عملية غير معروفة' }, 400);
     }
   } catch (e) {

@@ -1,6 +1,6 @@
 // مخطط قاعدة البيانات + تعريف الكيانات والصلاحيات (مصدر الحقيقة للواجهة الخلفية)
 
-export const SCHEMA_VERSION = 28;
+export const SCHEMA_VERSION = 29;
 
 export const DDL = [
   `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -265,6 +265,8 @@ export const MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS tamims (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT, title TEXT NOT NULL, subject TEXT, blocks TEXT, items TEXT, decisions TEXT,
     attachments TEXT, signed_files TEXT, status TEXT DEFAULT 'بانتظار الاعتماد', notes TEXT, to_user_id INTEGER, cfo_user_id INTEGER, decided_by INTEGER, decided_at TEXT,
     cfo_seen_at TEXT, org TEXT DEFAULT 'nubl', created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT)`,
+  // v29: توقيع الرئيس التنفيذي الإلكتروني على التعميد (صورة التوقيع + رمز التحقق) ووقت آخر تذكير
+  'ALTER TABLE tamims ADD COLUMN ceo_sign TEXT', 'ALTER TABLE tamims ADD COLUMN reminded_at TEXT',
   'ALTER TABLE content ADD COLUMN publish_time TEXT',
   'ALTER TABLE content ADD COLUMN hashtags TEXT',
   'ALTER TABLE content ADD COLUMN cta TEXT',
